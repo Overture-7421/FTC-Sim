@@ -1,0 +1,44 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "java",
+      "request": "attach",
+      "name": "Debug UI (Gradle run with --debug-jvm)",
+      "hostName": "127.0.0.1",
+      "port": 5005,
+      "preLaunchTask": "ftc-sim: debug UI (wait for debugger on 5005)"
+    },
+    {
+      "type": "java",
+      "request": "attach",
+      "name": "Debug app (Gradle run with --debug-jvm)",
+      "hostName": "127.0.0.1",
+      "port": 5005,
+      "preLaunchTask": "ftc-sim: debug app (wait for debugger on 5005)"
+    },
+    {
+      "type": "java",
+      "request": "attach",
+      "name": "Debug one test class (Gradle with --debug-jvm)",
+      "hostName": "127.0.0.1",
+      "port": 5005,
+      "preLaunchTask": "ftc-sim: debug one test class (wait for debugger on 5005)"
+    },
+    {
+      "type": "java",
+      "request": "attach",
+      "name": "Debug any Gradle task (Gradle with --debug-jvm)",
+      "hostName": "127.0.0.1",
+      "port": 5005,
+      "preLaunchTask": "ftc-sim: debug any Gradle task (wait for debugger on 5005)"
+    },
+    {
+      "type": "java",
+      "request": "attach",
+      "name": "Attach to port 5005 (a JVM you started yourself)",
+      "hostName": "127.0.0.1",
+      "port": 5005
+    }
+  ]
+}

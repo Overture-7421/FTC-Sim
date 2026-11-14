@@ -1,0 +1,213 @@
+// FTC-Sim export script. The importer hands this to the Gradle wrapper of a COPY of an FTC project (--init-script), so
+// the project itself is not edited: the script only adds one task, ftcsimExport, to the Android application module
+// and, when that task has run, writes a text file that says what the simulator needs to run the team's code.
+//
+// Project properties (-P):
+//   ftcsim.export.file   where to write the result (required)
+//   ftcsim.app.project   Gradle path of the application module; by default the only module that applies
+//                        com.android.application
+//   ftcsim.variant       the variant to export, "debug" by default
+//
+// The file is UTF-8 text, one record per line, fields separated by a tab; "-" stands for "none". Records:
+//   ftcsim-export 1                                            format version, always the first line
+//   gradle <version>
+//   variant <name>
+//   application <project path> <namespace> [<Java resources>...]
+//                                                              the module's own src/main/resources as AGP processes them
+//   classes <directory>                                        compiled classes of the application module, javac first
+//   module <project path> <application|library> <namespace>    the application module last
+//   res <project path> <directory>                             an existing res folder of that module, main first
+//   assets <project path> <directory>
+//   jni <project path> <directory>
+//   library <module|project|file> <id> <classes jar> <aar> [<Java resources>...]
+//                                                              the runtime class path in order; id is group:name:version,
+//                                                              a project path, or a file name. The Java resources are the
+//                                                              jars (or folders) that hold the component's non-class files:
+//                                                              AGP's class jars have those taken out, see the view below.
+//
+// A reader ignores fields after the ones it knows, which is how the Java resources were added to the two records.
+//
+// Failures that the importer recognises start with "FTCSIM-EXPORT-ERROR <code>:".
+
+import org.gradle.api.GradleException
+import org.gradle.api.artifacts.component.ComponentIdentifier
+import org.gradle.api.artifacts.component.ModuleComponentIdentifier
+import org.gradle.api.artifacts.component.ProjectComponentIdentifier
+import org.gradle.api.attributes.Attribute
+
+gradle.projectsEvaluated {
+    def properties = gradle.startParameter.projectProperties
+    def exportFile = properties['ftcsim.export.file']
+    if (exportFile == null) {
+        throw new GradleException('FTCSIM-EXPORT-ERROR no-export-file: -Pftcsim.export.file=<file> is required')
+    }
+    def variant = properties['ftcsim.variant'] ?: 'debug'
+    def capitalized = variant.capitalize()
+    def root = gradle.rootProject
+
+    def applications = root.allprojects.findAll { it.plugins.hasPlugin('com.android.application') }
+    def wanted = properties['ftcsim.app.project']
+    def app = wanted != null ? applications.find { it.path == wanted } : (applications.size() == 1 ? applications[0] : null)
+    if (app == null) {
+        def found = applications.collect { it.path }
+        throw new GradleException(
+                'FTCSIM-EXPORT-ERROR no-application-module: ' + (found.isEmpty()
+                        ? 'no module applies com.android.application'
+                        : 'expected exactly one application module, found ' + found.join(', ') + '; name the one to use'))
+    }
+    def javac = app.tasks.findByName("compile${capitalized}JavaWithJavac")
+    def runtime = app.configurations.findByName("${variant}RuntimeClasspath")
+    if (javac == null || runtime == null) {
+        throw new GradleException("FTCSIM-EXPORT-ERROR no-variant: ${app.path} has no variant named '${variant}'")
+    }
+    def kotlin = app.tasks.findByName("compile${capitalized}Kotlin")
+
+    def artifactType = Attribute.of('artifactType', String)
+    def view = { String type ->
+        runtime.incoming.artifactView { spec ->
+            spec.lenient = true
+            spec.attributes { it.attribute(artifactType, type) }
+        }
+    }
+    // One jar per component (an AAR's classes.jar and its libs/*.jar merged), in class path order, and the AARs.
+    def classesView = view('android-classes-jar')
+    def aarView = view('aar')
+    // AGP's class jars have every non-class file taken out (images, META-INF/services provider files and the like). On a
+    // device AGP merges those files into the APK from this view instead: an AAR's classes.jar and libs/*.jar as
+    // published, a plain jar whole, and the processed java_res folder of a project's module.
+    def javaResView = view('android-java-res')
+    // The application's own src/main/resources, which no view of its dependencies contains.
+    def applicationJavaRes = app.tasks.findByName("process${capitalized}JavaRes")
+
+    app.tasks.register('ftcsimExport') {
+        group = 'ftc-sim'
+        description = 'Writes the compiled classes, class path and resources of the application for FTC-Sim.'
+        dependsOn javac
+        if (kotlin != null) {
+            dependsOn kotlin
+        }
+        if (applicationJavaRes != null) {
+            dependsOn applicationJavaRes
+        }
+        // Naming the views as inputs makes Gradle build what they need: library modules, AAR transforms.
+        inputs.files(classesView.files, aarView.files, javaResView.files)
+
+        doLast {
+            def tab = '\t'
+            def lines = []
+            lines << "ftcsim-export${tab}1"
+            lines << "gradle${tab}${gradle.gradleVersion}"
+            lines << "variant${tab}${variant}"
+            def ownJavaRes = applicationJavaRes == null ? [] : applicationJavaRes.outputs.files.files.findAll { it.exists() }
+            lines << "application${tab}${app.path}${tab}${namespaceOf(app)}" + ownJavaRes.collect { "${tab}${it.absolutePath}" }.join('')
+
+            def classDirectories = [javac, kotlin].findAll { it != null }.collect { destinationOf(it) }.findAll { it != null }
+            classDirectories.each { lines << "classes${tab}${it.absolutePath}" }
+
+            def describe = { ComponentIdentifier id ->
+                if (id instanceof ModuleComponentIdentifier) {
+                    return ['module', "${id.group}:${id.module}:${id.version}".toString()]
+                }
+                if (id instanceof ProjectComponentIdentifier) {
+                    return ['project', id.projectPath]
+                }
+                return ['file', id.displayName]
+            }
+            def aars = [:]
+            aarView.artifacts.artifacts.each { artifact ->
+                def (kind, name) = describe(artifact.id.componentIdentifier)
+                aars["${kind}${tab}${name}".toString()] = artifact.file
+            }
+            // The Java resources of each component: one or more jars, or a folder, in the order the view lists them.
+            def javaResources = [:]
+            javaResView.artifacts.artifacts.each { artifact ->
+                if (artifact.file.exists()) {
+                    def (kind, name) = describe(artifact.id.componentIdentifier)
+                    javaResources.computeIfAbsent("${kind}${tab}${name}".toString(), { [] }) << artifact.file.absolutePath
+                }
+            }
+            def withResources = { String key ->
+                (javaResources.remove(key) ?: []).collect { "${tab}${it}" }.join('')
+            }
+            def written = new LinkedHashSet<String>()
+            classesView.artifacts.artifacts.each { artifact ->
+                def (kind, name) = describe(artifact.id.componentIdentifier)
+                def key = "${kind}${tab}${name}".toString()
+                def aar = written.add(key) ? aars[key] : null
+                lines << "library${tab}${key}${tab}${artifact.file.absolutePath}${tab}${aar == null ? '-' : aar.absolutePath}${withResources(key)}"
+            }
+            aars.each { key, aar ->
+                if (!written.contains(key)) {
+                    written.add(key)
+                    lines << "library${tab}${key}${tab}-${tab}${aar.absolutePath}${withResources(key)}"
+                }
+            }
+            new ArrayList<String>(javaResources.keySet()).each { key ->
+                lines << "library${tab}${key}${tab}-${tab}-${withResources(key)}"
+            }
+
+            def modules = new LinkedHashMap<String, Object>()
+            runtime.incoming.resolutionResult.allComponents.each { component ->
+                if (component.id instanceof ProjectComponentIdentifier && component.id.projectPath != app.path) {
+                    def project = root.findProject(component.id.projectPath)
+                    if (project != null && project.extensions.findByName('android') != null) {
+                        modules[project.path] = project
+                    }
+                }
+            }
+            modules[app.path] = app
+            modules.each { path, project ->
+                def kind = project.plugins.hasPlugin('com.android.application') ? 'application' : 'library'
+                lines << "module${tab}${path}${tab}${kind}${tab}${namespaceOf(project)}"
+                [['res', 'res'], ['assets', 'assets'], ['jni', 'jniLibs']].each { record, set ->
+                    sourceDirectories(project, variant, set).each { dir ->
+                        lines << "${record}${tab}${path}${tab}${dir.absolutePath}"
+                    }
+                }
+            }
+
+            def target = new File(exportFile)
+            target.parentFile.mkdirs()
+            target.setText(lines.join('\n') + '\n', 'UTF-8')
+        }
+    }
+}
+
+// The compiled classes of a compile task; Kotlin's task renamed destinationDir to destinationDirectory.
+def destinationOf(task) {
+    try {
+        return task.destinationDirectory.get().asFile
+    } catch (MissingPropertyException ignored) {
+        return task.destinationDir
+    }
+}
+
+def namespaceOf(project) {
+    def android = project.extensions.findByName('android')
+    def namespace = null
+    try {
+        namespace = android.namespace
+    } catch (MissingPropertyException ignored) {
+        // Android Gradle plugins before 7.0 have no namespace; the manifest names the package
+    }
+    if (namespace != null) {
+        return namespace
+    }
+    def manifest = new File(project.projectDir, 'src/main/AndroidManifest.xml')
+    def declared = manifest.isFile() ? (manifest.getText('UTF-8') =~ /package\s*=\s*"([^"]+)"/) : null
+    return declared != null && declared.find() ? declared.group(1) : ''
+}
+
+// The existing folders of a source set kind (res, assets, jniLibs) in the main source set and the variant's, less
+// specific first, so that a later folder overrides an earlier one.
+def sourceDirectories(project, variant, kind) {
+    def android = project.extensions.findByName('android')
+    def folders = []
+    ['main', variant].each { name ->
+        def set = android.sourceSets.findByName(name)
+        if (set != null) {
+            folders.addAll(set."${kind}".srcDirs.findAll { it.isDirectory() })
+        }
+    }
+    return folders
+}

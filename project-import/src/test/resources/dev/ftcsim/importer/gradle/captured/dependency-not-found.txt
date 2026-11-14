@@ -1,0 +1,50 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.9/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :FtcRobotController:preBuild UP-TO-DATE
+> Task :FtcRobotController:preDebugBuild UP-TO-DATE
+> Task :FtcRobotController:generateDebugBuildConfig
+> Task :FtcRobotController:generateDebugResValues
+> Task :FtcRobotController:generateDebugResources
+> Task :FtcRobotController:packageDebugResources
+> Task :FtcRobotController:javaPreCompileDebug
+> Task :FtcRobotController:processDebugJavaRes NO-SOURCE
+> Task :TeamCode:preBuild UP-TO-DATE
+> Task :TeamCode:preDebugBuild UP-TO-DATE
+> Task :TeamCode:javaPreCompileDebug
+> Task :TeamCode:generateDebugResValues
+> Task :FtcRobotController:parseDebugLocalResources
+> Task :FtcRobotController:writeDebugAarMetadata
+> Task :FtcRobotController:compileDebugLibraryResources
+> Task :TeamCode:mapDebugSourceSetPaths FAILED
+11 actionable tasks: 11 executed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':TeamCode:mapDebugSourceSetPaths'.
+> Could not resolve all files for configuration ':TeamCode:debugRuntimeClasspath'.
+   > Could not find com.pedropathing:ftc:9.9.9.
+     Searched in the following locations:
+       - https://repo.maven.apache.org/maven2/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://dl.google.com/dl/android/maven2/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://mymaven.bylazar.com/releases/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://repo.dairy.foundation/releases/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+     Required by:
+         project :TeamCode
+         project :TeamCode > project :FtcRobotController
+   > Could not find com.pedropathing:ftc:9.9.9.
+     Searched in the following locations:
+       - https://repo.maven.apache.org/maven2/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://dl.google.com/dl/android/maven2/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://mymaven.bylazar.com/releases/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+       - https://repo.dairy.foundation/releases/com/pedropathing/ftc/9.9.9/ftc-9.9.9.pom
+     Required by:
+         project :TeamCode > org.solverslib:pedroPathing:0.3.3
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 9s

@@ -1,0 +1,10 @@
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Something nobody has seen before went wrong in task ':TeamCode:frobnicate'.
+> The frobnicator is unplugged
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 1s

@@ -1,0 +1,10 @@
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+A problem occurred evaluating root project 'hornet'.
+> FTCSIM-EXPORT-ERROR no-application-module: expected exactly one application module, found :TeamCode, :Practice; name the one to use
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 3s

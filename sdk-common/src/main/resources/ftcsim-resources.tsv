@@ -1,0 +1,4 @@
+# The resources of the simulated Robot Controller app itself, which the resource tables of the libraries do not
+# contain: its own res/values/dimens.xml. Libraries such as Panels read them when they put text on the app's screen.
+dimen	0x7ffe0001	activity_horizontal_margin	16dp
+dimen	0x7ffe0002	activity_vertical_margin	5dp

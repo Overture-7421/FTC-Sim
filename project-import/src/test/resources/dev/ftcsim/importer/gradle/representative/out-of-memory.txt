@@ -1,0 +1,12 @@
+> Task :TeamCode:dexBuilderDebug FAILED
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':TeamCode:dexBuilderDebug'.
+> Java heap space
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 40s

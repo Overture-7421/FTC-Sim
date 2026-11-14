@@ -1,0 +1,30 @@
+# Gradle
+.gradle/
+build/
+build-*/
+!/build-logic/
+.kotlin/
+!gradle/wrapper/gradle-wrapper.jar
+
+# IDEs
+.idea/
+*.iml
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+out/
+
+# Local artifacts produced by the simulator tooling
+/work/
+/.ftcsim/
+*.hprof
+hs_err_pid*.log
+
+# The Java extension's fallback import (Buildship) writes a bin folder per module
+bin/
+
+# OS
+Thumbs.db
+desktop.ini

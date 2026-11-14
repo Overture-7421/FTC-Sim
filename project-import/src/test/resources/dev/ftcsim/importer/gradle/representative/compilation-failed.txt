@@ -1,0 +1,18 @@
+> Task :TeamCode:compileDebugJavaWithJavac FAILED
+C:\Users\student\FTC\hornet\TeamCode\src\main\java\org\team\Drive.java:12: error: cannot find symbol
+        motor.setPowr(1);
+             ^
+  symbol:   method setPowr(int)
+  location: variable motor of type DcMotor
+1 error
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':TeamCode:compileDebugJavaWithJavac'.
+> Compilation failed; see the compiler error output for details.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 9s

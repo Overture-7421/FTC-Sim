@@ -1,0 +1,25 @@
+> Task :FtcRobotController:generateDebugResValues UP-TO-DATE
+> Task :FtcRobotController:generateDebugResources UP-TO-DATE
+> Task :FtcRobotController:packageDebugResources UP-TO-DATE
+> Task :FtcRobotController:parseDebugLocalResources UP-TO-DATE
+> Task :FtcRobotController:generateDebugRFile FAILED
+6 actionable tasks: 2 executed, 4 up-to-date
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':FtcRobotController:generateDebugRFile'.
+> Could not resolve all files for configuration ':FtcRobotController:debugCompileClasspath'.
+   > Could not resolve com.pedropathing:ftc:9.9.9.
+     Required by:
+         project :FtcRobotController
+      > No cached version of com.pedropathing:ftc:9.9.9 available for offline mode.
+      > No cached version of com.pedropathing:ftc:9.9.9 available for offline mode.
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 7s

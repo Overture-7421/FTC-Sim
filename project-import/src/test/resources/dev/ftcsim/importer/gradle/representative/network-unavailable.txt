@@ -1,0 +1,17 @@
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':TeamCode:mapDebugSourceSetPaths'.
+> Could not resolve all files for configuration ':TeamCode:debugRuntimeClasspath'.
+   > Could not resolve com.pedropathing:ftc:2.1.1.
+     Required by:
+         project :TeamCode
+      > Could not resolve com.pedropathing:ftc:2.1.1.
+         > Could not get resource 'https://repo.maven.apache.org/maven2/com/pedropathing/ftc/2.1.1/ftc-2.1.1.pom'.
+            > Could not GET 'https://repo.maven.apache.org/maven2/com/pedropathing/ftc/2.1.1/ftc-2.1.1.pom'.
+               > repo.maven.apache.org
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+
+BUILD FAILED in 4s

@@ -1,0 +1,51 @@
+{
+  "files.encoding": "utf8",
+  "files.eol": "\r\n",
+  "files.exclude": {
+    "build": true,
+    "*/build": true,
+    ".gradle": true,
+    "*/.gradle": true,
+    ".kotlin": true,
+    "*/.kotlin": true,
+    "*/bin": true
+  },
+  "search.exclude": {
+    "build": true,
+    "*/build": true,
+    ".gradle": true,
+    "*/.gradle": true,
+    ".kotlin": true,
+    "*/.kotlin": true,
+    "*/bin": true
+  },
+  "files.watcherExclude": {
+    "build/**": true,
+    "*/build/**": true,
+    "**/.gradle/**": true,
+    "**/.kotlin/**": true,
+    "*/bin/**": true
+  },
+  "terminal.integrated.env.windows": {
+    "JAVA_HOME": "${env:JAVA_HOME}",
+    "PATH": "${env:PATH}"
+  },
+  "gradle.autoDetect": "off",
+  "java.compile.nullAnalysis.mode": "disabled",
+  "java.test.defaultConfig": "ftc-sim",
+  "java.test.config": [
+    {
+      "name": "ftc-sim",
+      "vmArgs": [
+        "--enable-native-access=ALL-UNNAMED",
+        "-Dfile.encoding=UTF-8",
+        "-Duser.language=en",
+        "-Duser.country=US",
+        "-Duser.timezone=UTC",
+        "-Dftcsim.nativeDirectory=${workspaceFolder}\\build\\vscode-natives",
+        "-Dftcsim.fixtureClasses=${workspaceFolder}\\robot-runtime\\build\\classes\\java\\test",
+        "-Dftcsim.stage0.scripts=${workspaceFolder}\\launcher\\scripts"
+      ]
+    }
+  ]
+}

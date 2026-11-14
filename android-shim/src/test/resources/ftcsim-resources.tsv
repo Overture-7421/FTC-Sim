@@ -1,0 +1,14 @@
+# A table of test resources; lines like this one are comments.
+string	0x7f0f0001	greeting	Hello\nWorld\\ \t!
+string	0x7f0f0002	formatted	%1$s has %2$d
+integer	0x7f060001	answer	42
+integer	0x7f060002	hexAnswer	0x2a
+bool	0x7f050001	yes	true
+color	0x7f070001	red	#ff0000
+color	0x7f070002	translucentRed	#80ff0000
+color	0x7f070003	shortGreen	#0f0
+dimen	0x7f030001	margin	16dp
+dimen	0x7f030002	halfInch	0.5in
+dimen	0x7f030003	thin	0.3px
+dimen	0x7f030004	title	36pt
+dimen	0x7f030005	negative	-2.6px

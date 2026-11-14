@@ -1,0 +1,412 @@
+{
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}",
+    "shell": {
+      "executable": "cmd.exe",
+      "args": ["/d", "/c"]
+    }
+  },
+  "presentation": {
+    "reveal": "always",
+    "panel": "shared",
+    "clear": true,
+    "showReuseMessage": false
+  },
+  "problemMatcher": [
+    {
+      "owner": "ftc-sim-javac",
+      "fileLocation": "absolute",
+      "pattern": {
+        "regexp": "^([A-Za-z]:[^:]+\\.java):(\\d+): (error|warning): (.*)$",
+        "file": 1,
+        "line": 2,
+        "severity": 3,
+        "message": 4
+      }
+    },
+    {
+      "owner": "ftc-sim-kotlin",
+      "fileLocation": "absolute",
+      "severity": "error",
+      "pattern": {
+        "regexp": "^e: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+        "file": 1,
+        "line": 2,
+        "column": 3,
+        "message": 4
+      }
+    },
+    {
+      "owner": "ftc-sim-kotlin-warnings",
+      "fileLocation": "absolute",
+      "severity": "warning",
+      "pattern": {
+        "regexp": "^w: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+        "file": 1,
+        "line": 2,
+        "column": 3,
+        "message": 4
+      }
+    }
+  ],
+  "inputs": [
+    {
+      "id": "module",
+      "type": "pickString",
+      "description": "Gradle module (a module missing from this list: use ftc-sim: Gradle (type the arguments))",
+      "options": [
+        "acceptance-tests",
+        "android-shim",
+        "app",
+        "desktop-ui",
+        "game-biobuzz",
+        "game-decode",
+        "launcher",
+        "platform",
+        "project-import",
+        "robot-runtime",
+        "sdk-common",
+        "sim-contracts",
+        "sim-core",
+        "sim-field",
+        "sim-hardware",
+        "sim-link",
+        "sim-mechanisms",
+        "sim-physics",
+        "simulator",
+        "worker"
+      ],
+      "default": "sim-core"
+    },
+    {
+      "id": "testClass",
+      "type": "promptString",
+      "description": "Test filter for --tests, for example dev.ftcsim.core.kernel.FixedRateWorldTest, *FixedRateWorldTest or FixedRateWorldTest.someMethod",
+      "default": "*Test"
+    },
+    {
+      "id": "hornetPackage",
+      "type": "promptString",
+      "description": "Folder of the prepared Hornet program (the one with manifest.json that the app made under %LOCALAPPDATA%\\FTC-Sim\\programs)"
+    },
+    {
+      "id": "gradleArgs",
+      "type": "promptString",
+      "description": "Arguments for gradlew, for example :sim-physics:goldenHashes or :sim-core:test --tests *FooTest",
+      "default": "tasks"
+    },
+    {
+      "id": "debugTask",
+      "type": "promptString",
+      "description": "Task for --debug-jvm (a JavaExec or Test task), for example :desktop-ui:run or :sim-core:test --tests *FooTest",
+      "default": ":desktop-ui:run"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "ftc-sim: build (compile everything)",
+      "detail": "Compiles main, test and scenario classes of every module; no tests.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", "classes", "testClasses", "scenariosClasses", "hookScenariosClasses"],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "ftc-sim: test (all modules)",
+      "detail": "Runs every module's tests; the acceptance tests that need Hornet skip themselves without -Pftcsim.hornetPackage.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", "test"],
+      "group": {
+        "kind": "test",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "ftc-sim: check (tests + module rules)",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", "check"],
+      "group": "test"
+    },
+    {
+      "label": "ftc-sim: checkModuleRules",
+      "detail": "Fails when a module depends on a project the moduleRules block does not allow.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", "checkModuleRules"],
+      "group": "test"
+    },
+    {
+      "label": "ftc-sim: test one module",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":${input:module}:test"],
+      "group": "test"
+    },
+    {
+      "label": "ftc-sim: test one class",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}"],
+      "group": "test"
+    },
+    {
+      "label": "ftc-sim: Hornet acceptance tests (prepared package)",
+      "detail": "Runs :acceptance-tests:test with -Pftcsim.hornetPackage; asks for the prepared Hornet program's folder every time.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":acceptance-tests:test", "-Pftcsim.hornetPackage=${input:hornetPackage}"],
+      "group": "test"
+    },
+    {
+      "label": "ftc-sim: run UI",
+      "detail": "Runs :desktop-ui:run until the window is closed.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":desktop-ui:run"],
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "ftc-sim: run app",
+      "detail": "Runs :app:run, FTC-Sim as a user runs it (window, worker process, importer), until the window is closed.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":app:run"],
+      "presentation": {
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "ftc-sim: build distribution",
+      "detail": "Runs :app:dist: app/build/dist/FTC-Sim (the folder a driver unzips, started with FTC-Sim.cmd) and FTC-Sim.zip.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":app:dist"],
+      "group": "build"
+    },
+    {
+      "label": "ftc-sim: debug UI (wait for debugger on 5005)",
+      "detail": "Starts :desktop-ui:run with --debug-jvm; attach with the launch configuration of the same name.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":desktop-ui:run", "--debug-jvm"],
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      },
+      "problemMatcher": [
+        {
+          "owner": "ftc-sim-javac",
+          "fileLocation": "absolute",
+          "pattern": {
+            "regexp": "^([A-Za-z]:[^:]+\\.java):(\\d+): (error|warning): (.*)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^> Task ",
+            "endsPattern": "^Listening for transport dt_socket at address: 5005\\s*$"
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin",
+          "fileLocation": "absolute",
+          "severity": "error",
+          "pattern": {
+            "regexp": "^e: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin-warnings",
+          "fileLocation": "absolute",
+          "severity": "warning",
+          "pattern": {
+            "regexp": "^w: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        }
+      ]
+    },
+    {
+      "label": "ftc-sim: debug app (wait for debugger on 5005)",
+      "detail": "Starts :app:run with --debug-jvm; attach with the launch configuration of the same name.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":app:run", "--debug-jvm"],
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      },
+      "problemMatcher": [
+        {
+          "owner": "ftc-sim-javac",
+          "fileLocation": "absolute",
+          "pattern": {
+            "regexp": "^([A-Za-z]:[^:]+\\.java):(\\d+): (error|warning): (.*)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^> Task ",
+            "endsPattern": "^Listening for transport dt_socket at address: 5005\\s*$"
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin",
+          "fileLocation": "absolute",
+          "severity": "error",
+          "pattern": {
+            "regexp": "^e: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin-warnings",
+          "fileLocation": "absolute",
+          "severity": "warning",
+          "pattern": {
+            "regexp": "^w: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        }
+      ]
+    },
+    {
+      "label": "ftc-sim: debug one test class (wait for debugger on 5005)",
+      "detail": "Starts one module's tests filtered by --tests with --debug-jvm.",
+      "type": "shell",
+      "command": ".\\gradlew.bat",
+      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}", "--debug-jvm"],
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      },
+      "problemMatcher": [
+        {
+          "owner": "ftc-sim-javac",
+          "fileLocation": "absolute",
+          "pattern": {
+            "regexp": "^([A-Za-z]:[^:]+\\.java):(\\d+): (error|warning): (.*)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^> Task ",
+            "endsPattern": "^Listening for transport dt_socket at address: 5005\\s*$"
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin",
+          "fileLocation": "absolute",
+          "severity": "error",
+          "pattern": {
+            "regexp": "^e: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin-warnings",
+          "fileLocation": "absolute",
+          "severity": "warning",
+          "pattern": {
+            "regexp": "^w: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        }
+      ]
+    },
+    {
+      "label": "ftc-sim: debug any Gradle task (wait for debugger on 5005)",
+      "detail": "Appends --debug-jvm to a task you type, for example :sim-physics:goldenHashes.",
+      "type": "shell",
+      "command": ".\\gradlew.bat --console=plain ${input:debugTask} --debug-jvm",
+      "isBackground": true,
+      "presentation": {
+        "panel": "dedicated"
+      },
+      "problemMatcher": [
+        {
+          "owner": "ftc-sim-javac",
+          "fileLocation": "absolute",
+          "pattern": {
+            "regexp": "^([A-Za-z]:[^:]+\\.java):(\\d+): (error|warning): (.*)$",
+            "file": 1,
+            "line": 2,
+            "severity": 3,
+            "message": 4
+          },
+          "background": {
+            "activeOnStart": true,
+            "beginsPattern": "^> Task ",
+            "endsPattern": "^Listening for transport dt_socket at address: 5005\\s*$"
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin",
+          "fileLocation": "absolute",
+          "severity": "error",
+          "pattern": {
+            "regexp": "^e: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        },
+        {
+          "owner": "ftc-sim-kotlin-warnings",
+          "fileLocation": "absolute",
+          "severity": "warning",
+          "pattern": {
+            "regexp": "^w: file:///(.+?\\.kts?):(\\d+):(\\d+):? (.*)$",
+            "file": 1,
+            "line": 2,
+            "column": 3,
+            "message": 4
+          }
+        }
+      ]
+    },
+    {
+      "label": "ftc-sim: Gradle (type the arguments)",
+      "detail": "Runs gradlew with whatever you type: any task of any module, present or future.",
+      "type": "shell",
+      "command": ".\\gradlew.bat --console=plain ${input:gradleArgs}"
+    }
+  ]
+}
