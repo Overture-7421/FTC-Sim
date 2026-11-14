@@ -2,7 +2,6 @@ package dev.ftcsim.scenarios.opmodes;
 
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
-import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.HardwareDevice;
 
 /** Asks the hardware map for a device of a type nothing in the simulator makes. */

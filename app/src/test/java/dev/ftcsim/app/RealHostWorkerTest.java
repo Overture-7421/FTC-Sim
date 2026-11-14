@@ -41,64 +41,63 @@ class RealHostWorkerTest {
         String property = System.getProperty(AppClasspath.FILE_PROPERTY);
         assumeTrue(property != null, "run through Gradle, which writes the class path file and names it in " + AppClasspath.FILE_PROPERTY);
         AppFolders folders = new AppFolders(root.resolve("FTC-Sim"));
-        RealHost host = new RealHost(folders, Machine.real(), AppClasspath.read(Path.of(property)))
-                .connectTimeout(Duration.ofMinutes(3))
-                .shutdownGrace(Duration.ofSeconds(60));
+        try (RealHost host = new RealHost(folders, Machine.real(), AppClasspath.read(Path.of(property)))) {
+            host.connectTimeout(Duration.ofMinutes(3)).shutdownGrace(Duration.ofSeconds(60));
 
-        SimulatorLink opened = host.openLink();
-        RemoteSimulatorLink link = (RemoteSimulatorLink) opened;
-        long pid = link.workerPid().orElseThrow();
-        try {
-            AtomicReference<Catalogue> catalogue = new AtomicReference<>();
-            AtomicReference<String> failure = new AtomicReference<>();
-            link.addListener(new SimulatorLink.Listener() {
-                @Override
-                public void opened(SessionInfo info) {}
+            SimulatorLink opened = host.openLink();
+            RemoteSimulatorLink link = (RemoteSimulatorLink) opened;
+            long pid = link.workerPid().orElseThrow();
+            try {
+                AtomicReference<Catalogue> catalogue = new AtomicReference<>();
+                AtomicReference<String> failure = new AtomicReference<>();
+                link.addListener(new SimulatorLink.Listener() {
+                    @Override
+                    public void opened(SessionInfo info) {}
 
-                @Override
-                public void snapshot(WorldSnapshot latest) {}
+                    @Override
+                    public void snapshot(WorldSnapshot latest) {}
 
-                @Override
-                public void status(SessionStatus latest) {}
+                    @Override
+                    public void status(SessionStatus latest) {}
 
-                @Override
-                public void catalogue(Catalogue latest) {
-                    catalogue.set(latest);
+                    @Override
+                    public void catalogue(Catalogue latest) {
+                        catalogue.set(latest);
+                    }
+
+                    @Override
+                    public void refused(String message) {}
+
+                    @Override
+                    public void failed(String message) {
+                        failure.set(message);
+                    }
+                });
+                long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
+                while (catalogue.get() == null && System.nanoTime() < deadline) {
+                    TimeUnit.MILLISECONDS.sleep(10);
                 }
 
-                @Override
-                public void refused(String message) {}
+                assertTrue(catalogue.get() != null, "the worker told what can be asked for; it failed with " + failure.get());
+                assertEquals(List.of("none", "decode", "biobuzz"), catalogue.get().fields().stream().map(FieldChoice::id).toList());
+                assertFalse(catalogue.get().profiles().isEmpty());
+                String command = ProcessHandle.of(pid).orElseThrow().info().command().orElse("");
+                assertEquals(
+                        RealHost.thisJava().toAbsolutePath().normalize().toString().toLowerCase(),
+                        command.toLowerCase(),
+                        "the worker runs on the Java of the application, not on another");
+                assertTrue(Files.isDirectory(folders.natives()));
 
-                @Override
-                public void failed(String message) {
-                    failure.set(message);
-                }
-            });
-            long deadline = System.nanoTime() + TimeUnit.MINUTES.toNanos(2);
-            while (catalogue.get() == null && System.nanoTime() < deadline) {
-                TimeUnit.MILLISECONDS.sleep(10);
+                link.close();
+
+                assertEquals(OptionalInt.of(0), link.workerExitCode(), "the worker ended because it was asked to");
+                assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false), "no worker process is left");
+                assertTrue(Files.isRegularFile(link.workerLog().orElseThrow()));
+                assertEquals(folders.logs(), link.workerLog().orElseThrow().getParent(), "the log is in the user's log folder");
+            } finally {
+                link.close();
+                ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
             }
-
-            assertTrue(catalogue.get() != null, "the worker told what can be asked for; it failed with " + failure.get());
-            assertEquals(List.of("none", "decode", "biobuzz"), catalogue.get().fields().stream().map(FieldChoice::id).toList());
-            assertFalse(catalogue.get().profiles().isEmpty());
-            String command = ProcessHandle.of(pid).orElseThrow().info().command().orElse("");
-            assertEquals(
-                    RealHost.thisJava().toAbsolutePath().normalize().toString().toLowerCase(),
-                    command.toLowerCase(),
-                    "the worker runs on the Java of the application, not on another");
-            assertTrue(Files.isDirectory(folders.natives()));
-
-            link.close();
-
-            assertEquals(OptionalInt.of(0), link.workerExitCode(), "the worker ended because it was asked to");
-            assertFalse(ProcessHandle.of(pid).map(ProcessHandle::isAlive).orElse(false), "no worker process is left");
-            assertTrue(Files.isRegularFile(link.workerLog().orElseThrow()));
-            assertEquals(folders.logs(), link.workerLog().orElseThrow().getParent(), "the log is in the user's log folder");
-        } finally {
-            link.close();
-            ProcessHandle.of(pid).ifPresent(ProcessHandle::destroyForcibly);
-            host.close();
         }
     }
 }

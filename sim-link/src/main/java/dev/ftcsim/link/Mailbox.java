@@ -41,16 +41,16 @@ final class Mailbox {
             }
             Entry entry = new Entry(++sequence, new Item.Deliver(event));
             switch (event) {
-                case Event.Snapshot latest -> snapshot = entry;
-                case Event.Status latest -> status = entry;
-                case Event.Opened opened -> {
+                case Event.Snapshot _ -> snapshot = entry;
+                case Event.Status _ -> status = entry;
+                case Event.Opened _ -> {
                     snapshot = null;
                     status = null;
                     reliable.addLast(entry);
                 }
-                case Event.Failed failed -> reliable.addLast(entry);
-                case Event.Catalogue catalogue -> reliable.addLast(entry);
-                case Event.Refused refused -> reliable.addLast(entry);
+                case Event.Failed _ -> reliable.addLast(entry);
+                case Event.Catalogue _ -> reliable.addLast(entry);
+                case Event.Refused _ -> reliable.addLast(entry);
             }
             lock.notifyAll();
         }

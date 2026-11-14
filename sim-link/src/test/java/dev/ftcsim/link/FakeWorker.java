@@ -97,13 +97,13 @@ public final class FakeWorker {
                 switch (WireCodec.decodeCommand(payload)) {
                     case Command.Open open -> reply(out, new Event.Opened(info(open.request().profile())));
                     case Command.Init init -> reply(out, new Event.Failed("init " + init.opMode()));
-                    case Command.Start start -> {
+                    case Command.Start _ -> {
                         if (mode.equals("explode")) {
                             System.err.println("kaboom: the physics engine crashed");
                             Runtime.getRuntime().halt(9);
                         }
                     }
-                    case Command.Close close -> {
+                    case Command.Close _ -> {
                         System.out.println("closing");
                         System.exit(0);
                     }

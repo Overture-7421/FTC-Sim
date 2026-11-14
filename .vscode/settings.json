@@ -31,6 +31,7 @@
     "PATH": "${env:PATH}"
   },
   "gradle.autoDetect": "off",
+  "java.configuration.updateBuildConfiguration": "automatic",
   "java.compile.nullAnalysis.mode": "disabled",
   "java.test.defaultConfig": "ftc-sim",
   "java.test.config": [

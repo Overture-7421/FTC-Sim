@@ -152,7 +152,7 @@
       "label": "ftc-sim: test one class",
       "type": "shell",
       "command": ".\\gradlew.bat",
-      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}"],
+      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}", "--rerun"],
       "group": "test"
     },
     {
@@ -198,6 +198,9 @@
       "command": ".\\gradlew.bat",
       "args": ["--console=plain", ":desktop-ui:run", "--debug-jvm"],
       "isBackground": true,
+      "runOptions": {
+        "instancePolicy": "terminateOldest"
+      },
       "presentation": {
         "panel": "dedicated"
       },
@@ -251,6 +254,9 @@
       "command": ".\\gradlew.bat",
       "args": ["--console=plain", ":app:run", "--debug-jvm"],
       "isBackground": true,
+      "runOptions": {
+        "instancePolicy": "terminateOldest"
+      },
       "presentation": {
         "panel": "dedicated"
       },
@@ -302,8 +308,11 @@
       "detail": "Starts one module's tests filtered by --tests with --debug-jvm.",
       "type": "shell",
       "command": ".\\gradlew.bat",
-      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}", "--debug-jvm"],
+      "args": ["--console=plain", ":${input:module}:test", "--tests", "${input:testClass}", "--rerun", "--debug-jvm"],
       "isBackground": true,
+      "runOptions": {
+        "instancePolicy": "terminateOldest"
+      },
       "presentation": {
         "panel": "dedicated"
       },
@@ -356,6 +365,9 @@
       "type": "shell",
       "command": ".\\gradlew.bat --console=plain ${input:debugTask} --debug-jvm",
       "isBackground": true,
+      "runOptions": {
+        "instancePolicy": "terminateOldest"
+      },
       "presentation": {
         "panel": "dedicated"
       },

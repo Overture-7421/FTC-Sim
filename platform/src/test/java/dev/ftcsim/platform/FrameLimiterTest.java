@@ -15,7 +15,6 @@ class FrameLimiterTest {
     private static final class FakeTime implements LongSupplier, LongConsumer {
         long now;
         long parkOvershoot;
-        long parkCalls;
 
         @Override
         public long getAsLong() {
@@ -25,7 +24,6 @@ class FrameLimiterTest {
 
         @Override
         public void accept(long nanos) {
-            parkCalls++;
             now += nanos + parkOvershoot;
         }
     }

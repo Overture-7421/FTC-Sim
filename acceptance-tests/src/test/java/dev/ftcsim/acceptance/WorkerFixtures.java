@@ -37,8 +37,8 @@ final class WorkerFixtures {
         Path file = temp.resolve(AppClasspath.FILE_NAME);
         Files.writeString(
                 file, "worker=" + RobotWorld.classpathText("ftcsim.workerClasspath") + "\nrobot=" + RobotWorld.classpathText("ftcsim.simulatorClasspath") + "\n");
-        return new RealHost(new AppFolders(temp.resolve("FTC-Sim")), machine, AppClasspath.read(file))
-                .connectTimeout(Duration.ofMinutes(3))
-                .shutdownGrace(Duration.ofSeconds(60));
+        RealHost host = new RealHost(new AppFolders(temp.resolve("FTC-Sim")), machine, AppClasspath.read(file));
+        host.connectTimeout(Duration.ofMinutes(3)).shutdownGrace(Duration.ofSeconds(60));
+        return host;
     }
 }

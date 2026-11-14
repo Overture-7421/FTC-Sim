@@ -9,6 +9,7 @@ public final class SwallowingRunawayAuto extends LinearOpMode {
     @Override
     public void runOpMode() {
         waitForStart();
+        @SuppressWarnings("unused")
         long turns = 0;
         while (true) {
             try {

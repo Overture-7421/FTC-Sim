@@ -1,3 +1,10 @@
+import org.gradle.plugins.ide.eclipse.EclipsePlugin
+import org.gradle.plugins.ide.eclipse.model.AbstractClasspathEntry
+import org.gradle.plugins.ide.eclipse.model.Classpath
+import org.gradle.plugins.ide.eclipse.model.EclipseModel
+import org.gradle.plugins.ide.eclipse.model.Library
+import org.gradle.plugins.ide.eclipse.model.ProjectDependency
+
 plugins {
     id("ftcsim.java-conventions")
     id("ftcsim.ftc-sdk")
@@ -179,4 +186,34 @@ tasks.test {
             "--enable-native-access=ALL-UNNAMED",
         )
     })
+}
+
+// Buildship imports only main and test configurations by default; include the scenario projects and desktop-ui's
+// compiled Kotlin classes, and expose every dependency across all test and scenario source folders in Eclipse.
+plugins.withType<EclipsePlugin> {
+    val desktopUiKotlinClasses = project(":desktop-ui").layout.buildDirectory.dir("classes/kotlin/main").get().asFile
+    extensions.configure<EclipseModel> {
+        classpath.file.whenMerged {
+            desktopUiKotlinClasses.mkdirs()
+            val entries = (this as Classpath).entries
+            for (projectPath in listOf("/sdk-common", "/android-shim")) {
+                if (entries.none { it is ProjectDependency && it.path == projectPath }) {
+                    entries.add(
+                        ProjectDependency(projectPath).apply {
+                            entryAttributes["without_test_code"] = "true"
+                        },
+                    )
+                }
+            }
+            if (entries.none { it is Library && it.library.file == desktopUiKotlinClasses }) {
+                entries.add(Library(fileReference(desktopUiKotlinClasses)))
+            }
+            entries.filterIsInstance<AbstractClasspathEntry>()
+                .filter { it.kind != "src" || it.path.startsWith("/") }
+                .forEach { entry ->
+                    entry.entryAttributes.remove("gradle_used_by_scope")
+                    entry.entryAttributes.remove("test")
+                }
+        }
+    }
 }

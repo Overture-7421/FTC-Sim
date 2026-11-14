@@ -265,13 +265,13 @@ public final class NetworkHooks {
         return new Socket(address, port, localAddress, localPort);
     }
 
-    @SuppressWarnings({"deprecation", "removal"})
+    @SuppressWarnings("removal")
     public static Socket newSocket(String host, int port, boolean stream) throws IOException {
         require(NetworkRequest.Kind.CONNECT, endpoint(host, port));
         return new Socket(host, port, stream);
     }
 
-    @SuppressWarnings({"deprecation", "removal"})
+    @SuppressWarnings("removal")
     public static Socket newSocket(InetAddress address, int port, boolean stream) throws IOException {
         require(NetworkRequest.Kind.CONNECT, endpoint(address, port));
         return new Socket(address, port, stream);
@@ -377,7 +377,7 @@ public final class NetworkHooks {
         socket.send(packet);
     }
 
-    @SuppressWarnings({"deprecation", "removal"})
+    @SuppressWarnings("removal")
     public static void send(MulticastSocket socket, DatagramPacket packet, byte ttl) throws IOException {
         require(NetworkRequest.Kind.SEND, endpoint(packet.getSocketAddress()));
         socket.send(packet, ttl);

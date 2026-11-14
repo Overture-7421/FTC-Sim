@@ -4,7 +4,6 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.InetAddress;
-import java.net.InetSocketAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.net.SocketAddress;
@@ -141,7 +140,6 @@ final class SimulatedServerSocket extends ServerSocket {
     public void setPerformancePreferences(int connectionTime, int latency, int bandwidth) {}
 
     @Override
-    @SuppressWarnings("unchecked")
     public <T> ServerSocket setOption(SocketOption<T> name, T value) throws IOException {
         if (name == StandardSocketOptions.SO_REUSEADDR) {
             setReuseAddress((Boolean) value);

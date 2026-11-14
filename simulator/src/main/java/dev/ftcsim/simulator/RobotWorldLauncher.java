@@ -39,14 +39,12 @@ public final class RobotWorldLauncher {
     /** A running robot controller and the class loader that holds everything it loaded. */
     public static final class RobotWorld implements AutoCloseable {
         private final RobotClassLoader loader;
-        private final RobotHost host;
         private final RobotHost scopedHost;
         private final List<String> shutdownProblems = new CopyOnWriteArrayList<>();
         private volatile Supplier<Collection<String>> reportedThreads = List::of;
 
         private RobotWorld(RobotClassLoader loader, RobotHost host) {
             this.loader = loader;
-            this.host = host;
             this.scopedHost = (RobotHost) Proxy.newProxyInstance(
                     RobotHost.class.getClassLoader(), new Class<?>[] {RobotHost.class}, new InWorld(loader, host));
         }

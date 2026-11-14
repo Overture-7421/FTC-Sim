@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Timeout;
 class PinsSessionTest {
     private static final long MS = 1_000_000L;
     private static final long SECOND = 1_000 * MS;
-    private static final int CONTROL_HUB = 173;
     private static final int EXPANSION_HUB = 2;
 
     /** Where the profile below closes the limit switch, in encoder counts. */

@@ -1,4 +1,8 @@
 import groovy.json.JsonSlurper
+import org.gradle.plugins.ide.eclipse.EclipsePlugin
+import org.gradle.plugins.ide.eclipse.model.Classpath
+import org.gradle.plugins.ide.eclipse.model.EclipseModel
+import org.gradle.plugins.ide.eclipse.model.Library
 
 plugins {
     id("ftcsim.java-conventions")
@@ -193,4 +197,18 @@ tasks.test {
             "-Dftcsim.launcherScripts=${launcherScripts.asFile}",
         )
     })
+}
+
+// Buildship links :desktop-ui's Java output folder only; add Gradle's compiled Kotlin classes so Main resolves App.
+plugins.withType<EclipsePlugin> {
+    val desktopUiKotlinClasses = project(":desktop-ui").layout.buildDirectory.dir("classes/kotlin/main").get().asFile
+    extensions.configure<EclipseModel> {
+        classpath.file.whenMerged {
+            desktopUiKotlinClasses.mkdirs()
+            val entries = (this as Classpath).entries
+            if (entries.none { it is Library && it.library.file == desktopUiKotlinClasses }) {
+                entries.add(Library(fileReference(desktopUiKotlinClasses)))
+            }
+        }
+    }
 }

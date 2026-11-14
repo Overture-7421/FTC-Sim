@@ -135,17 +135,17 @@ final class WorkerServer {
         try {
             switch (command) {
                 case Command.Open open -> open(open.request());
-                case Command.Reset reset -> reset();
-                case Command.Close close -> {
+                case Command.Reset _ -> reset();
+                case Command.Close _ -> {
                     return false;
                 }
                 case Command.Init init -> init(init.opMode());
-                case Command.Start start -> {
+                case Command.Start _ -> {
                     if (hasSession("start")) {
                         carryOut(() -> session.start());
                     }
                 }
-                case Command.Stop stop -> {
+                case Command.Stop _ -> {
                     if (hasSession("stop")) {
                         session.stop();
                     }
@@ -157,7 +157,7 @@ final class WorkerServer {
                         carryOut(() -> session.armMatch(arm.autoOpMode(), arm.teleOpMode()));
                     }
                 }
-                case Command.StartMatch startMatch -> {
+                case Command.StartMatch _ -> {
                     if (hasSession("start a match in")) {
                         carryOut(() -> session.startMatch());
                     }

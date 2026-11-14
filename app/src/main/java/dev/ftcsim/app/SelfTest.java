@@ -162,37 +162,38 @@ final class SelfTest {
     }
 
     private void checkWorker(AppClasspath jars, AppFolders folders) {
-        RealHost host = new RealHost(folders, machine, jars).connectTimeout(WORKER_PATIENCE).shutdownGrace(CLOSE_PATIENCE);
-        RemoteSimulatorLink link = null;
-        long pid = 0;
-        try {
-            long started = System.nanoTime();
-            SimulatorLink opened = host.openLink();
-            if (!(opened instanceof RemoteSimulatorLink remote)) {
-                opened.close();
-                fail("worker", "the host did not start a worker process");
-                return;
+        try (RealHost host = new RealHost(folders, machine, jars)) {
+            host.connectTimeout(WORKER_PATIENCE).shutdownGrace(CLOSE_PATIENCE);
+            RemoteSimulatorLink link = null;
+            long pid = 0;
+            try {
+                long started = System.nanoTime();
+                SimulatorLink opened = host.openLink();
+                if (!(opened instanceof RemoteSimulatorLink remote)) {
+                    opened.close();
+                    fail("worker", "the host did not start a worker process");
+                    return;
+                }
+                link = remote;
+                pid = link.workerPid().orElse(0);
+                Catalogue catalogue = awaitCatalogue(link);
+                long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
+                String command = ProcessHandle.of(pid).flatMap(handle -> handle.info().command()).orElse("");
+                if (!command.equalsIgnoreCase(RealHost.thisJava().toAbsolutePath().normalize().toString())) {
+                    fail("worker", "it runs on " + command + ", not on the Java of the application");
+                } else if (catalogue.profiles().isEmpty() || catalogue.fields().isEmpty()) {
+                    fail("worker", "its catalogue is empty");
+                } else {
+                    ok("worker (pid " + pid + ") started on the same Java in " + millis + " ms and told its catalogue (fields: "
+                            + catalogue.fields().size() + ", robot profiles: " + catalogue.profiles().size() + ")");
+                }
+            } catch (IOException | RuntimeException failure) {
+                fail("worker", failure.getMessage());
+            } finally {
+                if (link != null) {
+                    checkWorkerEnded(link, pid);
+                }
             }
-            link = remote;
-            pid = link.workerPid().orElse(0);
-            Catalogue catalogue = awaitCatalogue(link);
-            long millis = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - started);
-            String command = ProcessHandle.of(pid).flatMap(handle -> handle.info().command()).orElse("");
-            if (!command.equalsIgnoreCase(RealHost.thisJava().toAbsolutePath().normalize().toString())) {
-                fail("worker", "it runs on " + command + ", not on the Java of the application");
-            } else if (catalogue.profiles().isEmpty() || catalogue.fields().isEmpty()) {
-                fail("worker", "its catalogue is empty");
-            } else {
-                ok("worker (pid " + pid + ") started on the same Java in " + millis + " ms and told its catalogue (fields: "
-                        + catalogue.fields().size() + ", robot profiles: " + catalogue.profiles().size() + ")");
-            }
-        } catch (IOException | RuntimeException failure) {
-            fail("worker", failure.getMessage());
-        } finally {
-            if (link != null) {
-                checkWorkerEnded(link, pid);
-            }
-            host.close();
         }
     }
 

@@ -1,4 +1,6 @@
 import org.gradle.api.tasks.testing.logging.TestExceptionFormat
+import org.gradle.plugins.ide.eclipse.EclipsePlugin
+import org.gradle.plugins.ide.eclipse.model.EclipseModel
 
 plugins {
     `java-library`
@@ -10,9 +12,21 @@ val jdk = catalog.findVersion("jdk").get().requiredVersion.toInt()
 group = "dev.ftcsim"
 
 java {
+    sourceCompatibility = JavaVersion.toVersion(jdk)
+    targetCompatibility = JavaVersion.toVersion(jdk)
     // JDK 25 whatever JAVA_HOME and PATH say; Gradle finds an installed one or downloads one (see settings.gradle.kts).
     toolchain {
         languageVersion.set(JavaLanguageVersion.of(jdk))
+    }
+}
+
+plugins.withType<EclipsePlugin> {
+    extensions.configure<EclipseModel> {
+        jdt {
+            sourceCompatibility = JavaVersion.toVersion(jdk)
+            targetCompatibility = JavaVersion.toVersion(jdk)
+            javaRuntimeName = "JavaSE-$jdk"
+        }
     }
 }
 

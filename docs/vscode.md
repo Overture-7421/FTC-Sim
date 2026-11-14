@@ -18,7 +18,7 @@ Checked on Windows against VS Code 1.146, Java 1.58.0 (language server 1.63), Gr
 |---|---|
 | Build | `Ctrl+Shift+B`: classes, test classes and scenario classes of every module |
 | All tests, `check`, module rules | `Terminal > Run Test Task`; `ftc-sim: check`; `ftc-sim: checkModuleRules` |
-| One module / one class | `ftc-sim: test one module`, `ftc-sim: test one class` (pick `sim-core`, then type `dev.ftcsim.core.kernel.FixedRateWorldTest` or `*FixedRateWorldTest`) |
+| One module / one class | `ftc-sim: test one module`, `ftc-sim: test one class` (pick `sim-core`, then type `dev.ftcsim.core.kernel.FixedRateWorldTest` or `*FixedRateWorldTest`; passes `--rerun` so cached results do not skip it) |
 | Run the UI | `ftc-sim: run UI` (`:desktop-ui:run`): the window alone, on a fake simulator and a fake importer |
 | Run the app | `ftc-sim: run app` (`:app:run`): FTC-Sim as a user runs it, the window on a real worker process and the real project importer (see `docs/architecture/app.md`) |
 | Build the distribution | `ftc-sim: build distribution` (`:app:dist`): `app\build\dist\FTC-Sim` and `FTC-Sim.zip`, the folder a driver unzips and starts with `FTC-Sim.cmd` (see `docs/architecture/distribution.md`) |
@@ -34,6 +34,7 @@ javac and Kotlin compiler errors and warnings land in the Problems panel. A new 
 - A user-level `terminal.integrated.env.windows` that points `JAVA_HOME` at another JDK (on this machine: `C:\Users\Public\wpilib\2023\jdk`, which does not exist) makes every `gradlew.bat` in a VS Code terminal fail with "JAVA_HOME is set to an invalid directory". The workspace resets `JAVA_HOME` and `PATH` to VS Code's own environment.
 - Tasks run in `cmd.exe`, so quoting does not depend on your default terminal profile.
 - `gradle.autoDetect` is off: Gradle for Java found 703 tasks in this build and would add them all to Run Task, where they run on the extension's bundled JRE, not your JDK. Use the `ftc-sim:` tasks.
+- `java.configuration.updateBuildConfiguration` is `automatic`, so Gradle build script changes resynchronise without prompting.
 - `java.compile.nullAnalysis.mode` is `disabled`; otherwise the server asks about null analysis because of the SDK's annotations.
 - `java.test.config` copies the JVM settings of the `Test` tasks that a plain JUnit launch can reproduce (native access, locale, time zone, `ftcsim.nativeDirectory`, `ftcsim.fixtureClasses`, `ftcsim.stage0.scripts`).
 - `build`, `.gradle`, `.kotlin` and `bin` folders of the modules are hidden from Explorer, search and the file watcher.
@@ -41,7 +42,7 @@ javac and Kotlin compiler errors and warnings land in the Problems panel. A new 
 ## Known limits
 - **Testing view**: cannot run all of `acceptance-tests` (class paths and `ftcsim.*` properties computed by its Gradle task) nor `GoldenDeterminismTest` and `NativeImportsTest` in `sim-physics`; the distribution tests of `app` (`DistributionLayoutTest`, `ThirdPartyNoticesTest`, `DistributionEndToEndTest`) are skipped there, because Gradle builds the distribution and names it in `ftcsim.dist`. Every other test class passed when replayed with the server's own launch description. Use the Gradle tasks; the "Delegate Test to Gradle" profile (from Gradle for Java) is untried.
 - **Kotlin** (`desktop-ui\src\main\kotlin`): the Java extension ignores `.kt` files. `JetBrains.kotlin-server` is alpha (0.0.86) and was not tried with Compose or this project. `fwcd.kotlin` (an older community server, last released Dec 2024) was not tried either; install one of them, not both. Without one there is no highlighting, navigation or live errors, only task output. Breakpoints in `.kt` files are untested.
-- **Import fallback**: when the build-server connection fails (it did on the first opens after a Java extension update), the Java extension imports with Buildship: false errors in 4 of 37 `acceptance-tests` scenario files (`sdk-common` and `android-shim` classes unresolved), and a `bin\` folder per module (`.gitignore` ignores it).
+- **Import fallback**: when the build-server connection fails (it did on the first opens after a Java extension update), the Java extension imports with Buildship and writes a `bin\` folder per module (`.gitignore` ignores it). The Gradle scripts configure Eclipse's Java 25 target, `:desktop-ui`'s compiled Kotlin classes and `:acceptance-tests`'s scenario dependencies so Buildship compiles cleanly once `ftc-sim: build (compile everything)` has run; if stale workspace metadata remains from an older module layout or Java extension upgrade, run `Java: Clean Java Language Server Workspace`.
 - Gradle runs started by Gradle for Java itself (sidebar) use the extension's bundled JRE, not your JDK, so a second Gradle daemon (up to 3 GB, see `gradle.properties`) can be alive.
-- `--debug-jvm` always uses port 5005: one debug session at a time.
+- `--debug-jvm` always uses port 5005: one debug session at a time (re-running the same debug task terminates its previous instance; stop another debug task's terminal before switching).
 - `ftc-sim: run UI` was checked up to the JVM start under `--debug-jvm`; no window was opened.

@@ -12,6 +12,7 @@ public final class LockedRunawayAuto extends LinearOpMode {
     public void runOpMode() {
         waitForStart();
         synchronized (lock) {
+            @SuppressWarnings("unused")
             long turns = 0;
             while (true) {
                 turns++;

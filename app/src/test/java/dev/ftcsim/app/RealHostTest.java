@@ -46,11 +46,12 @@ class RealHostTest {
 
     @Test
     void whenTheJarsOfTheSimulatorCannotBeFoundTheMessageSaysSoAndHowToFixIt() {
-        RealHost host = new RealHost(folders(), new Machine(name -> null), () -> {
+        String message;
+        try (RealHost host = new RealHost(folders(), new Machine(name -> null), () -> {
             throw new IOException("ftcsim-classpath.properties is not next to app.jar");
-        }, RealHost.thisJava());
-
-        String message = assertThrows(IOException.class, host::openLink).getMessage();
+        }, RealHost.thisJava())) {
+            message = assertThrows(IOException.class, host::openLink).getMessage();
+        }
 
         assertTrue(message.contains("cannot find the program files of its simulator") && message.contains("is not next to app.jar"), message);
         assertTrue(message.contains("Install FTC-Sim again"), message);
@@ -60,9 +61,11 @@ class RealHostTest {
     void aJavaThatIsNotThereIsADamagedInstallationNotAMysteryOfTheWorker() throws IOException {
         Path jar = Files.writeString(root.resolve("a.jar"), "jar");
         Path missingJava = root.resolve("jre").resolve("bin").resolve("java.exe");
-        RealHost host = new RealHost(folders(), new Machine(name -> null), () -> new AppClasspath(List.of(jar), List.of(jar)), missingJava);
-
-        String message = assertThrows(IOException.class, host::openLink).getMessage();
+        String message;
+        try (RealHost host = new RealHost(
+                folders(), new Machine(name -> null), () -> new AppClasspath(List.of(jar), List.of(jar)), missingJava)) {
+            message = assertThrows(IOException.class, host::openLink).getMessage();
+        }
 
         assertTrue(message.contains("The Java that comes with FTC-Sim is damaged") && message.contains("java.exe is missing"), message);
     }
@@ -71,10 +74,11 @@ class RealHostTest {
     void aWorkerThatEndsBeforeItConnectsIsReportedWithWhatItWroteAndWhereTheLogsAre() throws IOException {
         Path notAJar = Files.writeString(root.resolve("not-the-worker.jar"), "this is not a jar");
         AppFolders folders = folders();
-        RealHost host = new RealHost(folders, new Machine(name -> null), new AppClasspath(List.of(notAJar), List.of(notAJar)))
-                .connectTimeout(Duration.ofMinutes(1));
-
-        String message = assertThrows(IOException.class, host::openLink).getMessage();
+        String message;
+        try (RealHost host = new RealHost(folders, new Machine(name -> null), new AppClasspath(List.of(notAJar), List.of(notAJar)))) {
+            host.connectTimeout(Duration.ofMinutes(1));
+            message = assertThrows(IOException.class, host::openLink).getMessage();
+        }
 
         assertTrue(message.startsWith("The simulator could not be started. The simulator worker ended before it connected"), message);
         assertTrue(message.contains("dev.ftcsim.worker.WorkerMain"), "what the worker wrote about it: " + message);

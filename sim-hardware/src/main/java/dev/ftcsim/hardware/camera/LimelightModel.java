@@ -109,7 +109,6 @@ public final class LimelightModel implements CameraModel {
     private record Pending(
             long index, long captureNanos, long startNanos, int pipelineIndex, Pipeline pipeline, Resolution resolution) {}
 
-    private final DeviceContext context;
     private final RayView rays;
     private final CameraMount mount;
     private final Rigid cameraInRobot;
@@ -137,7 +136,6 @@ public final class LimelightModel implements CameraModel {
 
     private LimelightModel(
             DeviceContext context, Settings settings, Map<Integer, Pipeline> pipelines, List<SceneTag> scene, long seed) {
-        this.context = context;
         this.rays = context.rays();
         this.mount = settings.mount();
         this.cameraInRobot = mount.cameraInRobot();

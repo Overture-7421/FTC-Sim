@@ -1,3 +1,7 @@
+import org.gradle.plugins.ide.eclipse.EclipsePlugin
+import org.gradle.plugins.ide.eclipse.model.Classpath
+import org.gradle.plugins.ide.eclipse.model.EclipseModel
+import org.gradle.plugins.ide.eclipse.model.Library
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
@@ -25,7 +29,7 @@ dependencies {
     implementation(project(":sim-contracts"))
     implementation(project(":platform"))
 
-    implementation(compose.desktop.windows_x64)
+    implementation(libs.compose.desktop.windows.x64)
     implementation(libs.compose.material3)
     implementation(libs.compose.icons.core)
     implementation(libs.coroutines.swing)
@@ -55,4 +59,24 @@ compose.desktop {
 
 tasks.withType<Test>().configureEach {
     jvmArgs(nativeAccessFlags)
+}
+
+// Buildship compiles only Java sources; ensure Gradle's Kotlin output folders exist so JDT never flags missing paths.
+plugins.withType<EclipsePlugin> {
+    val kotlinMainClasses = layout.buildDirectory.dir("classes/kotlin/main").get().asFile
+    val kotlinTestClasses = layout.buildDirectory.dir("classes/kotlin/test").get().asFile
+    extensions.configure<EclipseModel> {
+        classpath.file.whenMerged {
+            kotlinMainClasses.mkdirs()
+            kotlinTestClasses.mkdirs()
+            val entries = (this as Classpath).entries
+            if (entries.none { it is Library && it.library.file == kotlinTestClasses }) {
+                entries.add(
+                    Library(fileReference(kotlinTestClasses)).apply {
+                        entryAttributes["test"] = "true"
+                    },
+                )
+            }
+        }
+    }
 }

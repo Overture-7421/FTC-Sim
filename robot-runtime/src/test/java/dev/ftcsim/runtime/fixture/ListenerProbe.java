@@ -29,6 +29,10 @@ public final class ListenerProbe implements Callable<List<String>> {
     private final List<String> outcomes = new ArrayList<>();
     private final List<AutoCloseable> held = new ArrayList<>();
 
+    private static <T> T nullReceiver() {
+        return null;
+    }
+
     private static String describe(Object listener) throws IOException {
         if (listener instanceof ServerSocket socket) {
             return socket.getClass().getSimpleName() + ':' + socket.getLocalPort();
@@ -86,7 +90,7 @@ public final class ListenerProbe implements Callable<List<String>> {
                     "default factory createServerSocket(int,int,InetAddress)",
                     () -> ServerSocketFactory.getDefault().createServerSocket(18309, 5, loopback));
             attempt("SSLServerSocketFactory.createServerSocket(int) stays under the policy", () -> {
-                SSLServerSocketFactory factory = null;
+                SSLServerSocketFactory factory = nullReceiver();
                 return factory.createServerSocket(18310);
             });
 

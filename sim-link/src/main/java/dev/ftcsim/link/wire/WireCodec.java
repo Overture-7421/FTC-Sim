@@ -21,8 +21,8 @@ public final class WireCodec {
                 w.unsignedByte(Protocol.INIT);
                 w.string(init.opMode());
             }
-            case Command.Start start -> w.unsignedByte(Protocol.START);
-            case Command.Stop stop -> w.unsignedByte(Protocol.STOP);
+            case Command.Start _ -> w.unsignedByte(Protocol.START);
+            case Command.Stop _ -> w.unsignedByte(Protocol.STOP);
             case Command.SetGamepad pad -> {
                 w.unsignedByte(Protocol.SET_GAMEPAD);
                 w.unsignedByte(pad.gamepad());
@@ -40,14 +40,14 @@ public final class WireCodec {
                 w.unsignedByte(Protocol.SET_SPEED);
                 w.doubleBits(speed.speed());
             }
-            case Command.Reset reset -> w.unsignedByte(Protocol.RESET);
-            case Command.Close close -> w.unsignedByte(Protocol.CLOSE);
+            case Command.Reset _ -> w.unsignedByte(Protocol.RESET);
+            case Command.Close _ -> w.unsignedByte(Protocol.CLOSE);
             case Command.ArmMatch arm -> {
                 w.unsignedByte(Protocol.ARM_MATCH);
                 w.string(arm.autoOpMode());
                 w.string(arm.teleOpMode());
             }
-            case Command.StartMatch startMatch -> w.unsignedByte(Protocol.START_MATCH);
+            case Command.StartMatch _ -> w.unsignedByte(Protocol.START_MATCH);
         }
         return w.finish();
     }

@@ -48,6 +48,10 @@ public final class NetworkProbe implements Callable<List<String>> {
 
     private final List<String> outcomes = new ArrayList<>();
 
+    private static <T> T nullReceiver() {
+        return null;
+    }
+
     private void attempt(String label, Attempt attempt) {
         String outcome;
         try {
@@ -65,7 +69,7 @@ public final class NetworkProbe implements Callable<List<String>> {
     }
 
     @Override
-    @SuppressWarnings({"deprecation", "removal"})
+    @SuppressWarnings("removal")
     public List<String> call() throws Exception {
         InetAddress ten = InetAddress.getByAddress(new byte[] {10, 0, 0, 1});
         InetAddress loopback = InetAddress.getByAddress(new byte[] {127, 0, 0, 1});
@@ -90,20 +94,20 @@ public final class NetworkProbe implements Callable<List<String>> {
             }
         });
         attempt("SSLServerSocket.bind(SocketAddress)", () -> {
-            SSLServerSocket socket = null;
+            SSLServerSocket socket = nullReceiver();
             socket.bind(anywhere);
             return socket;
         });
         attempt("ServerSocketFactory.createServerSocket(int)", () -> {
-            ServerSocketFactory factory = null;
+            ServerSocketFactory factory = nullReceiver();
             return factory.createServerSocket(18004);
         });
         attempt("ServerSocketFactory.createServerSocket(int,int)", () -> {
-            ServerSocketFactory factory = null;
+            ServerSocketFactory factory = nullReceiver();
             return factory.createServerSocket(18005, 5);
         });
         attempt("SSLServerSocketFactory.createServerSocket(int,int,InetAddress)", () -> {
-            SSLServerSocketFactory factory = null;
+            SSLServerSocketFactory factory = nullReceiver();
             return factory.createServerSocket(18006, 5, loopback);
         });
         attempt("ServerSocketChannel.bind(SocketAddress)", () -> {
@@ -159,24 +163,24 @@ public final class NetworkProbe implements Callable<List<String>> {
             }
         });
         attempt("SSLSocket.connect(SocketAddress)", () -> {
-            SSLSocket socket = null;
+            SSLSocket socket = nullReceiver();
             socket.connect(remote);
             return socket;
         });
         attempt("SocketFactory.createSocket(String,int)", () -> {
-            SocketFactory factory = null;
+            SocketFactory factory = nullReceiver();
             return factory.createSocket("example.invalid", 87);
         });
         attempt("SocketFactory.createSocket(InetAddress,int)", () -> {
-            SocketFactory factory = null;
+            SocketFactory factory = nullReceiver();
             return factory.createSocket(ten, 88);
         });
         attempt("SSLSocketFactory.createSocket(String,int,InetAddress,int)", () -> {
-            SSLSocketFactory factory = null;
+            SSLSocketFactory factory = nullReceiver();
             return factory.createSocket("example.invalid", 89, loopback, 0);
         });
         attempt("SocketFactory.createSocket(InetAddress,int,InetAddress,int)", () -> {
-            SocketFactory factory = null;
+            SocketFactory factory = nullReceiver();
             return factory.createSocket(ten, 90, loopback, 0);
         });
         attempt("SocketChannel.open(SocketAddress)", () -> SocketChannel.open(remote));
@@ -285,16 +289,16 @@ public final class NetworkProbe implements Callable<List<String>> {
             }
         });
         attempt("HttpClient.send(HttpRequest,BodyHandler)", () -> {
-            HttpClient client = null;
+            HttpClient client = nullReceiver();
             return client.send(HttpRequest.newBuilder(URI.create("http://example.invalid/f")).build(), HttpResponse.BodyHandlers.ofString());
         });
         attempt("HttpClient.sendAsync(HttpRequest,BodyHandler)", () -> {
-            HttpClient client = null;
+            HttpClient client = nullReceiver();
             return client.sendAsync(HttpRequest.newBuilder(URI.create("https://example.invalid/g")).build(), HttpResponse.BodyHandlers.ofString())
                     .get(5, TimeUnit.SECONDS);
         });
         attempt("HttpClient.sendAsync(HttpRequest,BodyHandler,PushPromiseHandler)", () -> {
-            HttpClient client = null;
+            HttpClient client = nullReceiver();
             return client.sendAsync(
                             HttpRequest.newBuilder(URI.create("http://example.invalid/h")).build(),
                             HttpResponse.BodyHandlers.ofString(),

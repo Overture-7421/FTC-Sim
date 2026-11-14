@@ -306,7 +306,7 @@ public final class LynxHub {
 
     private Datagram answer(Datagram request, Reply reply, MessageNumbers numbers) {
         return switch (reply) {
-            case Reply.Ack ack -> respond(request, StandardCommand.ACK.number(), attention(), numbers);
+            case Reply.Ack _ -> respond(request, StandardCommand.ACK.number(), attention(), numbers);
             case Reply.Nack nack ->
                 respond(request, StandardCommand.NACK.number(), new byte[] {(byte) nack.reason()}, numbers);
             case Reply.Response response ->
