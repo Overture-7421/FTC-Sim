@@ -60,8 +60,9 @@ holds the bindings.
 
 ## Testing a model
 
-- **Register level**, in `sim-hardware`: `WorldRig` (in the tests) steps a `DeviceHost` at 240 Hz around a `ScriptedBody`,
-  a chassis that follows a script of constant-velocity moves so that the true pose is known exactly, and a test `RayView`.
+- **Register level**, in `sim-hardware`: `WorldRig` (in the tests) steps a `DeviceHost` at 240 Hz around a `ScriptedBody`
+  (in the test fixtures, shared with `acceptance-tests`), a chassis that follows a script of constant-velocity moves so
+  that the true pose is known exactly, and a test `RayView`.
   Write the register traffic as the driver does and compare with an answer worked out by hand.
 - **Through the real driver**, in `acceptance-tests`: a fixture OpMode in `src/scenarios` that uses the driver as a robot
   program does, a robot built with `TestRobot.builder().chassis(...)` and `.pinpoint()`, `.colorSensor(...)`,

@@ -1,5 +1,6 @@
 plugins {
     id("ftcsim.java-conventions")
+    `java-test-fixtures`
 }
 
 dependencies {

@@ -8,7 +8,8 @@
  * dev.ftcsim.hardware.device.DeviceHost} per robot, creates the devices with it, and calls
  * {@link dev.ftcsim.hardware.device.DeviceHost#step} after every physics step.
  *
- * <p>The models are in the packages of their makers: {@code gobilda}, {@code rev} and {@code bosch}; {@code scripted} is
- * a chassis that follows a script, for tests and demos. See {@code docs/architecture/adding-a-device.md}.
+ * <p>The models are in the packages of their makers: {@code gobilda}, {@code rev} and {@code bosch}. The tests drive
+ * them with {@code scripted.ScriptedBody}, a chassis that follows a script, which lives in the test fixtures. See
+ * {@code docs/architecture/adding-a-device.md}.
  */
 package dev.ftcsim.hardware.device;

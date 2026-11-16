@@ -98,6 +98,7 @@ dependencies {
     testImplementation(project(":sim-contracts"))
     testImplementation(project(":sim-core"))
     testImplementation(project(":sim-hardware"))
+    testImplementation(testFixtures(project(":sim-hardware")))
     testImplementation(project(":simulator"))
     testImplementation(project(":sim-link"))
     testImplementation(project(":project-import"))
