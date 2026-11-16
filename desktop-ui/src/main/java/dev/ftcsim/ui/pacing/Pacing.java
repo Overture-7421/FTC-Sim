@@ -2,6 +2,7 @@ package dev.ftcsim.ui.pacing;
 
 import dev.ftcsim.platform.FrameLimiter;
 import dev.ftcsim.platform.FramePacer;
+import dev.ftcsim.platform.HighResolutionParker;
 import java.util.Locale;
 
 /**

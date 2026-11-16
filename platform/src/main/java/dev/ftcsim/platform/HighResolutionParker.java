@@ -1,6 +1,5 @@
-package dev.ftcsim.ui.pacing;
+package dev.ftcsim.platform;
 
-import dev.ftcsim.platform.WindowsWaitableTimer;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.LongConsumer;
 

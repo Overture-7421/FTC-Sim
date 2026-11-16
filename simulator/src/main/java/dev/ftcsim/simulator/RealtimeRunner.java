@@ -5,7 +5,7 @@ import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.platform.DeadlineWaiter;
-import dev.ftcsim.platform.WindowsWaitableTimer;
+import dev.ftcsim.platform.HighResolutionParker;
 import java.io.IOException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
@@ -16,7 +16,6 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.LockSupport;
 import java.util.function.Consumer;
-import java.util.function.LongConsumer;
 
 /**
  * Shows a {@link SimulationSession} in real time: a thread of its own opens the session, advances simulated time at
@@ -146,8 +145,7 @@ public final class RealtimeRunner implements AutoCloseable {
         status.set(describe(session, 1.0, new ArrayDeque<>()));
         snapshot.set(session.snapshot());
         opened.countDown();
-        try (WindowsWaitableTimer timer = openTimer()) {
-            LongConsumer parker = timer == null ? LockSupport::parkNanos : timer::parkNanos;
+        try (HighResolutionParker parker = new HighResolutionParker()) {
             loop(session, new DeadlineWaiter(System::nanoTime, parker));
         } finally {
             session.close();
@@ -246,14 +244,6 @@ public final class RealtimeRunner implements AutoCloseable {
         return new SessionStatus(
                 session.now(), session.phase(), session.telemetry(), session.score(), problems, session.hardware(), speed,
                 achieved, paused, session.match(), session.unmapped());
-    }
-
-    private static WindowsWaitableTimer openTimer() {
-        try {
-            return WindowsWaitableTimer.openHighResolution();
-        } catch (RuntimeException unavailable) {
-            return null;
-        }
     }
 
     /** Stops the run, closes the session on its own thread and waits for it to finish. */

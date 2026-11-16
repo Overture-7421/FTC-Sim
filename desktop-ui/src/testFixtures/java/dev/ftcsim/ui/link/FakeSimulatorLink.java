@@ -10,7 +10,7 @@ import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.contracts.session.SimulatorLink;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
 import dev.ftcsim.platform.DeadlineWaiter;
-import dev.ftcsim.ui.pacing.HighResolutionParker;
+import dev.ftcsim.platform.HighResolutionParker;
 import java.util.List;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.CopyOnWriteArrayList;
