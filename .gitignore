@@ -3,6 +3,8 @@
 build/
 build-*/
 !/build-logic/
+# A Java package folder named build matches the build/ rule above.
+!/build-logic/src/main/kotlin/dev/ftcsim/build/
 .kotlin/
 !gradle/wrapper/gradle-wrapper.jar
 

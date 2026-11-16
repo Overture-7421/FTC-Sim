@@ -183,6 +183,7 @@ laid out.
    `app\build\dist\FTC-Sim` (with no Java on the PATH and no JAVA_HOME: it must run on its own `runtime`).
 4. The documentation that describes your change is updated, and `docs/README.md` still lists every page.
 5. You left no stray process, private build folder or temporary file behind, and did not change git state unless asked.
+   `git status --ignored` shows no ignored file under a `src` folder (a package folder named `build` would be ignored).
 6. Your report says what you ran, with counts, and what you could **not** verify. Do not claim what you did not run.
 
 ## When something is odd
