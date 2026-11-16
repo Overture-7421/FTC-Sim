@@ -1,6 +1,5 @@
 package dev.ftcsim.physics;
 
-import com.github.stephengold.joltjni.Body;
 import com.github.stephengold.joltjni.BodyCreationSettings;
 import com.github.stephengold.joltjni.BodyFilter;
 import com.github.stephengold.joltjni.BodyInterface;
@@ -8,8 +7,6 @@ import com.github.stephengold.joltjni.BodyLockRead;
 import com.github.stephengold.joltjni.BoxShape;
 import com.github.stephengold.joltjni.BroadPhaseLayerFilter;
 import com.github.stephengold.joltjni.BroadPhaseLayerInterfaceTable;
-import com.github.stephengold.joltjni.HingeConstraint;
-import com.github.stephengold.joltjni.HingeConstraintSettings;
 import com.github.stephengold.joltjni.IgnoreMultipleBodiesFilter;
 import com.github.stephengold.joltjni.JobSystem;
 import com.github.stephengold.joltjni.JobSystemSingleThreaded;
@@ -31,12 +28,9 @@ import com.github.stephengold.joltjni.ShapeResult;
 import com.github.stephengold.joltjni.SpecifiedBroadPhaseLayerFilter;
 import com.github.stephengold.joltjni.SpecifiedObjectLayerFilter;
 import com.github.stephengold.joltjni.SphereShape;
-import com.github.stephengold.joltjni.StaticCompoundShapeSettings;
 import com.github.stephengold.joltjni.TempAllocatorImpl;
-import com.github.stephengold.joltjni.TwoBodyConstraint;
 import com.github.stephengold.joltjni.Vec3;
 import com.github.stephengold.joltjni.enumerate.EActivation;
-import com.github.stephengold.joltjni.enumerate.EConstraintSpace;
 import com.github.stephengold.joltjni.enumerate.EMotionQuality;
 import com.github.stephengold.joltjni.enumerate.EMotionType;
 import com.github.stephengold.joltjni.enumerate.EOverrideMassProperties;
@@ -58,7 +52,7 @@ import java.util.TreeMap;
  * Z-up and metric and advances in steps of 1/240 s on the calling thread. Nothing here depends on callback order or
  * wall-clock time; every loop runs in ascending entity id order.
  *
- * <p>Entities are the bodies a snapshot reports: pieces, hives, gates, chassis and fixed boxes. Other static field
+ * <p>Entities are the bodies a snapshot reports: pieces, pivots, chassis and fixed boxes. Other static field
  * geometry has no entity id. Not thread-safe; call everything from one simulation thread.
  */
 public final class PhysicsWorld implements AutoCloseable {
@@ -77,11 +71,6 @@ public final class PhysicsWorld implements AutoCloseable {
 
     private static final float FIELD_FRICTION = 0.8f;
     private static final float FIELD_RESTITUTION = 0.0f;
-    private static final float HIVE_FRICTION = 0.5f;
-    private static final float HIVE_RESTITUTION = 0.1f;
-    private static final double HIVE_WALL_M = 0.01;
-    private static final float GATE_FRICTION = 0.3f;
-    private static final float GATE_RESTITUTION = 0.1f;
     private static final float CHASSIS_FRICTION = 0.4f;
     private static final float CHASSIS_RESTITUTION = 0.0f;
     // Rounded edges let the box slide over the ramp seams instead of snagging on them.
@@ -94,23 +83,9 @@ public final class PhysicsWorld implements AutoCloseable {
 
     private static boolean engineStarted;
 
-    private enum Role { PIECE, HIVE, GATE, CHASSIS, PIVOT, FIXED }
+    private enum Role { PIECE, CHASSIS, PIVOT, FIXED }
 
     private record Entity(int id, int kind, Role role, int bodyId) {}
-
-    private static final class HiveBody {
-        final Hive model;
-        final int bodyId;
-        // The kinematic body keeps its last velocity, so it must be zeroed once after arriving.
-        boolean stopPending;
-
-        HiveBody(Hive model, int bodyId) {
-            this.model = model;
-            this.bodyId = bodyId;
-        }
-    }
-
-    private record GateBody(int bodyId, HingeConstraint hinge) {}
 
     private record ChassisBody(int bodyId, MecanumChassis model) {}
 
@@ -134,8 +109,6 @@ public final class PhysicsWorld implements AutoCloseable {
     private final IgnoreMultipleBodiesFilter rayIgnored = new IgnoreMultipleBodiesFilter();
     private final Map<PieceSpec, SphereShape> pieceShapes = new HashMap<>();
     private final TreeMap<Integer, Entity> entities = new TreeMap<>();
-    private final TreeMap<Integer, HiveBody> hives = new TreeMap<>();
-    private final TreeMap<Integer, GateBody> gates = new TreeMap<>();
     private final TreeMap<Integer, ChassisBody> chassis = new TreeMap<>();
     private final String dllSha256;
 
@@ -232,7 +205,6 @@ public final class PhysicsWorld implements AutoCloseable {
 
     /** Advances the world by one fixed step. */
     public void step() {
-        advanceHives();
         driveChassis();
         pivots.applyDampers();
         rolling.apply(STEP_SECONDS);
@@ -488,115 +460,6 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     /**
-     * Adds a kinematic seesaw tray resting on its negative end stop. Order it to tip through the
-     * returned handle; it moves on the next steps.
-     */
-    public Hive addHive(int entityId, int kind, HiveSpec spec) {
-        requireFreeEntity(entityId);
-        Hive hive = new Hive(entityId, spec);
-        double wall = HIVE_WALL_M;
-        double rimZ = 0.5 * (wall + spec.lipHeightM());
-        double halfLength = 0.5 * spec.lengthM();
-        double halfWidth = 0.5 * spec.widthM();
-        List<BoxPart> parts = List.of(
-                new BoxPart(Vector3.ZERO, new Vector3(halfLength, halfWidth, 0.5 * wall)),
-                new BoxPart(new Vector3(halfLength - 0.5 * wall, 0, rimZ), new Vector3(0.5 * wall, halfWidth, 0.5 * spec.lipHeightM())),
-                new BoxPart(new Vector3(-halfLength + 0.5 * wall, 0, rimZ), new Vector3(0.5 * wall, halfWidth, 0.5 * spec.lipHeightM())),
-                new BoxPart(new Vector3(0, halfWidth - 0.5 * wall, rimZ), new Vector3(halfLength, 0.5 * wall, 0.5 * spec.lipHeightM())),
-                new BoxPart(new Vector3(0, -halfWidth + 0.5 * wall, rimZ), new Vector3(halfLength, 0.5 * wall, 0.5 * spec.lipHeightM())));
-        try (ShapeResult tray = compoundOfBoxes(parts); ShapeRefC shape = tray.get();
-                BodyCreationSettings settings = new BodyCreationSettings(
-                        shape, rvec3(spec.pivot()), hiveRotation(hive.angleRadians()), EMotionType.Kinematic, LAYER_MOVING)) {
-            settings.setFriction(HIVE_FRICTION).setRestitution(HIVE_RESTITUTION);
-            int bodyId = bodies.createAndAddBody(settings, EActivation.DontActivate);
-            register(entityId, kind, Role.HIVE, bodyId);
-            hives.put(entityId, new HiveBody(hive, bodyId));
-        }
-        return hive;
-    }
-
-    private record BoxPart(Vector3 offset, Vector3 halfExtents) {}
-
-    private static ShapeResult compoundOfBoxes(List<BoxPart> parts) {
-        List<BoxShape> boxes = new ArrayList<>();
-        try (StaticCompoundShapeSettings compound = new StaticCompoundShapeSettings()) {
-            for (BoxPart part : parts) {
-                BoxShape box = new BoxShape(vec3(part.halfExtents()), 0f);
-                boxes.add(box);
-                compound.addShape(vec3(part.offset()), Quat.sIdentity(), box);
-            }
-            ShapeResult result = compound.create();
-            if (result.hasError()) {
-                throw new IllegalStateException("compound shape: " + result.getError());
-            }
-            return result;
-        } finally {
-            boxes.forEach(BoxShape::close);
-        }
-    }
-
-    private static Quat hiveRotation(double angleRadians) {
-        return quat(Quaternion.axisAngle(Vector3.Y, angleRadians));
-    }
-
-    private void advanceHives() {
-        for (HiveBody hive : hives.values()) {
-            boolean wasMoving = hive.model.isMoving();
-            hive.model.advance(STEP_SECONDS);
-            if (wasMoving) {
-                bodies.moveKinematic(
-                        hive.bodyId, rvec3(hive.model.spec().pivot()), hiveRotation(hive.model.angleRadians()), STEP_SECONDS);
-                hive.stopPending = !hive.model.isMoving();
-            } else if (hive.stopPending) {
-                bodies.setLinearAndAngularVelocity(hive.bodyId, ZERO_VELOCITY, ZERO_VELOCITY);
-                hive.stopPending = false;
-            }
-        }
-    }
-
-    /** Adds a flap that hangs from a hinge and closes under gravity. */
-    public Gate addGate(int entityId, int kind, GateSpec spec) {
-        requireFreeEntity(entityId);
-        Vector3 center = spec.hinge().minus(new Vector3(0, 0, 0.5 * spec.heightM()));
-        Vector3 halfExtents = new Vector3(0.5 * spec.thicknessM(), 0.5 * spec.widthM(), 0.5 * spec.heightM());
-        try (BoxShape shape = new BoxShape(vec3(halfExtents), 0f);
-                BodyCreationSettings settings = new BodyCreationSettings(
-                        shape, rvec3(center), Quat.sIdentity(), EMotionType.Dynamic, LAYER_MOVING);
-                MassProperties mass = new MassProperties();
-                HingeConstraintSettings hinge = new HingeConstraintSettings()) {
-            mass.setMass((float) spec.massKg());
-            settings.setOverrideMassProperties(EOverrideMassProperties.CalculateInertia)
-                    .setMassPropertiesOverride(mass)
-                    .setAngularDamping((float) spec.angularDamping())
-                    .setFriction(GATE_FRICTION)
-                    .setRestitution(GATE_RESTITUTION);
-            Body flap = bodies.createBody(settings);
-            bodies.addBody(flap, EActivation.Activate);
-
-            Vec3 axis = new Vec3(0f, -1f, 0f);
-            Vec3 zeroAngleDirection = new Vec3(0f, 0f, -1f);
-            hinge.setSpace(EConstraintSpace.WorldSpace);
-            hinge.setPoint1(spec.hinge().x(), spec.hinge().y(), spec.hinge().z());
-            hinge.setPoint2(spec.hinge().x(), spec.hinge().y(), spec.hinge().z());
-            hinge.setHingeAxis1(axis);
-            hinge.setHingeAxis2(axis);
-            hinge.setNormalAxis1(zeroAngleDirection);
-            hinge.setNormalAxis2(zeroAngleDirection);
-            hinge.setLimitsMin(0f);
-            hinge.setLimitsMax((float) spec.openLimitRadians());
-            TwoBodyConstraint constraint = hinge.create(Body.sFixedToWorld(), flap);
-            system.addConstraint(constraint);
-            register(entityId, kind, Role.GATE, flap.getId());
-            gates.put(entityId, new GateBody(flap.getId(), (HingeConstraint) constraint));
-        }
-        return new Gate(this, entityId);
-    }
-
-    double gateAngle(int entityId) {
-        return gates.get(entityId).hinge().getCurrentAngle();
-    }
-
-    /**
      * Stands a mecanum robot on the ground. The robot is a rounded box collider whose centre of mass
      * sits low; its wheels act only through {@link MecanumChassis}, which is driven by the commands
      * set before each {@link #step()}.
@@ -664,10 +527,6 @@ public final class PhysicsWorld implements AutoCloseable {
     }
 
     private void closeNativeObjects() {
-        for (GateBody gate : gates.values()) {
-            system.removeConstraint(gate.hinge());
-            gate.hinge().close();
-        }
         pivots.close();
         system.close();
         pieceShapes.values().forEach(SphereShape::close);
