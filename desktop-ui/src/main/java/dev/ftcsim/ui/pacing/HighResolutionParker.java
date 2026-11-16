@@ -34,10 +34,6 @@ public final class HighResolutionParker implements LongConsumer, AutoCloseable {
         }
     }
 
-    public boolean highResolution() {
-        return timer != null;
-    }
-
     public String description() {
         return timer != null ? "high-resolution timer" : "park (high-resolution timer unavailable: " + fallbackReason + ")";
     }

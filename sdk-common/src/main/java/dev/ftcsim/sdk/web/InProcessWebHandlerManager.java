@@ -2,9 +2,7 @@ package dev.ftcsim.sdk.web;
 
 import com.qualcomm.robotcore.util.WebHandlerManager;
 import com.qualcomm.robotcore.util.WebServer;
-import java.util.ArrayList;
 import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import org.firstinspires.ftc.robotcore.internal.webserver.WebHandler;
 import org.firstinspires.ftc.robotcore.internal.webserver.WebObserver;
@@ -36,8 +34,4 @@ final class InProcessWebHandlerManager implements WebHandlerManager {
     /** Observers see client requests, and a server without clients receives none. */
     @Override
     public void registerObserver(String key, WebObserver webObserver) {}
-
-    synchronized List<String> commands() {
-        return new ArrayList<>(handlers.keySet());
-    }
 }

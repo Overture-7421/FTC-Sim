@@ -2,7 +2,6 @@ package dev.ftcsim.sdk.web;
 
 import com.qualcomm.robotcore.util.WebHandlerManager;
 import com.qualcomm.robotcore.util.WebServer;
-import java.util.List;
 import org.firstinspires.ftc.robotcore.internal.webserver.RobotControllerWebInfo;
 import org.firstinspires.ftc.robotcore.internal.webserver.websockets.WebSocketManager;
 
@@ -44,15 +43,5 @@ public final class InProcessWebServer implements WebServer {
     @Override
     public RobotControllerWebInfo getConnectionInformation() {
         throw new UnsupportedOperationException("The simulated robot controller's web server does not listen, so it has no address to report");
-    }
-
-    /** The commands libraries registered handlers for, in registration order. */
-    public List<String> registeredCommands() {
-        return handlers.commands();
-    }
-
-    /** The web socket namespaces libraries registered, in registration order. */
-    public List<String> registeredNamespaces() {
-        return sockets.namespaces();
     }
 }

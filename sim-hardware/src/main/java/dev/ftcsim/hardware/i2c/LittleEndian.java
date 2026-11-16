@@ -13,11 +13,6 @@ public final class LittleEndian {
         return bytes(Float.floatToIntBits(value));
     }
 
-    /** The low two bytes of {@code value}. */
-    public static byte[] shortBytes(int value) {
-        return new byte[] {(byte) value, (byte) (value >> 8)};
-    }
-
     public static int intAt(byte[] data, int offset) {
         return (data[offset] & 0xFF)
                 | (data[offset + 1] & 0xFF) << 8
@@ -27,9 +22,5 @@ public final class LittleEndian {
 
     public static float floatAt(byte[] data, int offset) {
         return Float.intBitsToFloat(intAt(data, offset));
-    }
-
-    public static int unsignedShortAt(byte[] data, int offset) {
-        return (data[offset] & 0xFF) | (data[offset + 1] & 0xFF) << 8;
     }
 }

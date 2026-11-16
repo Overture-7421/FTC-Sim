@@ -1,8 +1,6 @@
 package dev.ftcsim.sdk.web;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
-import java.util.List;
 import java.util.Set;
 import org.firstinspires.ftc.robotcore.internal.webserver.websockets.FtcWebSocket;
 import org.firstinspires.ftc.robotcore.internal.webserver.websockets.FtcWebSocketMessage;
@@ -55,9 +53,5 @@ final class InProcessWebSocketManager implements WebSocketManager {
         if (!namespaces.contains(namespace)) {
             throw new IllegalStateException("The namespace '" + namespace + "' is not registered");
         }
-    }
-
-    synchronized List<String> namespaces() {
-        return new ArrayList<>(namespaces);
     }
 }

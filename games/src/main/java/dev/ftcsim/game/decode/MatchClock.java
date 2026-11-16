@@ -50,10 +50,6 @@ final class MatchClock {
         return autoStarted() && (nowNanos - autoStart >= AUTO_NANOS || teleopStart != NONE);
     }
 
-    boolean teleopStarted() {
-        return teleopStart != NONE;
-    }
-
     boolean hasEnded() {
         return ended != NONE;
     }

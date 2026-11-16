@@ -66,17 +66,6 @@ public final class HeldKeys {
         }
     }
 
-    /** Releases every held key; records the reason only when something was actually held. */
-    public void neutralize(String reason) {
-        boolean released;
-        synchronized (this) {
-            released = releaseAll(reason);
-        }
-        if (released) {
-            changed.run();
-        }
-    }
-
     private boolean releaseAll(String reason) {
         if (held.isEmpty()) {
             return false;

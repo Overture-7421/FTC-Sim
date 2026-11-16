@@ -79,10 +79,6 @@ public record ImportRequest(
         return new ImportRequest(projectDirectory, workspace, packageDirectory, packageZip, jdkHome, androidSdk, trust, gradleUserHome, offline, timeout, applicationModule, simulatorClasspath);
     }
 
-    public ImportRequest withApplicationModule(String gradlePath) {
-        return new ImportRequest(projectDirectory, workspace, packageDirectory, packageZip, jdkHome, androidSdk, trust, gradleUserHome, offline, gradleTimeout, gradlePath, simulatorClasspath);
-    }
-
     public ImportRequest withSimulatorClasspath(List<Path> classpath) {
         return new ImportRequest(projectDirectory, workspace, packageDirectory, packageZip, jdkHome, androidSdk, trust, gradleUserHome, offline, gradleTimeout, applicationModule, classpath);
     }
