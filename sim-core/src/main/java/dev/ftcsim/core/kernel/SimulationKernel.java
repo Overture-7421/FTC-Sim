@@ -5,9 +5,9 @@ import java.util.PriorityQueue;
 
 /**
  * Advances simulated time and everything that lives in it: the fixed-step world, scheduled callbacks, and the
- * robot thread. Given the same robot program, inputs and configuration it produces the same sequence of
- * observations however fast or slowly the host drives it, because time moves only here and the robot thread
- * is run strictly between moves.
+ * robot thread. Time moves only here and the robot thread is run strictly between moves, so the robot sees
+ * simulated time however fast or slowly the host drives it; the host can pause, slow down or speed up a run, and the
+ * simulation needs no locks because only one of the two threads runs at a time.
  *
  * <p>At any instant the order is fixed: world steps up to that time, then scheduled callbacks, then the robot
  * thread. Time then jumps to the earliest of the next world step, the next callback, the robot's wake-up time
@@ -31,8 +31,7 @@ public final class SimulationKernel {
 
     public SimulationKernel(WorldStepper world, KernelConfig config) {
         this.world = world;
-        this.gate = new RobotGate(
-                clock, diagnostics, config.robotThread(), config.robotLivenessMillis(), config.worldFrame(), config.worldQuietMillis());
+        this.gate = new RobotGate(clock, diagnostics, config.robotThread(), config.robotLivenessMillis());
         this.hooks = new KernelHooks(this, gate, clock, config, diagnostics);
     }
 
@@ -153,12 +152,6 @@ public final class SimulationKernel {
         return thread == (simulator == null ? creator : simulator);
     }
 
-    /** True when the simulator thread is known and {@code thread} is some other thread. */
-    boolean isOutsider(Thread thread) {
-        Thread simulator = simulatorThread;
-        return simulator != null && simulator != thread;
-    }
-
     /** A one-line account of where the robot thread stands, for diagnostics and failure messages. */
     public String describeRobot() {
         return gate.describe();
@@ -175,14 +168,10 @@ public final class SimulationKernel {
             boolean progressed;
             do {
                 progressed = false;
-                // Threads of the robot world other than the robot thread, a library's own, run between two turns of
-                // the robot thread and never beside one, and before a callback that runs robot code on this thread.
-                gate.awaitWorldQuiet();
                 if (depth == 1) {
                     progressed = runDueEvents(now);
                 }
                 progressed |= runDueWatchdogs(now);
-                gate.awaitStartingThreads();
                 gate.setHorizon(Math.min(target, Math.min(world.nextStepNanos(), Math.min(nextEventNanos(), nextWatchdogNanos()))));
                 progressed |= gate.runIfDue(now);
             } while (progressed);

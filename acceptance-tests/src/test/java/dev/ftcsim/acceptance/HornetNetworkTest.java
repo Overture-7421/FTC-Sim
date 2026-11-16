@@ -10,8 +10,7 @@ import dev.ftcsim.contracts.hooks.NetworkRequest;
 import dev.ftcsim.importer.pack.PreparedProgram;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
@@ -74,7 +73,7 @@ class HornetNetworkTest {
         assumeTrue(System.getProperty("os.name", "").toLowerCase(java.util.Locale.ROOT).contains("windows"), "netstat -ano is the Windows one");
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotProfile profile = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec profile = HornetMapping.spec();
         long pid = ProcessHandle.current().pid();
 
         List<String> before = ownedBy(netstat(), pid);

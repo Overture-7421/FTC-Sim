@@ -6,6 +6,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 
 plugins {
     id("ftcsim.java-conventions")
+    `java-test-fixtures`
     alias(libs.plugins.kotlin.jvm)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.compose.multiplatform)
@@ -42,22 +43,30 @@ dependencies {
     runtimeOnly(variantOf(libs.lwjgl.glfw) { classifier("natives-windows") })
     runtimeOnly(variantOf(libs.lwjgl.opengl) { classifier("natives-windows") })
 
+    // The fake host and its simulator: test-only, so the shipped window carries none of it.
+    testFixturesImplementation(project(":sim-contracts"))
+    testFixturesImplementation(project(":platform"))
+    // The window's classes carry Compose types in their signatures, and the Compose compiler runs on every Kotlin source set.
+    testFixturesImplementation(libs.compose.desktop.windows.x64)
+
     testImplementation(libs.compose.ui.test)
 }
 
 // LWJGL and Skiko call restricted native methods and Unsafe; without these flags the JDK prints warnings.
 val nativeAccessFlags = listOf("--enable-native-access=ALL-UNNAMED", "--sun-misc-unsafe-memory-access=allow")
 
-compose.desktop {
-    application {
-        mainClass = "dev.ftcsim.ui.App"
-        jvmArgs += nativeAccessFlags
-        // `run` starts the app on the project's JDK 25, not on whichever JVM runs Gradle.
-        javaHome = javaToolchains.launcherFor(java.toolchain).get().metadata.installationPath.asFile.absolutePath
-    }
+tasks.withType<Test>().configureEach {
+    jvmArgs(nativeAccessFlags)
 }
 
-tasks.withType<Test>().configureEach {
+// The window alone, on the fake host of the test fixtures, for interface work. The shipped window has no main of its
+// own: the real application is :app:run.
+tasks.register<JavaExec>("runFake") {
+    group = "application"
+    description = "Opens the window on the fake host (fake link, fake preparer, no robot code); --args takes the window's options and --practice."
+    classpath = sourceSets["testFixtures"].runtimeClasspath
+    mainClass.set("dev.ftcsim.ui.FakeApp")
+    javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
     jvmArgs(nativeAccessFlags)
 }
 

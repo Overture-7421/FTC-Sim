@@ -1,6 +1,6 @@
 # BIOBUZZ presented by RTX (2026-27) field
 
-Package `dev.ftcsim.game.biobuzz` in `game-biobuzz`. `BiobuzzField` builds the whole field in an empty `PhysicsWorld`
+Package `dev.ftcsim.game.biobuzz` in `games`. `BiobuzzField` builds the whole field in an empty `PhysicsWorld`
 and `BiobuzzRun` plays its rules. Numbers are metres in the field frame unless they say inches; the CAD is in inches and
 `Solids.in` converts.
 

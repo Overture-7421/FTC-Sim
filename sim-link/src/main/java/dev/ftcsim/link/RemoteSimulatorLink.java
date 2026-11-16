@@ -158,7 +158,7 @@ public final class RemoteSimulatorLink implements SimulatorLink {
     @Override
     public void open(SessionRequest request) {
         Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(request.profile(), "request.profile");
+        Objects.requireNonNull(request.mapping(), "request.mapping");
         Objects.requireNonNull(request.program(), "request.program");
         Objects.requireNonNull(request.field(), "request.field");
         Objects.requireNonNull(request.alliance(), "request.alliance");
@@ -360,6 +360,7 @@ public final class RemoteSimulatorLink implements SimulatorLink {
                     case Event.Failed failure -> listener.failed(failure.message());
                     case Event.Catalogue latest -> listener.catalogue(latest.catalogue());
                     case Event.Refused refusal -> listener.refused(refusal.message());
+                    case Event.Log log -> listener.log(log.lines());
                 }
             });
         }

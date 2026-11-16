@@ -1,16 +1,14 @@
 package dev.ftcsim.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.ProfileException;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -18,19 +16,20 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * The devices of a robot profile, mounted on the simulated hubs and read through the SDK's own drivers by a program
- * that knows nothing about the simulator: the chip that counts odometry pods follows the robot that carries them, and
- * a distance sensor sees what the robot carries.
+ * The sensors of the robot, mounted on the simulated hubs and read through the SDK's own drivers by a program that
+ * knows nothing about the simulator: the Pinpoint reports where the robot really is, a colour sensor sees what the
+ * robot carries, and a sensor is found by its driver class under any name. Whatever else a program asks for is a problem
+ * of the session.
  */
 @Timeout(180)
 class DevicesSessionTest {
     private static final long SECOND = 1_000_000_000L;
 
-    private static RobotProfile hornet;
+    private static RobotSpec hornet;
 
     @BeforeAll
-    static void loadProfile() throws IOException {
-        hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+    static void loadProfile() {
+        hornet = HornetMapping.spec();
     }
 
     /** The number a telemetry line shows as "caption : value". */
@@ -38,6 +37,14 @@ class DevicesSessionTest {
         return session.telemetry().lines().stream()
                 .filter(line -> line.startsWith(caption + " : "))
                 .mapToDouble(line -> Double.parseDouble(line.substring(caption.length() + 3)))
+                .findFirst()
+                .orElseThrow(() -> new AssertionError("no telemetry line '" + caption + "' in " + session.telemetry().lines()));
+    }
+
+    private static String text(SimulationSession session, String caption) {
+        return session.telemetry().lines().stream()
+                .filter(line -> line.startsWith(caption + " : "))
+                .map(line -> line.substring(caption.length() + 3))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no telemetry line '" + caption + "' in " + session.telemetry().lines()));
     }
@@ -50,7 +57,7 @@ class DevicesSessionTest {
     }
 
     @Test
-    void thePinpointOnTheRobotCountsTheTrueMotionOfTheRobotThroughTheSdksOwnDriver() throws IOException {
+    void thePinpointOnTheRobotReportsTheTruePoseOfTheRobotThroughTheSdksOwnDriver() throws IOException {
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             SimulationSession session = handle.session;
             startDriving(session);
@@ -69,12 +76,12 @@ class DevicesSessionTest {
             assertTrue(travelled > 1.5, "the robot should have gone somewhere: " + truth);
             // What the program shows is as of its latest loop, a few milliseconds behind a robot that is still moving.
             double lagMillimetres = 1000.0 * Math.hypot(truth.vx(), truth.vy()) * 0.02;
-            double tolerance = 10.0 + 0.01 * travelled * 1000.0 + lagMillimetres;
+            double tolerance = 2.0 + lagMillimetres;
             assertEquals(truth.x() * 1000.0, reading(session, "pinpoint x mm"), tolerance);
             assertEquals(truth.y() * 1000.0, reading(session, "pinpoint y mm"), tolerance);
             double chip = reading(session, "pinpoint heading rad");
             double headingError = Math.atan2(Math.sin(truth.yaw() - chip), Math.cos(truth.yaw() - chip));
-            assertEquals(0.0, headingError, 0.02 + Math.abs(truth.wz()) * 0.02, "heading of the chip against the chassis, " + truth);
+            assertEquals(0.0, headingError, 0.002 + Math.abs(truth.wz()) * 0.02, "heading of the chip against the chassis, " + truth);
             assertEquals(List.of(), session.problems(), handle.log.toString());
         }
     }
@@ -100,16 +107,36 @@ class DevicesSessionTest {
     }
 
     @Test
-    void aDeviceTypeNoModelExistsForIsRefusedWithAMessageThatNamesTheDeviceAndTheTypes() {
-        RobotProfile profile = RobotProfileLoader.parse("""
-                {"schema": 1, "name": "bad device",
-                 "devices": { "mystery": { "type": "no-such-sensor", "bus": 1 } } }
-                """, "test profile");
+    void aSensorIsFoundByTheClassTheCodeAsksForUnderAnyNameAndWhatTheSimulatorCannotProvideIsAProblem() throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            session.init("Sensors By Class");
+            session.runFor(SECOND);
 
-        ProfileException refused = assertThrows(ProfileException.class, () -> TestSessions.open(profile, 0, 0, 0));
+            assertEquals("found GoBildaPinpointDriver", text(session, "pinpoint"));
+            assertEquals("found GoBildaPinpointDriver", text(session, "same pinpoint"));
+            assertTrue(text(session, "second pinpoint").contains("\"another one\" and type GoBildaPinpointDriver"), text(session, "second pinpoint"));
+            for (String caption : new String[] {"colour range", "colour normalized", "colour legacy", "colour v3"}) {
+                assertEquals("found RevColorSensorV3", text(session, caption), caption);
+            }
+            assertTrue(text(session, "second colour").contains("\"other colour\""), text(session, "second colour"));
+            assertTrue(text(session, "octoquad").contains("\"octo\""), text(session, "octoquad"));
+            assertTrue(text(session, "external imu").contains("no other I2C device"), text(session, "external imu"));
+            assertTrue(text(session, "webcam").contains("Webcam 1"), text(session, "webcam"));
 
-        assertTrue(refused.getMessage().contains("devices.mystery"), refused.getMessage());
-        assertTrue(refused.getMessage().contains("no-such-sensor"), refused.getMessage());
-        assertTrue(refused.getMessage().contains("gobilda-pinpoint"), "it should list the types there are: " + refused.getMessage());
+            List<String> problems = session.problems();
+            for (String unsupported : new String[] {"'another one'", "'other colour'", "'octo'", "'extImu'", "'Webcam 1'"}) {
+                assertEquals(
+                        1, problems.stream().filter(problem -> problem.contains(unsupported) && problem.contains("not supported")).count(),
+                        unsupported + " is a problem of the session: " + problems);
+            }
+            assertTrue(
+                    problems.stream().noneMatch(problem -> problem.contains("'my odometry computer'") || problem.contains("'colour'")),
+                    "the sensors that are found are no problem: " + problems);
+            assertEquals(
+                    List.of(),
+                    session.unmapped().stream().filter(device -> device.kind() != UnmappedDevice.Kind.MOTOR).toList(),
+                    "a sensor is not an unmapped motor, servo or pin");
+        }
     }
 }

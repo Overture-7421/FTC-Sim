@@ -111,6 +111,11 @@ final class SdkRobotHost implements RobotHost {
         return display.snapshot();
     }
 
+    @Override
+    public void clearMessages() {
+        display.clear();
+    }
+
     /** Stops what runs, as the SDK does when the robot controller shuts down. */
     @Override
     public void close() {

@@ -54,11 +54,11 @@ class HeadlessApp(
     }
 
     /** What the Setup screen offers, once the link has told; null until then. */
-    fun rules(): SetupRules? = services.session.catalogue.value?.let { SetupRules.of(it, services.programRequired) }
+    fun rules(): SetupRules? = services.session.catalogue.value?.let(SetupRules::of)
 
-    /** Starts the default practice run the way the Setup screen would and shows the Practice screen. */
+    /** Starts the default fake session the way opening a project would and shows the Simulator screen. */
     fun openPractice() {
-        services.startRun(FakeSimulatorLink.defaultRequest())
+        services.openSession(FakeSimulatorLink.defaultRequest())
         ui.navigator.go(Destination.PRACTICE)
     }
 

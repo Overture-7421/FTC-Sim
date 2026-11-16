@@ -34,6 +34,14 @@ final class DriverStationDisplay {
         lines = List.copyOf(shown);
     }
 
+    /** The screen as it is when nothing has been said: no telemetry, no warning, no error. */
+    void clear() {
+        lines = List.of();
+        crash = "";
+        RobotLog.clearGlobalErrorMsg();
+        RobotLog.clearGlobalWarningMsg();
+    }
+
     void showCrash(String stackTrace) {
         crash = stackTrace;
     }

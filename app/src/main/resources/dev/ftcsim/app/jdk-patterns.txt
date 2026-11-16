@@ -1,0 +1,16 @@
+# The places to look for a JDK on this computer, for the project's own Gradle build (the importer needs a JDK 17 to 21; the
+# simulator itself runs on the runtime that comes with it and looks at none of these). One path a line, with %VARIABLES%
+# and wildcards that stand for one folder level; a pattern whose variable is not set matches nothing.
+%ProgramFiles%\Eclipse Adoptium\*
+%ProgramFiles%\Java\*
+%ProgramFiles%\Microsoft\jdk-*
+%ProgramFiles%\Amazon Corretto\*
+%ProgramFiles%\Zulu\*
+%ProgramFiles%\BellSoft\*
+%ProgramFiles%\Semeru\*
+%LOCALAPPDATA%\Programs\Eclipse Adoptium\*
+%USERPROFILE%\.jdks\*
+%USERPROFILE%\.gradle\jdks\*
+%ProgramFiles%\Android\Android Studio*\jbr
+%LOCALAPPDATA%\Programs\Android Studio*\jbr
+%LOCALAPPDATA%\JetBrains\Toolbox\apps\AndroidStudio\*\*\jbr

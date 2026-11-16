@@ -24,13 +24,32 @@ class ControlsTest {
     )
 
     @Test
-    fun nothingWorksBeforeASessionWhileItOpensOrAfterItFailed() {
-        for (connection in listOf(Connection.NONE, Connection.OPENING, Connection.FAILED)) {
+    fun nothingWorksBeforeASessionOrWhileItOpens() {
+        for (connection in listOf(Connection.NONE, Connection.OPENING)) {
             assertEquals(
-                Controls(false, false, false, false, false, false, "The session is not open yet.", false, false),
+                Controls(false, false, false, false, false, false, false, "No session", false, false),
                 controls(connection),
             )
         }
+    }
+
+    @Test
+    fun aSessionThatFailedOffersOnlyARestartBecauseTheCodeMayBeWhatWasWrong() {
+        val failed = controls(Connection.FAILED)
+
+        assertTrue(failed.restart)
+        assertEquals(Controls(false, false, false, false, false, false, true, "No session", false, false), failed)
+    }
+
+    @Test
+    fun restartingTheCodeIsPossibleInEveryPhaseOfAnOpenSessionButNotWhileTheCodeIsBeingBuilt() {
+        for (phase in RobotPhase.entries) {
+            assertTrue(controls(phase = phase).restart, "phase $phase")
+        }
+        val building = Controls.of(SessionState(Connection.OPEN, Fixtures.info(), "Teleop A"), RunState(), building = true)
+
+        assertFalse(building.restart, "a second restart waits for the first")
+        assertTrue(building.pause && building.reset, "the session itself is untouched while the code builds")
     }
 
     @Test
@@ -96,7 +115,7 @@ class ControlsTest {
         for (phase in listOf(RobotPhase.INIT, RobotPhase.RUNNING)) {
             val busy = controls(phase = phase)
             assertFalse(busy.arm, "phase $phase")
-            assertEquals("Stop the OpMode first: a match starts from idle.", busy.matchReason)
+            assertEquals("Stop the OpMode first", busy.matchReason)
         }
     }
 
@@ -105,7 +124,7 @@ class ControlsTest {
         val autoOnly = controls(opModes = listOf(Fixtures.opModes[1]), selected = "Auto B")
 
         assertFalse(autoOnly.arm)
-        assertEquals("This program has no teleop OpMode, which a match needs.", autoOnly.matchReason)
+        assertEquals("No TeleOp OpMode", autoOnly.matchReason)
     }
 
     @Test
@@ -137,7 +156,7 @@ class ControlsTest {
         assertTrue(ended.init)
         assertFalse(ended.stopMatch)
         assertFalse(ended.arm)
-        assertEquals("A match has been played. Reset the session to play another.", ended.matchReason)
+        assertEquals("Reset the world to play another match", ended.matchReason)
     }
 
     @Test

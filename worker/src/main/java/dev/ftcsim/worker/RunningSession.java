@@ -56,6 +56,12 @@ interface RunningSession extends AutoCloseable {
      */
     void startMatch();
 
+    /**
+     * Stops the robot program and puts the world back as it began, with the robot program still loaded; returns once the
+     * simulation has done so.
+     */
+    void reset();
+
     void setGamepad(int gamepad, GamepadState state);
 
     void setPaused(boolean paused);

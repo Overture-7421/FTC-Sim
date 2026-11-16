@@ -3,15 +3,35 @@ package dev.ftcsim.contracts.hardware;
 import java.util.List;
 
 /**
- * Where the robot's devices are connected. The simulator's robot profile implements this; the SDK adapter asks
+ * Where the robot's devices are connected. The simulator's wiring table implements this; the SDK adapter asks
  * it the first time robot code looks a device up by name, so a robot program never has to be told what is
- * plugged in where. A name the profile does not mention still gets a working port, the next free one, and the
- * answer says so, so the simulator can show it as unbound instead of pretending it is wired to something real.
+ * plugged in where. A motor, servo or pin the robot mapping does not place still gets a working port, the next
+ * free one, and the answer says so, so the simulator can show it as unbound instead of pretending it is wired to
+ * something real. The robot's sensors are fixed: robot code finds each by the driver class it asks for, under any
+ * name, and anything else is recorded as unsupported.
  */
 public interface HardwareDirectory {
 
     /** The I2C bus of a hub that its own IMU, the BNO055 inside the hub, is on. */
     int EMBEDDED_IMU_BUS = 0;
+
+    /** The I2C sensors of the robot, each on a bus of the parent hub that is its own. */
+    enum Sensor {
+        /** The goBILDA Pinpoint odometry computer. */
+        PINPOINT(1),
+        /** The REV colour sensor. */
+        COLOR_SENSOR(2);
+
+        private final int bus;
+
+        Sensor(int bus) {
+            this.bus = bus;
+        }
+
+        public int bus() {
+            return bus;
+        }
+    }
 
     /** One REV hub on the bus. */
     record Hub(int address, String name, boolean parent, boolean embedded) {
@@ -22,7 +42,7 @@ public interface HardwareDirectory {
         }
     }
 
-    /** Where a device was found, and whether the profile put it there or the simulator picked a free port. */
+    /** Where a device was found, and whether the robot mapping or the design put it there or the simulator picked a free port. */
     sealed interface Wiring permits MotorWiring, ServoWiring, I2cWiring, DigitalWiring, AnalogWiring {
         int hubAddress();
 
@@ -50,19 +70,34 @@ public interface HardwareDirectory {
 
     ServoWiring servo(String name);
 
-    I2cWiring i2c(String name);
+    /**
+     * Where the sensor of that kind is for robot code that asks for a driver of it under {@code name}. The robot has
+     * one of each kind, so one name can be it, as a robot configuration has one entry for it; the same name finds it
+     * again, and another name is refused.
+     *
+     * @throws IllegalStateException if the sensor already has another name
+     */
+    I2cWiring sensor(String name, Sensor kind);
 
     /**
      * Where the IMU is for robot code that asks for an IMU, the {@code IMU} interface or {@code BNO055IMU}, under
-     * {@code name}. A name the profile places is wired where the profile says. Any other name is the IMU inside the
-     * embedded hub, on its bus 0, whatever the name is: robot code calls it "imu", "IMU", "gyro" or anything else, and
-     * the profile is not asked to guess. A hub has one such chip, so one name can be it, as a robot configuration has
+     * {@code name}: the IMU inside the embedded hub, on its bus 0, whatever the name is. Robot code calls it "imu",
+     * "IMU", "gyro" or anything else. A hub has one such chip, so one name can be it, as a robot configuration has
      * one entry for it; asking for it under another name is refused.
      *
      * @throws IllegalStateException if the robot has no embedded hub, or the IMU of the embedded hub already is
      *                               another name
      */
     I2cWiring imu(String name);
+
+    /**
+     * Records a device robot code asked for that the simulator cannot provide, such as an OctoQuad, a second sensor of a
+     * kind or a webcam, so that the session lists it among its problems. The device is not bound.
+     *
+     * @param name what robot code called it
+     * @param what the kind of device, as robot code asked for it
+     */
+    void unsupported(String name, String what);
 
     DigitalWiring digital(String name);
 

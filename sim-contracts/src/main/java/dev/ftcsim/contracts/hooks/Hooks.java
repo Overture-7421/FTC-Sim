@@ -12,10 +12,7 @@ import java.util.concurrent.TimeUnit;
  * must restore {@link #installDefault()} afterwards.
  */
 public final class Hooks {
-    /**
-     * The name of the robot world's class loader, which is what a stack frame of robot code reports as its
-     * {@code StackTraceElement.getClassLoaderName()}. The kernel knows a thread runs robot code by it.
-     */
+    /** The name of the robot world's class loader, which is what a stack frame of robot code reports as its class loader name. */
     public static final String WORLD_LOADER_NAME = "robot";
 
     private static volatile RobotHooks delegate = new RealWorldHooks();
@@ -56,21 +53,6 @@ public final class Hooks {
     /** The wall-clock time robot code sees, in nanoseconds since 1970; see {@link RobotHooks#currentTimeNanos}. */
     public static long currentTimeNanos() {
         return delegate.currentTimeNanos();
-    }
-
-    /** A seed for a generator robot code created without one; see {@link RobotHooks#randomSeed}. */
-    public static long randomSeed() {
-        return delegate.randomSeed();
-    }
-
-    /** Replaces {@code Math.random}; see {@link RobotHooks#mathRandom}. */
-    public static double mathRandom() {
-        return delegate.mathRandom();
-    }
-
-    /** Tells the host that robot code did something it cannot make reproducible; see {@link RobotHooks#nondeterministic}. */
-    static void nondeterministic(String description) {
-        delegate.nondeterministic(description);
     }
 
     public static void sleep(long millis) throws InterruptedException {

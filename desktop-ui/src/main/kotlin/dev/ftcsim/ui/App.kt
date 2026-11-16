@@ -2,6 +2,7 @@ package dev.ftcsim.ui
 
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -14,11 +15,9 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import dev.ftcsim.ui.common.AwtFileChooser
 import dev.ftcsim.ui.common.AwtLogOpener
+import dev.ftcsim.ui.common.FAKE_HOST_TITLE
 import dev.ftcsim.ui.common.FtcSimTheme
 import dev.ftcsim.ui.host.AppHost
-import dev.ftcsim.ui.host.FakeAppHost
-import dev.ftcsim.ui.link.FakeSimulatorLink
-import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.settings.SettingsStore
 import dev.ftcsim.ui.settings.UserDirectories
 import java.awt.event.WindowAdapter
@@ -30,37 +29,31 @@ import kotlinx.coroutines.withContext
 
 /**
  * The simulator's desktop application. [run] is the entry point of the application around the window, which gives it a
- * [AppHost]; [main] is the window's own, which runs on a fake host so that the interface can be developed without a worker.
+ * [AppHost]. The window has no host of its own: the test fixtures start it on a fake one, for interface work.
  */
 object App {
-    /** Opens the window on a fake link and a fake preparer; `--practice` also opens the default practice run. */
-    @JvmStatic
-    fun main(args: Array<String>) {
-        val options = AppOptions.parse(args)
-        launch(FakeAppHost(), options) { services, ui ->
-            if (options.openPractice) {
-                services.startRun(FakeSimulatorLink.defaultRequest())
-                ui.navigator.go(Destination.PRACTICE)
-            }
-        }
-    }
-
     /**
-     * Opens the window on [host] and returns when it has closed. Options: `--exit-after=<seconds>`, `--no-focus` and
-     * `--settings=<file>`. Callable from Java.
+     * Opens the window on [host] and returns when it has closed, with the project that was open last time open again,
+     * unless `--no-last-project` is given. Options: `--exit-after=<seconds>`, `--no-focus` and `--settings=<file>`.
+     * Callable from Java.
      */
     @JvmStatic
     fun run(host: AppHost, args: Array<String>) {
         val options = AppOptions.parse(args)
-        require(!options.openPractice) { "--practice opens the window's own fake run and is not available here" }
-        launch(host, options) { _, _ -> }
+        run(host, options) { _, ui -> if (options.opensLastProject) ui.openLast() }
     }
 
-    private fun launch(host: AppHost, options: AppOptions, started: (AppServices, AppUi) -> Unit) {
+    /** What the window's title says: the project that is open, and on a stand-in host that nothing real runs. */
+    internal fun title(project: String?, fake: Boolean): String =
+        listOfNotNull("FTC-Sim", project, FAKE_HOST_TITLE.takeIf { fake }).joinToString(" - ")
+
+    /** Opens the window on [host] with [options], calls [started] once the window's services exist, and returns when it has closed. */
+    fun run(host: AppHost, options: AppOptions, started: suspend (AppServices, AppUi) -> Unit) {
         application {
             val settingsFile = remember { options.settingsFile ?: UserDirectories.uiSettingsFile() }
             val services = remember { AppServices(host, SettingsStore.forFile(settingsFile)) }
             val ui = remember { AppUi(services) }
+            val open by ui.runner.open.collectAsState()
             val scope = rememberCoroutineScope()
             var closing by remember { mutableStateOf(false) }
             // The window disappears at once; the link may take a moment to end, which the UI thread must not wait for.
@@ -83,7 +76,7 @@ object App {
             Window(
                 onCloseRequest = close,
                 state = rememberWindowState(size = DpSize(1280.dp, 800.dp)),
-                title = "FTC-Sim",
+                title = title(open?.project?.name, services.isFake),
                 visible = !closing,
                 focusable = options.takesFocus,
             ) {

@@ -9,15 +9,14 @@ import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.Vector3;
 import dev.ftcsim.physics.WheelPosition;
 import dev.ftcsim.simulator.RobotRig;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 /**
- * The bundled Hornet profile against the four constants that Hornet's team measured on the real robot with Pedro
+ * The fixed DECODE robot mapped as Hornet against the four constants that Hornet's team measured on the real robot with Pedro
  * Pathing's own tuners (Hornet's {@code Constants}): the top speed forward and sideways at full power, and the
  * deceleration of the coasting robot, forward and sideways. The tuners themselves run in
  * {@link HornetBringupTest#pedrosOwnTunersMeasureTheSimulatedDrivetrain}, which needs Hornet's package; here the same
@@ -26,6 +25,7 @@ import org.junit.jupiter.api.Test;
 class HornetDrivetrainCalibrationTest {
 
     private static final double INCH = 0.0254;
+    private static final double BATTERY_VOLTS = 12.6;
     private static final double TOLERANCE = 0.05;
     private static final double RUN_INCHES = 48;
     private static final double COAST_FROM_INCHES_PER_SECOND = 30;
@@ -47,14 +47,14 @@ class HornetDrivetrainCalibrationTest {
         private final boolean sideways;
         private int steps;
 
-        Run(RobotProfile profile, boolean sideways) {
+        Run(RobotSpec profile, boolean sideways) {
             this.sideways = sideways;
             world.addStaticBox(new Vector3(0, 0, -0.5), new Vector3(20, 20, 0.5));
             chassis = world.addMecanumChassis(
-                    EntityIds.CHASSIS, RobotRig.CHASSIS_KIND, profile.chassis().toConfig(), Vector3.ZERO, 0);
+                    EntityIds.CHASSIS, RobotRig.CHASSIS_KIND, profile.chassis(), Vector3.ZERO, 0);
             double[] pattern = sideways ? LEFT : FORWARD;
             for (WheelPosition wheel : WheelPosition.values()) {
-                chassis.wheelPlant(wheel, 1).applyVoltage(pattern[wheel.ordinal()] * profile.batteryVolts());
+                chassis.wheelPlant(wheel, 1).applyVoltage(pattern[wheel.ordinal()] * BATTERY_VOLTS);
             }
         }
 
@@ -90,11 +90,11 @@ class HornetDrivetrainCalibrationTest {
         }
     }
 
-    private static RobotProfile hornet;
+    private static RobotSpec hornet;
 
     @BeforeAll
     static void loadHornet() throws IOException {
-        hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        hornet = HornetMapping.spec();
     }
 
     /** What the velocity tuners report: the speed at full power once the robot has travelled 48 inches from rest. */

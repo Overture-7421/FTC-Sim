@@ -32,8 +32,8 @@ parsing on the text that `LimelightModel` (sim-hardware, `dev.ftcsim.hardware.ca
    is in `Fiducial[]` (`v` 1, camera-relative arrays) and adds nothing to `botpose`, which stays zero with count 0.
 6. **The driver.** `start/stop/pause`, `setPollRateHz` (1..250, ignored while running), `getTimeSinceLastUpdate` and
    `isConnected` (250 ms) follow the SDK's `scheduleAtFixedRate` grid in virtual time; a request advances the robot's
-   clock by its latency (3 ms GET, 8 ms POST; an unanswered one by the SDK's 100 ms connect timeout). A name the profile
-   does not list is an unplugged camera: not connected, never valid, and a problem is reported.
+   clock by its latency (3 ms GET, 8 ms POST; an unanswered one by the SDK's 100 ms connect timeout). A second name for the
+   one camera is an unplugged camera: not connected, never valid, and a problem is reported.
 
 ## Numbers and where they come from
 
@@ -52,22 +52,25 @@ parsing on the text that `LimelightModel` (sim-hardware, `dev.ftcsim.hardware.ca
 | per-tag `ta` a fraction (0-1), top-level `ta` a percentage | the specification's tables |
 | per-tag `t6c_ts`, `t6t_cs`, `t6r_ts`, `t6t_rs`: x right, y down, z into the tag (the AprilTag convention) | **assumed**; only the depth in `t6t_cs` and `t6r_fs` (= `botpose` for one tag) are checked |
 
-## Profile
+## Where it is and how it is found
 
-```json
-"cameras": { "limelight": {                       // the name robot code asks the hardware map for
-  "type": "limelight-3a",
-  "mount": { "x": 0.16, "y": 0.0, "z": 0.25, "yawDegrees": 0, "pitchDegrees": 20, "rollDegrees": 0 },
-  "pipelines": { "0": { "type": "apriltag", "fieldMap": "decode", "ids": [20, 24], "resolution": "1280x960", "sendCorners": false } } } }
-```
+Robot code asks for it by `Limelight3A`, under any name (`hardwareMap.get(Limelight3A.class, "limelight")`); the robot has one
+Limelight and the first name that asks is its name. A second name gets an unplugged camera (not connected, never valid), and
+the session lists it among its problems. The camera is plugged in by `RobotRig` (a `CameraRack`, the `CameraWire` the SDK
+adapter talks to) with the field's tags and the bodies some of them are stuck on, so it sees the field the session runs on;
+`CameraRack.problems()` joins `SimulationSession.problems()`.
 
-The mount is in the chassis frame like every point of a profile (X forward, Y left, Z up from the centre of the
-chassis box, about 0.18 m above the floor for the generic chassis); yaw is positive to the left, pitch positive looking up,
-roll positive clockwise seen from behind. `type`, `fieldMap` are required; `ids` filters, `resolution` defaults to
-`640x480`. A pipeline slot that is not listed finds nothing and is reported. **Hornet's mount (0.16 m ahead, 0.25 m up, 20
-degrees up) and its 1280x960 pipeline are estimates**: the profile has no notes field, and Hornet's repository does not say.
-The integrator builds the cameras with `RobotCameras.build(profile, deviceContext, seed)` and passes the `CameraRack`
-(a `CameraWire`) in `RobotEnvironment`; `CameraRack.problems()` joins the problem list.
+Its **mount is the one setting a student has**, `RobotMapping.camera` (the Robot page's Limelight window): where it is on the
+robot, X forward, Y left, Z up in metres from the centre of the chassis's box (about 0.18 m above the floor for the fixed
+chassis), and yaw (positive to the left), pitch (positive looking up) and roll (positive clockwise seen from behind) in degrees.
+The usual mount is 0.16 m ahead, 0.25 m up, tilted 20 degrees up. The design fixes the rest: pipeline 0, AprilTags, believing
+the fixed tags of the field the robot stands on (`field`: the camera is set up for the game that is being played) at
+1280x960. The camera's pipelines are not a setting a student makes. **The mount of Hornet's camera and its 1280x960 pipeline
+are estimates**: Hornet's repository does not say.
+
+Before this was wired into the rig (it was only available to the tests), the Limelight of a session was always unplugged;
+with the camera plugged in, a program that corrects its pose from `botpose` (Hornet's `Camera` subsystem does) now gets
+results.
 
 ## Measured with the tests
 

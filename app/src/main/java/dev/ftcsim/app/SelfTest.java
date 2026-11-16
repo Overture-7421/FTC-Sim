@@ -19,6 +19,7 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
@@ -26,10 +27,11 @@ import java.util.stream.Stream;
 
 /**
  * {@code Main --self-test}: shows in a few seconds, with no window, whether this installation can run FTC-Sim on this
- * computer, and says what is wrong when it cannot. It checks the Java it runs on (the pinned version, x64, the options
- * the launcher passes), that the jars of the window and its native libraries can be reached, that the class path file
- * is whole, that the real worker starts on the same Java, tells what can be asked of it and ends with its link, that the
- * physics engine loads, and that no process is left behind. Everything is written to standard output, one line a check.
+ * computer, and says what is wrong when it cannot. It checks the Java it runs on (the runtime folder of the installation,
+ * x64, and the options the launcher passes), that the jars of the window and its native libraries can be reached, that the
+ * class path file is whole, that the real worker starts on the same Java, tells what can be asked of it and ends with its
+ * link, that the physics engine loads, and that no process is left behind. Everything is written to standard output, one
+ * line a check.
  *
  * <p>A distribution has no robot program (those come from a team's project, with the FTC SDK), so no session can be
  * opened in the worker; the physics engine is therefore loaded the way the worker loads it, from the worker's own jars
@@ -74,28 +76,32 @@ final class SelfTest {
     private final Machine machine;
     private final Source<RuntimePin> pin;
     private final Source<AppClasspath> classpath;
+    private final Optional<Path> installedRuntime;
     private final List<String> problems = new ArrayList<>();
 
-    SelfTest(PrintStream out, Jvm jvm, Machine machine, Source<RuntimePin> pin, Source<AppClasspath> classpath) {
+    /** @param installedRuntime where the runtime folder of the installation is; empty when not running from an installation */
+    SelfTest(PrintStream out, Jvm jvm, Machine machine, Source<RuntimePin> pin, Source<AppClasspath> classpath, Optional<Path> installedRuntime) {
         this.out = out;
         this.jvm = jvm;
         this.machine = machine;
         this.pin = pin;
         this.classpath = classpath;
+        this.installedRuntime = installedRuntime;
     }
 
     /** The self test of this computer: the Java that runs it, the user's folders and the class path file of the installation. */
     static SelfTest forThisMachine(PrintStream out) {
-        return new SelfTest(out, Jvm.current(), Machine.real(), RuntimePin::bundled, AppClasspath::locate);
+        return new SelfTest(out, Jvm.current(), Machine.real(), RuntimePin::bundled, AppClasspath::locate, RuntimePin.installedRuntime());
     }
 
     /** @return 0 when every check passed, 1 when one did not; the output says which */
     int run() {
         out.println("FTC-Sim self-test");
-        RuntimePin runtime = attempt("runtime manifest", pin);
+        RuntimePin runtime = attempt("runtime description", pin);
         if (runtime != null) {
             checkJava(runtime);
         }
+        checkRuntimeFolder();
         checkWindow();
         AppClasspath jars = attempt("class path file", classpath);
         if (jars == null) {
@@ -136,6 +142,29 @@ final class SelfTest {
             ok("Java options: " + String.join(" ", runtime.jvmArguments()));
         } else {
             fail("Java options", "the launcher did not pass " + String.join(" ", missing));
+        }
+    }
+
+    private void checkRuntimeFolder() {
+        if (installedRuntime.isEmpty()) {
+            skip("the Java is not the runtime folder of an installation: this program does not run from an installation's lib folder");
+            return;
+        }
+        Path expected = installedRuntime.get();
+        if (!Files.isRegularFile(expected.resolve("bin").resolve("java.exe"))) {
+            fail("runtime folder", expected + " has no bin\\java.exe: the runtime that comes with FTC-Sim is missing or damaged");
+            return;
+        }
+        boolean same;
+        try {
+            same = Files.isSameFile(expected, jvm.home());
+        } catch (IOException | RuntimeException unreadable) {
+            same = false;
+        }
+        if (same) {
+            ok("runtime folder: " + expected + " is the Java that runs FTC-Sim");
+        } else {
+            fail("runtime folder", "FTC-Sim runs on " + jvm.home() + " and not on the runtime folder of its installation, " + expected);
         }
     }
 
@@ -181,11 +210,11 @@ final class SelfTest {
                 String command = ProcessHandle.of(pid).flatMap(handle -> handle.info().command()).orElse("");
                 if (!command.equalsIgnoreCase(RealHost.thisJava().toAbsolutePath().normalize().toString())) {
                     fail("worker", "it runs on " + command + ", not on the Java of the application");
-                } else if (catalogue.profiles().isEmpty() || catalogue.fields().isEmpty()) {
+                } else if (catalogue.motors().isEmpty() || catalogue.fields().isEmpty()) {
                     fail("worker", "its catalogue is empty");
                 } else {
                     ok("worker (pid " + pid + ") started on the same Java in " + millis + " ms and told its catalogue (fields: "
-                            + catalogue.fields().size() + ", robot profiles: " + catalogue.profiles().size() + ")");
+                            + catalogue.fields().size() + ", motors: " + catalogue.motors().size() + ")");
                 }
             } catch (IOException | RuntimeException failure) {
                 fail("worker", failure.getMessage());

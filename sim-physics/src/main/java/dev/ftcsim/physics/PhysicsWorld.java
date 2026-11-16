@@ -3,7 +3,6 @@ package dev.ftcsim.physics;
 import com.github.stephengold.joltjni.Body;
 import com.github.stephengold.joltjni.BodyCreationSettings;
 import com.github.stephengold.joltjni.BodyFilter;
-import com.github.stephengold.joltjni.BodyIdVector;
 import com.github.stephengold.joltjni.BodyInterface;
 import com.github.stephengold.joltjni.BodyLockRead;
 import com.github.stephengold.joltjni.BoxShape;
@@ -32,7 +31,6 @@ import com.github.stephengold.joltjni.ShapeResult;
 import com.github.stephengold.joltjni.SpecifiedBroadPhaseLayerFilter;
 import com.github.stephengold.joltjni.SpecifiedObjectLayerFilter;
 import com.github.stephengold.joltjni.SphereShape;
-import com.github.stephengold.joltjni.StateRecorderImpl;
 import com.github.stephengold.joltjni.StaticCompoundShapeSettings;
 import com.github.stephengold.joltjni.TempAllocatorImpl;
 import com.github.stephengold.joltjni.TwoBodyConstraint;
@@ -43,7 +41,6 @@ import com.github.stephengold.joltjni.enumerate.EMotionQuality;
 import com.github.stephengold.joltjni.enumerate.EMotionType;
 import com.github.stephengold.joltjni.enumerate.EOverrideMassProperties;
 import com.github.stephengold.joltjni.enumerate.EPhysicsUpdateError;
-import com.github.stephengold.joltjni.enumerate.EStateRecorderState;
 import com.github.stephengold.joltjni.readonly.ConstBodyLockInterface;
 import com.github.stephengold.joltjni.readonly.ConstNarrowPhaseQuery;
 import dev.ftcsim.contracts.snapshot.BodyState;
@@ -58,9 +55,8 @@ import java.util.TreeMap;
 
 /**
  * Fixed-step rigid-body world on top of Jolt, and the only class that touches jolt-jni. The world is
- * Z-up and metric, advances in steps of 1/240 s on the calling thread, and is deterministic: equal
- * inputs give bit-identical state. Nothing here depends on callback order, wall-clock time or
- * identity hashes; every loop runs in ascending entity id order.
+ * Z-up and metric and advances in steps of 1/240 s on the calling thread. Nothing here depends on callback order or
+ * wall-clock time; every loop runs in ascending entity id order.
  *
  * <p>Entities are the bodies a snapshot reports: pieces, hives, gates, chassis and fixed boxes. Other static field
  * geometry has no entity id. Not thread-safe; call everything from one simulation thread.
@@ -172,7 +168,7 @@ public final class PhysicsWorld implements AutoCloseable {
 
     /**
      * Creates a world with the native library this build is validated against, single threaded, which is the
-     * configuration whose determinism was measured.
+     * configuration the build is tested with.
      *
      * @param nativeDirectory directory the DLL is extracted into before it is loaded
      */
@@ -185,7 +181,7 @@ public final class PhysicsWorld implements AutoCloseable {
      *
      * @param nativeDirectory directory the DLL is extracted into before it is loaded
      * @param dllSha256       SHA-256 the DLL must have, as lower-case hex
-     * @param workerThreads   0 for the deterministic single-threaded job system; more is for experiments
+     * @param workerThreads   0 for the single-threaded job system; more is for experiments
      */
     public static PhysicsWorld create(Path nativeDirectory, String dllSha256, int workerThreads) {
         String loaded = NativeLibrary.load(nativeDirectory, dllSha256);
@@ -314,32 +310,6 @@ public final class PhysicsWorld implements AutoCloseable {
             }
             return new RayHit(distance, RayHit.FIXED, RayHit.FIXED);
         }
-    }
-
-    /**
-     * SHA-256 over everything that determines the future: the step counter, the engine's saved state
-     * (which omits sleeping bodies' poses), every body's transform in body id order, and the state
-     * machines owned by this class.
-     */
-    public String stateHash() {
-        StateDigest digest = new StateDigest().putLong(stepIndex);
-        try (StateRecorderImpl recorder = new StateRecorderImpl()) {
-            system.saveState(recorder, EStateRecorderState.All);
-            digest.putBytes(recorder.getData());
-        }
-        try (BodyIdVector ids = new BodyIdVector()) {
-            system.getBodies(ids);
-            ids.sort();
-            for (int i = 0; i < ids.size(); i++) {
-                bodies.getPositionAndRotation(ids.get(i), scratchPosition, scratchRotation);
-                digest.putInt(ids.get(i))
-                        .putFloat(scratchPosition.x()).putFloat(scratchPosition.y()).putFloat(scratchPosition.z())
-                        .putFloat(scratchRotation.getX()).putFloat(scratchRotation.getY())
-                        .putFloat(scratchRotation.getZ()).putFloat(scratchRotation.getW());
-            }
-        }
-        digestOwnedState(digest);
-        return digest.hex();
     }
 
     /** Adds immovable field geometry: a box with the given centre, half extents and optional tilt. */
@@ -690,20 +660,6 @@ public final class PhysicsWorld implements AutoCloseable {
                 return new MecanumChassis.GroundHit(
                         vector(point), vector(lock.getBody().getWorldSpaceSurfaceNormal(hit.getSubShapeId2(), point)));
             }
-        }
-    }
-
-    private void digestOwnedState(StateDigest digest) {
-        for (Map.Entry<Integer, HiveBody> entry : hives.entrySet()) {
-            HiveBody hive = entry.getValue();
-            digest.putInt(entry.getKey())
-                    .putDouble(hive.model.angleRadians())
-                    .putDouble(hive.model.target())
-                    .putInt(hive.stopPending ? 1 : 0);
-        }
-        for (Map.Entry<Integer, ChassisBody> entry : chassis.entrySet()) {
-            digest.putInt(entry.getKey());
-            entry.getValue().model().putStateInto(digest);
         }
     }
 

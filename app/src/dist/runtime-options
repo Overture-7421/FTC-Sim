@@ -1,0 +1,6 @@
+# The options FTC-Sim.cmd starts the Java runtime of this folder with: the format of a Java argument file, one option a line.
+# They are also in the application's jar, where the self test checks that the running Java was given every one, and
+# :app:run starts the application with them. Native access is for the window's libraries (Skia, LWJGL, Jolt); the
+# memory access option keeps the JDK from warning about the sun.misc.Unsafe use of those libraries and of the FTC SDK.
+--enable-native-access=ALL-UNNAMED
+--sun-misc-unsafe-memory-access=allow

@@ -1,6 +1,5 @@
 package dev.ftcsim.core.kernel;
 
-import dev.ftcsim.contracts.hooks.Hooks;
 import java.util.function.Predicate;
 
 /**
@@ -15,18 +14,11 @@ import java.util.function.Predicate;
  *                           something to change, without reading the clock, still lets time pass; small enough
  *                           that the computation the robot does is not mistaken for time spent
  * @param epochMillis        the wall-clock time, in milliseconds since 1970, that simulated time zero corresponds
- *                           to; fixed so that every run sees the same dates
- * @param seed               what the robot program's random numbers derive from; the same seed gives it the same
- *                           numbers
+ *                           to, so that the robot program sees the dates of the simulated calendar
  * @param robotLivenessMillis how long, in real time, the robot thread may run without reaching a synchronisation
  *                           point before the kernel asks it to end, and twice that before it gives up on it; a robot
  *                           thread that never reaches one, because it loops inside the JDK, would otherwise hang the
  *                           simulator
- * @param worldFrame         tells whether a stack frame belongs to the robot world, which is how the kernel knows a
- *                           thread other than the robot thread is running robot code; by default a frame of the class
- *                           loader called {@link Hooks#WORLD_LOADER_NAME}
- * @param worldQuietMillis   how long, in real time, the kernel waits for such a thread to come to rest before it
- *                           records a problem and stops waiting for it
  */
 public record KernelConfig(
         Predicate<Thread> robotThread,
@@ -34,23 +26,12 @@ public record KernelConfig(
         long yieldCostNanos,
         long backEdgeCostNanos,
         long epochMillis,
-        long seed,
-        long robotLivenessMillis,
-        Predicate<StackTraceElement> worldFrame,
-        long worldQuietMillis) {
+        long robotLivenessMillis) {
 
-    /** 2026-01-01T00:00:00Z, an arbitrary but fixed start of the simulated calendar. */
+    /** 2026-01-01T00:00:00Z, an arbitrary start of the simulated calendar. */
     public static final long DEFAULT_EPOCH_MILLIS = 1_767_225_600_000L;
 
-    public static final long DEFAULT_SEED = 0x5EED_F7C5_1A11L;
-
     public static final long DEFAULT_ROBOT_LIVENESS_MILLIS = 10_000L;
-
-    public static final long DEFAULT_WORLD_QUIET_MILLIS = 20_000L;
-
-    /** A frame of the robot world's class loader. */
-    public static final Predicate<StackTraceElement> ROBOT_WORLD_FRAME =
-            frame -> Hooks.WORLD_LOADER_NAME.equals(frame.getClassLoaderName());
 
     public KernelConfig {
         if (pollCostNanos <= 0 || yieldCostNanos <= 0 || backEdgeCostNanos <= 0) {
@@ -59,29 +40,12 @@ public record KernelConfig(
         if (robotLivenessMillis <= 0) {
             throw new IllegalArgumentException("the robot thread must be given some real time to reach a synchronisation point");
         }
-        if (worldFrame == null || worldQuietMillis <= 0) {
-            throw new IllegalArgumentException("the kernel needs a way to tell robot code and some real time to wait for it");
-        }
     }
 
-    /** A configuration that waits for threads of the robot world for the default time. */
-    public KernelConfig(
-            Predicate<Thread> robotThread,
-            long pollCostNanos,
-            long yieldCostNanos,
-            long backEdgeCostNanos,
-            long epochMillis,
-            long seed,
-            long robotLivenessMillis) {
-        this(
-                robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, seed, robotLivenessMillis,
-                ROBOT_WORLD_FRAME, DEFAULT_WORLD_QUIET_MILLIS);
-    }
-
-    /** A configuration with the default seed and liveness limit. */
+    /** A configuration with the default liveness limit. */
     public KernelConfig(
             Predicate<Thread> robotThread, long pollCostNanos, long yieldCostNanos, long backEdgeCostNanos, long epochMillis) {
-        this(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, DEFAULT_SEED, DEFAULT_ROBOT_LIVENESS_MILLIS);
+        this(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, DEFAULT_ROBOT_LIVENESS_MILLIS);
     }
 
     public static KernelConfig defaults(Predicate<Thread> robotThread) {
@@ -89,31 +53,14 @@ public record KernelConfig(
     }
 
     public KernelConfig withBackEdgeCostNanos(long nanos) {
-        return new KernelConfig(
-                robotThread, pollCostNanos, yieldCostNanos, nanos, epochMillis, seed, robotLivenessMillis, worldFrame, worldQuietMillis);
-    }
-
-    public KernelConfig withSeed(long newSeed) {
-        return new KernelConfig(
-                robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, newSeed, robotLivenessMillis,
-                worldFrame, worldQuietMillis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, nanos, epochMillis, robotLivenessMillis);
     }
 
     public KernelConfig withEpochMillis(long millis) {
-        return new KernelConfig(
-                robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, millis, seed, robotLivenessMillis,
-                worldFrame, worldQuietMillis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, millis, robotLivenessMillis);
     }
 
     public KernelConfig withRobotLivenessMillis(long millis) {
-        return new KernelConfig(
-                robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, seed, millis, worldFrame, worldQuietMillis);
-    }
-
-    /** What counts as robot code for the threads the kernel waits for, and for how long it waits for one. */
-    public KernelConfig withWorldThreads(Predicate<StackTraceElement> frame, long quietMillis) {
-        return new KernelConfig(
-                robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, seed, robotLivenessMillis,
-                frame, quietMillis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, millis);
     }
 }

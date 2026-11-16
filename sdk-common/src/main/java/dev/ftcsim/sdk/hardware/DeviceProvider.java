@@ -6,7 +6,7 @@ import java.util.List;
 /**
  * Creates one family of simulated devices the first time robot code asks for one by name. A provider knows
  * how to build the SDK's own driver objects on top of the simulated hubs; it never decides where a device is
- * wired, which the robot profile does.
+ * wired, which the robot's wiring does.
  */
 interface DeviceProvider {
 
@@ -25,6 +25,6 @@ interface DeviceProvider {
         return false;
     }
 
-    /** Creates the device named {@code name}, wired where the profile says, and returns it unregistered. */
+    /** Creates the device named {@code name}, wired where the directory says, and returns it unregistered. */
     HardwareDevice create(SimHubs hubs, Class<?> requested, String name);
 }

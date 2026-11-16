@@ -14,14 +14,16 @@ import java.util.stream.Stream;
  * Which parts of a project folder are the project's own source and build files. Everything else is an output of
  * some tool, or belongs to this machine rather than to the project, and is neither copied nor hashed:
  * version-control and IDE folders, Gradle's caches, native build folders, the {@code build} folder of every
- * Gradle project, IntelliJ module files, and {@code local.properties}, which names the Android SDK of whoever
- * wrote it. Links (symbolic links and Windows junctions) are never followed, because they can lead out of the
+ * Gradle project, IntelliJ module files, {@code local.properties}, which names the Android SDK of whoever
+ * wrote it, and the {@code ftcsim.json} at the project's root, FTC-Sim's own file. Links (symbolic links and Windows junctions) are never followed, because they can lead out of the
  * project; they are reported to the visitor instead.
  */
 final class ProjectFiles {
     private static final Set<String> TOOL_DIRECTORIES =
             Set.of(".git", ".gradle", ".idea", ".vscode", ".vs", ".kotlin", ".cxx", ".externalNativeBuild", "captures");
     private static final Set<String> MACHINE_FILES = Set.of("local.properties", ".git");
+    /** The robot description FTC-Sim keeps at the project's root: not source, never built, and the one file FTC-Sim may add. */
+    static final String SIMULATOR_PROFILE = "ftcsim.json";
     private static final Set<String> BUILD_SCRIPTS =
             Set.of("build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts");
 
@@ -56,7 +58,8 @@ final class ProjectFiles {
                 if (!isToolDirectory(name, gradleProject)) {
                     walkDirectory(child, prefix + name + "/", visitor);
                 }
-            } else if (attributes.isRegularFile() && !MACHINE_FILES.contains(name) && !name.endsWith(".iml")) {
+            } else if (attributes.isRegularFile() && !MACHINE_FILES.contains(name) && !name.endsWith(".iml")
+                    && !(prefix.isEmpty() && name.equals(SIMULATOR_PROFILE))) {
                 visitor.file(prefix + name, child, attributes);
             }
         }

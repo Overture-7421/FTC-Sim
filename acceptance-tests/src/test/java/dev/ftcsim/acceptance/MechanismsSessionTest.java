@@ -2,67 +2,54 @@ package dev.ftcsim.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.robot.GamepadState;
+import dev.ftcsim.contracts.session.RobotMapping;
+import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.field.FieldSetup;
+import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * A team's intake and shooter driving simulated mechanisms: the SDK, the hubs, the shaft plants and the zones that
- * take pieces in, carry them and launch them, with nothing in the robot program that knows about any of it.
+ * A team's intake, shooter and turret driving simulated mechanisms: the SDK, the hubs, the shaft plants and the zones that
+ * take pieces in, carry them and launch them, with nothing in the robot program that knows about any of it. The BIOBUZZ
+ * robot's turret has no real team program to be checked with (Hornet's is DECODE's), so the fixture OpMode here, a
+ * position loop on a turret motor, is its only validation.
  */
 @Timeout(180)
 class MechanismsSessionTest {
     private static final long SECOND = 1_000_000_000L;
+    // Piece kinds of the DECODE field: purple and green artifacts.
+    private static final int PURPLE = 101;
+    private static final int GREEN = 102;
+    private static final double TURRET_RATIO = 3.0;
 
-    private static final String PROFILE = """
-            {
-              "schema": 1, "name": "mechanism test rig",
-              "motors": {
-                "intake": { "port": 0, "motor": "goBILDA-5203-435", "shaft": { "loadInertiaKgM2": 1.0e-4, "frictionNmsPerRad": 1.0e-3 } },
-                "up": { "port": 1, "motor": "goBILDA-5203-435", "shaft": { "loadInertiaKgM2": 1.0e-4, "frictionNmsPerRad": 1.0e-3 } },
-                "shooterLeft": { "port": 2, "motor": "goBILDA-bare-6000", "shaft": { "loadInertiaKgM2": 2.5e-4, "frictionNmsPerRad": 1.0e-5 } },
-                "shooterRight": { "port": 3, "motor": "goBILDA-bare-6000", "shaft": { "loadInertiaKgM2": 2.5e-4, "frictionNmsPerRad": 1.0e-5 } }
-              },
-              "mechanisms": {
-                "storages": {
-                  "magazine": {
-                    "capacity": 3,
-                    "path": [[0.30, 0.0, 0.0635], [-0.05, 0.0, 0.30]],
-                    "drives": [
-                      { "motor": "intake", "radiusM": 0.025, "sign": 1, "from": 0.0, "to": 0.25 },
-                      { "motor": "up", "radiusM": 0.02, "sign": 1, "from": 0.1 }
-                    ]
-                  }
-                },
-                "intakes": {
-                  "front": {
-                    "storage": "magazine", "center": [0.30, 0.0, 0.0635], "half": [0.05, 0.2, 0.1],
-                    "when": [ { "motor": "intake", "minRadPerSec": 10.0 } ]
-                  }
-                },
-                "launchers": {
-                  "shooter": {
-                    "storage": "magazine", "direction": [-0.6, 0.0, 0.8], "efficiency": 0.8,
-                    "wheels": [
-                      { "motor": "shooterLeft", "radiusM": 0.05, "sign": 1 },
-                      { "motor": "shooterRight", "radiusM": 0.05, "sign": 1 }
-                    ],
-                    "when": [ { "motor": "up", "minRadPerSec": 20.0 } ]
-                  }
-                }
-              }
-            }
-            """;
+    /** Hornet's robot but for the names its OpMode of the fixture uses: four wheels, the roller, the belt and two flywheels. */
+    private static final RobotMapping MAPPING = RobotMapping.empty("mechanism test rig").withMotors(List.of(
+            new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
+            new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
+            new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
+            new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
+            new MotorMapping("intake", Slot.INTAKE, "", false),
+            new MotorMapping("up", Slot.CONVEYOR, "", false),
+            new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
+            new MotorMapping("shooterRight", Slot.SHOOTER, "", false)));
 
     private static GamepadState pad(float rightTrigger, boolean a) {
         return new GamepadState(
@@ -76,14 +63,14 @@ class MechanismsSessionTest {
 
     @Test
     void thePiecesInFrontOfTheIntakeAreTakenInThenCarriedThenShotWhenTheFlywheelsAreUpToSpeed() throws IOException {
-        RobotProfile profile = RobotProfileLoader.parse(PROFILE, "test profile");
-        try (TestSessions.Handle handle = TestSessions.open(profile, new TestField(), 0, 0, 0)) {
+        RobotSpec robot = RobotDesign.decode().spec(MAPPING);
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
             SimulationSession session = handle.session;
             session.init("Intake Shooter");
             session.start();
 
             session.setGamepad(1, pad(1f, false));
-            session.runFor(4 * SECOND);
+            session.runFor(6 * SECOND);
 
             for (int id : TestField.ON_FLOOR) {
                 assertFalse(inWorld(session, id), "piece " + id + " should be inside the robot");
@@ -93,40 +80,39 @@ class MechanismsSessionTest {
             assertEquals(List.of(), session.problems(), handle.log.toString());
 
             session.setGamepad(1, pad(0f, true));
-            session.runFor(3 * SECOND);
-
-            for (int id : TestField.ON_FLOOR) {
-                assertTrue(inWorld(session, id), "piece " + id + " should have been shot out");
-                BodyPose pose = session.world().bodyPose(id);
-                assertTrue(pose.position().minus(new Vec3(0.30, 0, 0)).length() > 0.3, "piece " + id + " should have left: " + pose);
+            Set<Integer> shot = new HashSet<>();
+            for (int i = 0; i < 300; i++) {
+                session.runFor(SECOND / 100);
+                TestField.ON_FLOOR.stream().filter(id -> inWorld(session, id)).forEach(shot::add);
             }
+
+            // The flywheels are still spinning up when the first pieces go, so these may drop in front of the intake, which
+            // is still running, and be taken in again: what the test holds is that every piece was shot out.
+            assertEquals(Set.copyOf(TestField.ON_FLOOR), shot, "every piece should have been shot out at some time");
             assertEquals(List.of(), session.problems());
         }
     }
 
     @Test
     void aSensorOnTheRobotSeesAPieceTheRobotCarriesThoughItIsNotInThePhysicsWorld() throws IOException {
-        RobotProfile profile = RobotProfileLoader.parse(PROFILE, "test profile");
-        try (TestSessions.Handle handle = TestSessions.open(profile, new TestField(), 0, 0, 0)) {
+        RobotSpec robot = RobotDesign.decode().spec(MAPPING);
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
             SimulationSession session = handle.session;
             session.init("Intake Shooter");
             session.start();
             session.setGamepad(1, pad(1f, false));
-            session.runFor(4 * SECOND);
+            session.runFor(6 * SECOND);
             session.setGamepad(1, GamepadState.NEUTRAL);
             session.runFor(SECOND / 2);
 
-            // Three pieces wait along the path, one diameter apart, the first at the end of it. A ray that starts
-            // beyond the third, looking back along the path towards the end, meets the third first.
-            Vec3 stage = new Vec3(-0.05, 0, 0.30);
-            Vec3 along = new Vec3(0.30, 0, 0.0635).minus(stage);
-            Vec3 towardsEntrance = along.times(1.0 / along.length());
-            double start = 0.40;
-            var hit = session.rays().cast(stage.plus(towardsEntrance.times(start)), towardsEntrance.times(-1.0), 1.0);
+            // The piece that was taken in first waits at the end of the path, 0.26 m above the middle of the chassis's box.
+            double endHeight = robot.chassis().restBoxCenterHeightM() + 0.26;
+            double from = 0.9;
+            var hit = session.rays().cast(new Vec3(-0.12, 0.0, from), new Vec3(0, 0, -1), 1.0);
 
-            assertTrue(hit != null, "the carried piece should be visible to a ray");
-            assertEquals(start - 2 * 2 * TestField.RADIUS - TestField.RADIUS, hit.distanceMeters(), 0.01);
-            assertEquals(TestField.ON_FLOOR.get(2), hit.entityId(), "the piece that was taken in last is the third in line");
+            assertNotNull(hit, "the carried piece should be visible to a ray");
+            assertEquals(from - endHeight - TestField.RADIUS, hit.distanceMeters(), 0.02);
+            assertEquals(TestField.ON_FLOOR.get(0), hit.entityId(), "the piece that was taken in first is the one at the end");
             assertEquals(TestField.PIECE_KIND, hit.kind());
             assertEquals(0x7e57c2, hit.rgb());
         }
@@ -134,12 +120,85 @@ class MechanismsSessionTest {
 
     @Test
     void thePiecesTheFieldHoldsInReserveCanBeLoadedIntoTheRobotAsAPreload() throws IOException {
-        RobotProfile profile = RobotProfileLoader.parse(PROFILE, "test profile");
-        try (TestSessions.Handle handle = TestSessions.open(profile, new TestField(), 0, 0, 0)) {
+        RobotSpec robot = RobotDesign.decode().spec(MAPPING);
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
             assertEquals(2, handle.session.preload("magazine", TestField.PIECE_KIND, 5), "the reserve only holds two");
 
             handle.session.runFor(SECOND / 100);
             assertEquals(2, handle.session.snapshot().bodies().stream().filter(b -> TestField.IN_RESERVE.contains(b.entityId())).count());
         }
+    }
+
+    @Test
+    void aSessionOnTheRealFieldsStartsWithThreeArtifactsInTheRobotAndAWorldResetLoadsThemAgain() throws IOException {
+        RobotSpec robot = RobotDesign.decode().spec(MAPPING);
+        try (TestSessions.Handle handle = TestSessions.open(
+                robot, TestSessions.program(), new DecodeField(), new FieldSetup(1, Alliance.BLUE), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(0, session.preload("magazine", PURPLE, 1), "the magazine already holds its three");
+            assertEquals(0, session.preload("magazine", GREEN, 1));
+
+            session.resetWorld();
+
+            assertEquals(0, session.preload("magazine", PURPLE, 1), "the reset world holds three again");
+        }
+    }
+
+    /** The robot of the BIOBUZZ game with the turret the fixture OpMode holds at an angle of the left stick's choosing; it has no wheels. */
+    private static RobotSpec turretRobot(boolean mirrored) {
+        List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
+        motors.add(new MotorMapping("turret", Slot.TURRET, "", mirrored));
+        RobotMapping geared = new RobotMapping(
+                "turret test rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), TURRET_RATIO,
+                MAPPING.hubLogo(), MAPPING.hubUsb(), MAPPING.camera());
+        return RobotDesign.biobuzz().spec(geared);
+    }
+
+    /**
+     * Holds the turret at {@code stickX * 90} degrees with the OpMode's position loop, spins the flywheels, feeds a preloaded
+     * piece and returns the heading, in degrees from the field's +X, of the way it leaves.
+     */
+    private static double launchHeadingDegrees(RobotSpec robot, float stickX) throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(1, session.preload("magazine", TestField.PIECE_KIND, 1));
+            int id = TestField.IN_RESERVE.get(0);
+            session.init("Turret Aim");
+            session.start();
+            session.setGamepad(1, new GamepadState(
+                    stickX, 0f, 0f, 0f, 0f, 1f, false, false, false, false, false, false, false, false, false, false, false, false,
+                    false, false, false));
+            session.runFor(4 * SECOND);
+            assertFalse(inWorld(session, id), "the piece waits in the robot until the belt feeds the flywheels");
+
+            session.setGamepad(1, new GamepadState(
+                    stickX, 0f, 0f, 0f, 0f, 1f, false, false, false, false, true, false, false, false, false, false, false, false,
+                    false, false, false));
+            for (int i = 0; i < 300 && !inWorld(session, id); i++) {
+                session.runFor(SECOND / 100);
+            }
+            assertTrue(inWorld(session, id), "the piece was launched: " + handle.log);
+            BodyPose piece = session.world().bodyPose(id);
+            assertTrue(piece.velocity().length() > 1.0, "the flywheels were up to speed: " + piece.velocity());
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+            return Math.toDegrees(Math.atan2(piece.vy(), piece.vx()));
+        }
+    }
+
+    @Test
+    void aBiobuzzPieceLeavesAlongTheHeadingTheTurretWasHeldAtByTheTeamsPositionLoop() throws IOException {
+        RobotSpec robot = turretRobot(false);
+
+        assertEquals(0.0, launchHeadingDegrees(robot, 0f), 3.0, "a turret at its starting angle shoots straight ahead");
+        assertEquals(45.0, launchHeadingDegrees(robot, 0.5f), 3.0, "positive turns the turret to the left");
+        assertEquals(-90.0, launchHeadingDegrees(robot, -1f), 3.0, "and negative to the right");
+    }
+
+    @Test
+    void aMirroredTurretMotorTurnsTheTurretTheOtherWayRoundThanItsEncoderCounts() throws IOException {
+        // The loop takes the encoder to +45 degrees of turret; a motor mounted the other way round puts the turret at -45.
+        RobotSpec mirrored = turretRobot(true);
+
+        assertEquals(-45.0, launchHeadingDegrees(mirrored, 0.5f), 3.0);
     }
 }

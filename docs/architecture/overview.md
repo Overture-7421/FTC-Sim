@@ -12,7 +12,8 @@ desktop-ui  window, input, 3D viewport      worker      serves the link, opens s
 app         composition root                simulator   SimulationSession and RealtimeRunner
 sim-link    RemoteSimulatorLink, wire  <==== loopback TCP, a token per launch ====>
                                               |- sim-core       the kernel: the only thing that moves time
-                                              |- sim-physics, sim-mechanisms, sim-field, game-*
+                                              |- sim-physics, games (the field framework and the two games)
+                                              |- simulator also holds the mechanisms: plants, intakes, launchers
                                               |- sim-hardware   emulated REV hubs, devices, cameras, pins
                                               '- the robot world, a class loader of its own ("robot"):
                                                    the team's program, the FTC SDK, its libraries,
@@ -48,7 +49,7 @@ jumps to the earliest of the next world step, the next callback, the robot's wak
 |---|---|
 | Simulator thread | The only one that moves simulated time. Not thread-safe by design: `SimulationSession` is called from it only. |
 | Robot thread | Runs the OpMode between the simulator's moves. One robot thread is supported; a second is a recorded problem. |
-| Foreign threads (a library's timer, Panels' ticker) | Run in real time, are not scheduled, and must never change what the robot sees (`WorldThreads`, `transmitUnscheduled`). |
+| Foreign threads (a library's timer, Panels' ticker) | Run in real time and are not scheduled; the kernel does not wait for them. Their hub traffic goes through `transmitUnscheduled`, which moves no simulated time. |
 | Link and UI threads | Post commands and read the latest immutable status and snapshot; nothing the UI does can hold the simulation up. |
 
 What robot code pays in simulated time: a clock read 200 ns, a yield 1 µs, hub traffic what its wire takes, and every
@@ -61,9 +62,9 @@ The rates of the world: physics 240 Hz (step *n* at `floor(n * 1e9 / 240)` ns), 
 | | What | Where |
 |---|---|---|
 | **Real** | The FTC SDK (`OpModeManagerImpl`, `LynxModule`, motor controllers, I2C drivers, `HardwareMap`), the team's code and libraries | the robot world |
-| **Replaced** | The Android framework (a clean-room subset that fails loudly), the SDK's USB device, the network, clocks, sleeps, waits, randomness, native library loading, `System.exit` | `android-shim`, `sdk-common`, `robot-runtime` rewrites + `contracts.hooks` |
-| **Emulated** | REV hub firmware speaking the real RHSP protocol, I2C devices (Pinpoint, colour sensor, OctoQuad, BNO055), digital and analog pins, the Limelight 3A | `sim-hardware` |
-| **Simulated** | Rigid bodies with mecanum wheel traction, mechanisms (plants, intakes, storages, launchers), the two fields and their rules | `sim-physics`, `sim-mechanisms`, `sim-field`, `game-*` |
+| **Replaced** | The Android framework (a clean-room subset that fails loudly), the SDK's USB device, the network, clocks, sleeps, waits, native library loading, `System.exit` | `android-shim`, `sdk-common`, `robot-runtime` rewrites + `contracts.hooks` |
+| **Emulated** | REV hub firmware speaking the real RHSP protocol, the fixed ideal sensors (Pinpoint, colour sensor, the Control Hub's BNO055, the Limelight 3A), idle digital and analog pins | `sim-hardware` |
+| **Simulated** | Rigid bodies with mecanum wheel traction, mechanisms (plants, intakes, storages, launchers), the two fields and their rules | `sim-physics`, `simulator` (`mechanisms`), `games` |
 
 The SDK's own classes run unchanged. Only the USB device is replaced: `SimLynxUsbDevice` hands the SDK's serialised
 RHSP datagrams to a `HubWire` (`LynxBus`), and the emulated hubs answer. A new device is therefore a model on a hub's
@@ -71,13 +72,13 @@ bus, never new SDK code (`adding-a-device.md`).
 
 ## Life of a run
 
-1. **Setup.** The window builds a `SessionRequest` (program, field, alliance, robot profile, seed, start pose, speed)
+1. **Setup.** The window builds a `SessionRequest` (program, field, alliance, robot mapping, seed, start pose, speed)
    from the `Catalogue` the worker sent at the handshake, and the link sends `Open`.
 2. **Open.** `WorkerServer` hands the request to its `SessionOpener` (`LiveSessions`). `SessionFactory` turns the names
-   into a `SessionConfig`: the robot profile (`RobotProfileLoader`), the prepared program (`ProgramResolver`,
+   into a `SessionConfig`: the robot (`RobotDesign.forField(field).spec(mapping)`), the prepared program (`ProgramResolver`,
    `RobotProgram`), the field (`FieldRegistry`) and the start pose. `RealtimeRunner.open` starts the runner thread, which
    builds the `SimulationSession`: a `PhysicsWorld`, the field built in it, a `RobotRig` (hubs on a bus, the chassis, a
-   plant on every motor port the profile wires, devices, cameras, pins) and, through `RobotWorldLauncher`, the robot
+   plant on every motor port the mapping wires, the fixed sensors, the Limelight) and, through `RobotWorldLauncher`, the robot
    world, in which `SdkRobotHostFactory` boots the SDK (`SdkBootstrap`, `SdkRobotHost`). The simulator module reaches
    `sdk-common` only by that class name, never at compile time.
 3. **Init, Start, Stop.** `DriverStation` presses the buttons at the simulated instant the caller is at; the SDK's own
@@ -103,25 +104,22 @@ fails `check` (`checkModuleRules`).
 | `robot-runtime` | contracts | The robot class loader and the load-time rewriting | `RobotClassLoader`, `HookRewriter`, the `*Rules` tables |
 | `android-shim` | nothing | The audited subset of `android.*` and `dalvik.system.DexFile` that the SDK touches | package-info of `android` |
 | `sdk-common` | contracts, android-shim | The SDK host: OpMode manager, event loop, lifecycle hooks, the hardware map and its providers | `SdkRobotHost`, `SdkBootstrap`, `sdk.hardware.SimHardwareMap`, `SimLynxUsbDevice` |
-| `sim-hardware` | contracts | Hub firmware (`hardware.lynx`), I2C peripherals, device models, cameras, pin sources | `LynxBus`, `LynxHub`, `DeviceModels`, `CameraModels` |
+| `sim-hardware` | contracts | Hub firmware (`hardware.lynx`), I2C peripherals, the sensor models, the camera, the wiring table | `LynxBus`, `LynxHub`, `DeviceModels`, `CameraModels`, `WiringTable` |
 | `sim-physics` | contracts | Jolt through jolt-jni: world, mecanum chassis, pieces, hives, gates, the pinned DLL | `PhysicsWorld`, `MecanumChassis`, `PieceSpec`, `NativeLibrary` |
-| `sim-mechanisms` | contracts, physics | Plants, storages, intakes, launchers and the conditions that activate them | `Mechanisms`, `ShaftPlant`, `StorageSpec`, `LaunchSpec` |
-| `sim-field` | contracts, physics | What a game field has to provide, and nothing about any game | `Field`, `FieldRun`, `FieldSetup`, `EntityIds` |
-| `game-decode`, `game-biobuzz` | contracts, physics, field | The two fields: geometry, rules, scoring | `DecodeField`/`DecodeRun`, `BiobuzzField`/`BiobuzzRun` |
-| `simulator` | contracts, core, physics, hardware, mechanisms, field, both games, robot-runtime, platform | A session: profile, rig, kernel, physics, field, robot controller; the real-time runner | `SimulationSession`, `RobotRig`, `RobotWorldLauncher`, `RealtimeRunner`, `profile.RobotProfile` |
+| `games` | contracts, physics | What a game field has to provide (package `dev.ftcsim.field`, nothing about any game) and the two fields, one package each that do not refer to each other (`GamePackagesTest`): geometry, rules, scoring | `Field`, `FieldRun`, `FieldSetup`, `EntityIds`; `DecodeField`/`DecodeRun` (`game.decode`), `BiobuzzField`/`BiobuzzRun` (`game.biobuzz`) |
+| `simulator` | contracts, core, physics, hardware, games, robot-runtime, platform | A session: the fixed robot of the game, rig, kernel, physics, field, robot controller; the real-time runner; the mechanisms (package `dev.ftcsim.mechanisms`: plants, storages, intakes, launchers with their turret and the conditions that activate them) | `SimulationSession`, `RobotRig`, `RobotWorldLauncher`, `RealtimeRunner`, `robot.RobotDesign`, `robot.RobotSpec`, `Mechanisms`, `ShaftPlant`, `StorageSpec`, `LaunchSpec` |
 | `sim-link` | contracts | The UI's side of the process boundary and the wire format | `RemoteSimulatorLink`, `WorkerLauncher`, package `link.wire` |
 | `worker` | contracts, link, simulator, games, project-import | The process that runs a session and serves the link | `WorkerMain`, `WorkerServer`, `SessionFactory` |
 | `project-import` | contracts | Turns an unmodified team project into a prepared program | `ProjectImporter` (package-info of `importer`) |
-| `desktop-ui` | contracts, platform | The Material 3 window, the 3D viewport, input mapping | `ui.host.AppHost`, `PracticeScreen` and `SetupScreen` (Kotlin Compose), `ui.render` |
-| `app` | contracts, link, desktop-ui, project-import (and the worker's and the robot world's jars as files) | The composition root: where things are on the computer | `Main`, `RealHost`, `ImporterPreparer`, `AppFolders`, `SelfTest` |
-| `launcher` | nothing | The start-up scripts that find or fetch the pinned JDK | `FTC-Sim.cmd`, `FTC-Sim.ps1`, `jdk-manifest.json` |
+| `desktop-ui` | contracts, platform | The Material 3 window, the 3D viewport, input mapping | `ui.host.AppHost`, `ProjectRunner` (open and restart a project), `ProjectsScreen`, `PracticeScreen` and `MappingScreen` (Kotlin Compose), `ui.render` |
+| `app` | contracts, link, desktop-ui, project-import (and the worker's and the robot world's jars as files) | The composition root: where things are on the computer; `FTC-Sim.cmd`, `runtime-options` and the jlink runtime of the distribution (`src\dist`, `runtime.gradle.kts`) | `Main`, `RealHost`, `ImporterPreparer`, `ProjectMappingsImpl`, `AppFolders`, `AppLog`, `SelfTest`, `RuntimePin` |
 | `acceptance-tests` | everything | End-to-end tests with the real SDK, Hornet and the real worker | `docs/testing.md` |
 
 A few things the table hides:
 
 - `desktop-ui` does not know `sim-link`, the worker or the importer. It declares the seam (`AppHost`,
   `ProgramPreparer`); `app` implements it.
-- `sim-hardware`, `sim-physics`, `sim-mechanisms` and `sim-field` know nothing of the FTC SDK, and `sdk-common` knows
+- `sim-hardware`, `sim-physics`, `games` and the mechanisms in `simulator` know nothing of the FTC SDK (`simulator` reaches it only by class name at run time), and `sdk-common` knows
   nothing of physics or the UI. The only meeting place is `contracts` and `simulator`.
 - `sim-hardware` never reads a clock: time arrives through `advanceTo` and the bus's clock supplier.
 
@@ -132,11 +130,11 @@ A few things the table hides:
 - **Field frame**: origin at the middle of the field on the tile top, Z up, +X towards the audience, +Y towards the blue
   wall (the red wall is on the audience's left); heading counter-clockwise from +X. Both fields use it
   (`docs/fields/`).
-- **Robot frame**: X forward, Y left, Z up, origin at the centre of the chassis (`docs/robots/robot-profile.md`).
+- **Robot frame**: X forward, Y left, Z up, origin at the centre of the chassis (`docs/robots/fixed-robots.md`).
 - **Entity ids**: the chassis is 1, a field's bodies start at 1000 (`EntityIds`); a body's kind is 100 or more for a
   field's own kinds (`BodyKinds`). A snapshot orders bodies by id, so equal worlds give equal snapshots.
 - **Motors**: positive hub voltage makes the plant's encoder count rise; the SDK is told to invert nothing, and mounting
-  differences (mirrored motors) live in the robot profile, never in device code.
+  differences (mirrored motors) live in the robot mapping, never in device code.
 
 ## Where to look when ...
 
@@ -144,28 +142,27 @@ A few things the table hides:
 |---|---|
 | Robot code throws on an Android call, or a library cannot load a class | `android-shim`; the worker's log; `docs/architecture/decisions.md` section 10 (the APK index) |
 | A device reads wrongly, or the SDK driver for it fails | `sim-hardware` model of that device; the SDK driver is the specification |
-| The same run gives different results | `decisions.md` sections 2, 9 and 10; `KernelDiagnostics.problems()`; `docs/development.md`, determinism rules |
-| The robot drives or shoots wrongly | the robot profile (`docs/robots/`), `sim-physics` (`MecanumChassis`), `sim-mechanisms` |
-| A score is wrong | `game-decode` or `game-biobuzz` and its page in `docs/fields/` |
+| Two runs give different results | Runs are not promised to repeat (`decisions.md` section 9); library threads run in real time beside the simulation (section 10); `KernelDiagnostics.problems()` |
+| The robot drives or shoots wrongly | the robot's design and mapping (`docs/robots/fixed-robots.md`), `sim-physics` (`MecanumChassis`), the mechanisms (`simulator`, package `dev.ftcsim.mechanisms`) |
+| A score is wrong | `games` (`game.decode` or `game.biobuzz`) and its page in `docs/fields/` |
 | The window misbehaves | `desktop-ui` and `docs/architecture/ui.md` |
-| Importing a team project fails | `project-import`, `docs/architecture/prepared-program.md`, the Prepare screen's build log |
-| `FTC-Sim.cmd` does not start | `launcher`, `docs/architecture/distribution.md`, `%LOCALAPPDATA%\FTC-Sim\logs` |
+| Importing a team project fails | `project-import`, `docs/architecture/prepared-program.md`, the Projects screen's build view and log |
+| `FTC-Sim.cmd` does not start | `app\src\dist\FTC-Sim.cmd`, `docs/architecture/distribution.md`, `%LOCALAPPDATA%\FTC-Sim\logs` |
 | The worker dies or the link stalls | `sim-link`, `worker`, `docs/architecture/link.md` |
 
 ## Glossary
 
 - **Back edge**: a backward jump in robot code, charged 100 ns of simulated time so that a loop that only waits lets time pass.
 - **Baton**: the turn-taking between the simulator thread and the robot thread (`RobotGate`).
-- **Catalogue**: what a `SessionRequest` may name (fields, start poses, human actions, robot profiles).
-- **Foreign thread**: a thread of the robot world that the kernel does not schedule.
-- **Golden hash**: the committed state hashes of a scripted physics scenario, which a build must reproduce bit for bit.
+- **Catalogue**: what a `SessionRequest` may name (fields, start poses, human actions, the motors a mapping may name).
+- **Foreign thread**: a thread of the robot world that the kernel does not schedule; it runs in real time and is not waited for.
 - **Hook**: a static method that rewritten robot bytecode calls instead of a JDK member (`Hooks`, `TimeHooks`, ...).
 - **Host / robot world**: the two class loaders of the worker.
 - **Piece**: a game element (ARTIFACT, POLLEN, NECTAR) with exactly one owner: free body, carried by a storage, or in a reserve.
 - **Plant**: the mechanical model on a hub motor port (`MotorPlant`, `ShaftPlant`).
 - **Prepared program**: what the importer makes of a team project: a manifest, the class path, resources; no build tool needed to open it.
-- **Problem**: a condition the session reports because it weakens the run (an unreproducible hub write, a declined network request, a runaway thread).
-- **Profile**: the JSON description of the robot outside its code (`docs/robots/robot-profile.md`).
+- **Problem**: a condition the session reports (a robot thread that would not end or came back from a wait the simulator does not control, a declined network request, a runaway thread).
+- **Mapping**: what a student says about their robot, `RobotMapping`; the **design** (`RobotDesign`) is the fixed robot of a game (`docs/robots/fixed-robots.md`).
 - **RHSP**: the REV Hub Serial Protocol the SDK speaks to its hubs.
-- **Slicing**: how a caller cuts simulated time into advances; a run must not depend on it.
+- **Slicing**: how a caller cuts simulated time into advances; what an OpMode sees does not depend on it.
 - **Zone**: a region of a mechanism (intake, storage, launcher) whose activation is a condition on named motors' shaft speeds.

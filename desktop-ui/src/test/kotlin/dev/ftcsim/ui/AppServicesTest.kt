@@ -118,7 +118,7 @@ class AppServicesTest {
         opener.failure = IOException("no worker")
         val services = services()
         services.awaitLink { it is LinkState.Unavailable }
-        services.startRun(Fixtures.request(seed = 8L))
+        services.openSession(Fixtures.request(seed = 8L))
         assertEquals(Connection.OPENING, services.session.session.value.connection)
 
         opener.failure = null
@@ -134,7 +134,7 @@ class AppServicesTest {
         opener.gate = CountDownLatch(1)
         val services = services()
 
-        services.startRun(Fixtures.request(seed = 3L))
+        services.openSession(Fixtures.request(seed = 3L))
         assertEquals(LinkState.Connecting, services.session.link.value)
         assertEquals(Connection.OPENING, services.session.session.value.connection)
         opener.gate!!.countDown()
@@ -147,7 +147,7 @@ class AppServicesTest {
     fun aSessionThatFailedIsAskedForAgainOnAFreshLinkAndTheOldLinkIsClosed() {
         val services = services()
         services.awaitLink { it == LinkState.Connected }
-        services.startRun(Fixtures.request(seed = 4L))
+        services.openSession(Fixtures.request(seed = 4L))
         val first = opener.links.single()
         first.stub.listener!!.failed("the worker died")
         assertEquals(Connection.FAILED, services.session.session.value.connection)
@@ -213,21 +213,76 @@ class AppServicesTest {
     }
 
     @Test
-    fun theHostDecidesWhetherAProgramIsRequiredAndWhichPreparerIsUsed() {
-        val preparer = testHost().preparer()
-        val host = object : AppHost {
+    fun theHostDecidesWhichPreparerAndWhichMappingsAreUsedAndWhetherItIsAFake() {
+        val fake = testHost()
+        val real = object : AppHost {
             override fun openLink(): SimulatorLink = StubLink()
 
-            override fun preparer(): ProgramPreparer = preparer
+            override fun preparer(): ProgramPreparer = fake.preparer()
 
-            override fun programRequired() = true
+            override fun mappings() = fake.mappings()
         }
 
-        val services = services(host)
+        val services = services(real)
 
-        assertTrue(services.programRequired)
-        assertEquals(preparer, services.preparer)
-        assertFalse(services().programRequired, "the fake host needs none")
+        assertEquals(fake.preparer(), services.preparer)
+        assertEquals(fake.mappings(), services.mappings)
+        assertFalse(services.isFake, "a host is real unless it says otherwise")
+        assertTrue(services().isFake, "the stand-in host says so")
+    }
+
+    @Test
+    fun aSessionOpenedWhileAnotherIsOpenIsOpenedOnAFreshWorkerBecauseAWorkerKeepsPartOfEveryWorldItHeld() {
+        val services = services()
+        services.awaitLink { it == LinkState.Connected }
+        services.openSession(Fixtures.request(seed = 1L))
+        val first = opener.links.single()
+
+        services.openSession(Fixtures.request(seed = 2L))
+        services.awaitLink { it == LinkState.Connected && opener.links.size == 2 }
+
+        assertTrue(first.closed.await(WAIT_SECONDS, TimeUnit.SECONDS), "the worker that held the old world is closed")
+        assertEquals(listOf(1L), first.stub.requests.map { it.seed() })
+        assertEquals(listOf(2L), opener.links[1].stub.requests.map { it.seed() })
+    }
+
+    @Test
+    fun theFirstSessionOfALinkIsOpenedOnItWithoutANewWorker() {
+        val services = services()
+        services.awaitLink { it == LinkState.Connected }
+
+        services.openSession(Fixtures.request(seed = 1L))
+
+        assertEquals(listOf(1L), opener.links.single().stub.requests.map { it.seed() })
+        assertEquals(1, opener.attempts.get())
+    }
+
+    @Test
+    fun aSessionThatFailedIsReplacedOnAFreshLinkWithTheNewRequestNotTheOldOne() {
+        val services = services()
+        services.awaitLink { it == LinkState.Connected }
+        services.openSession(Fixtures.request(seed = 1L))
+        val first = opener.links.single()
+        first.stub.listener!!.failed("the robot code did not start")
+
+        services.openSession(Fixtures.request(seed = 2L))
+        services.awaitLink { it == LinkState.Connected && opener.links.size == 2 }
+
+        assertTrue(first.closed.await(WAIT_SECONDS, TimeUnit.SECONDS), "the link that failed is closed")
+        assertEquals(listOf(2L), opener.links[1].stub.requests.map { it.seed() })
+    }
+
+    @Test
+    fun aSessionOpenedWhileTheLinkCouldNotBeHadWaitsForAnotherTryAndIsOpenedOnIt() {
+        opener.failure = IOException("no worker")
+        val services = services()
+        services.awaitLink { it is LinkState.Unavailable }
+
+        opener.failure = null
+        services.openSession(Fixtures.request(seed = 6L))
+        services.awaitLink { it == LinkState.Connected }
+
+        assertEquals(6L, opener.links.single().stub.requests.single().seed())
     }
 
     private companion object {

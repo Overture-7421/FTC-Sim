@@ -4,6 +4,7 @@ import dev.ftcsim.contracts.field.Alliance
 import dev.ftcsim.contracts.field.HumanAction
 import dev.ftcsim.contracts.field.Score
 import dev.ftcsim.contracts.field.StartPose
+import dev.ftcsim.contracts.hardware.UnmappedDevice
 import dev.ftcsim.contracts.robot.GamepadState
 import dev.ftcsim.contracts.robot.OpModeDescriptor
 import dev.ftcsim.contracts.robot.OpModeKind
@@ -13,8 +14,10 @@ import dev.ftcsim.contracts.session.Catalogue
 import dev.ftcsim.contracts.session.FieldChoice
 import dev.ftcsim.contracts.session.MatchState
 import dev.ftcsim.contracts.session.MatchStatus
+import dev.ftcsim.contracts.session.MotorChoice
 import dev.ftcsim.contracts.session.Readout
 import dev.ftcsim.contracts.session.RobotInfo
+import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionInfo
 import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.contracts.session.SessionStatus
@@ -22,10 +25,10 @@ import dev.ftcsim.contracts.session.SimulatorLink
 
 /** A link that only writes down what it was asked, so tests can call the listener by hand from one thread. */
 class StubLink : SimulatorLink {
-    val calls = mutableListOf<String>()
-    val requests = mutableListOf<SessionRequest>()
-    val gamepads = HashMap<Int, GamepadState>()
-    var listener: SimulatorLink.Listener? = null
+    val calls: MutableList<String> = java.util.concurrent.CopyOnWriteArrayList()
+    val requests: MutableList<SessionRequest> = java.util.concurrent.CopyOnWriteArrayList()
+    val gamepads = java.util.concurrent.ConcurrentHashMap<Int, GamepadState>()
+    @Volatile var listener: SimulatorLink.Listener? = null
 
     override fun addListener(listener: SimulatorLink.Listener) {
         this.listener = listener
@@ -93,9 +96,9 @@ object Fixtures {
         SessionInfo(null, modes, RobotInfo("robot", 0.4, 0.4, 0.3, emptyList(), emptyList(), emptyList()))
 
     fun request(seed: Long = 0L, alliance: Alliance = Alliance.RED, startHeading: Double = 0.0) =
-        SessionRequest("fake", "", "none", alliance, seed, 0.0, 0.0, startHeading, 1.0)
+        SessionRequest(RobotMapping.empty("fake"), "", "none", alliance, seed, 0.0, 0.0, startHeading, 1.0)
 
-    /** Two fields, one with named start poses and actions, and two bundled profiles, as a worker would list them. */
+    /** Two fields, one with named start poses and actions, and two motors, as a worker would list them. */
     fun catalogue() = Catalogue(
         listOf(
             FieldChoice("none", "Bare floor", emptyList(), emptyList()),
@@ -109,7 +112,7 @@ object Fixtures {
                 listOf(HumanAction("feed", "Feed a piece")),
             ),
         ),
-        listOf("hornet-2026", "practice-bot"),
+        listOf(MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"), MotorChoice("goBILDA-5203-312", "goBILDA 5203, 312 rpm")),
     )
 
     fun match(state: MatchState, elapsedSeconds: Long = 0L, durationSeconds: Long = 0L) =
@@ -128,7 +131,9 @@ object Fixtures {
         hardware: List<Readout> = emptyList(),
         score: Score = Score(emptyList()),
         match: MatchStatus = MatchStatus.NONE,
+        unmapped: List<UnmappedDevice> = emptyList(),
     ) = SessionStatus(
         simTimeNanos, phase, TelemetrySnapshot(lines, warnings, error), score, problems, hardware, speed, achievedSpeed, paused, match,
+        unmapped,
     )
 }

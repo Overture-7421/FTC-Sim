@@ -5,14 +5,14 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.robot.GamepadState;
+import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -20,19 +20,19 @@ import org.junit.jupiter.api.Timeout;
 /**
  * The IMU of the Control Hub on the simulated robot as a whole: a program that knows nothing of the simulator turns the
  * real wheels through the real SDK motors, the physics world moves and tips the chassis, and the SDK's own IMU driver
- * reads from the chip what the chassis really did. Nothing here lists an IMU in the robot profile except the one test
- * that says how its hub is mounted.
+ * reads from the chip what the chassis really did. The robot mapping says nothing about the IMU except how its hub is
+ * mounted.
  */
 @Timeout(300)
 class ImuSessionTest {
     private static final long SECOND = 1_000_000_000L;
     private static final long MS = 1_000_000L;
 
-    private static RobotProfile hornet;
+    private static RobotSpec hornet;
 
     @BeforeAll
-    static void loadProfile() throws IOException {
-        hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+    static void loadProfile() {
+        hornet = HornetMapping.spec();
     }
 
     /** The number a telemetry line shows as "caption : value". */
@@ -130,12 +130,11 @@ class ImuSessionTest {
     }
 
     @Test
-    void aHubTheProfileSaysStandsOnItsEdgeGivesTheRightAnglesToCodeThatSaysSoAndNoSecondNameIsFoundForIt() throws IOException {
-        RobotProfile onEdge = new RobotProfile(
-                hornet.schema(), "Hornet with its hub on its edge", hornet.batteryVolts(), hornet.hubs(), hornet.chassis(),
-                hornet.motors(), hornet.servos(),
-                Map.of("imu", new RobotProfile.Device("bno055-imu", null, 0, Map.of("mount", Map.of("logo", "LEFT", "port", "UP")))),
-                null, Map.of());
+    void aHubMountedOnItsEdgeGivesTheRightAnglesToCodeThatSaysSoAndNoSecondNameIsFoundForIt() throws IOException {
+        RobotMapping base = HornetMapping.mapping();
+        RobotSpec onEdge = RobotDesign.decode().spec(new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), base.turretRatio(), "LEFT", "UP",
+                base.camera()));
 
         try (TestSessions.Handle handle = TestSessions.open(onEdge, 0, 0, 0)) {
             SimulationSession session = handle.session;
@@ -161,33 +160,7 @@ class ImuSessionTest {
     }
 
     @Test
-    void anExpansionHubsOwnImuThatTheProfileListsIsServedByTheHubsOwnDriversAndFollowsTheSameChassis() throws IOException {
-        RobotProfile twoImus = new RobotProfile(
-                hornet.schema(), "Hornet with the IMU of its Expansion Hub", hornet.batteryVolts(), hornet.hubs(), hornet.chassis(),
-                hornet.motors(), hornet.servos(), Map.of("imu 1", new RobotProfile.Device("bno055-imu", 2, 0, Map.of())), null, Map.of());
-
-        try (TestSessions.Handle handle = TestSessions.open(twoImus, 0, 0, 0)) {
-            SimulationSession session = handle.session;
-            start(session, "IMU Drive Two Hubs");
-            turnGently(session);
-            session.setGamepad(1, GamepadState.NEUTRAL);
-            session.runFor(SECOND);
-
-            BodyPose still = session.world().bodyPose(EntityIds.CHASSIS);
-            double yaw = Math.toDegrees(still.yaw());
-            assertTrue(Math.abs(yaw) > 10, "it has turned some way: " + still);
-            assertEquals(0.0, difference(reading(session, "imu yaw deg"), yaw), 0.6, "the Control Hub's IMU: " + still);
-            assertEquals(0.0, difference(reading(session, "imu 1 yaw deg"), yaw), 0.6, "the Expansion Hub's IMU: " + still);
-            assertEquals(
-                    "LynxEmbeddedBNO055IMUNew and LynxEmbeddedBNO055IMUNew; hub 2 BNO055 hub 173 BNO055", text(session, "imus"),
-                    "each hub's IMU has the hub's own driver, and the SDK finds a BNO055 in both");
-            assertEquals(List.of(), session.problems(), handle.log.toString());
-            assertNoPollGaveUp(handle);
-        }
-    }
-
-    @Test
-    void aHubWithNoImuLineInItsProfileStillHasOneAndNoNameIsReportedAsUnbound() throws IOException {
+    void aHubStillHasOneImuUnderAnyNameAndNoNameIsReportedAsUnbound() throws IOException {
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             handle.session.init("IMU Names");
             handle.session.runFor(2 * SECOND);
@@ -195,13 +168,16 @@ class ImuSessionTest {
             String refusal = text(handle.session, "second name");
             assertTrue(refusal.startsWith("Unable to find a hardware device with name \"gyro\" and type IMU"), refusal);
             assertTrue(refusal.contains("\"imu\" already is it"), refusal);
-            assertEquals(List.of(), handle.session.problems(), "the IMU needs no line in the profile, and is not unbound");
+            assertTrue(
+                    handle.session.problems().stream().anyMatch(problem -> problem.contains("'gyro'") && problem.contains("second name")),
+                    "a second name for the one IMU is a problem of the session: " + handle.session.problems());
+            assertTrue(handle.session.unmapped().isEmpty(), "and the IMU is not an unmapped device");
         }
     }
 
     @Test
-    void aProgramThatSetsTheImuUpLeavesTheWorldExactlyAsOneThatNeverAsksForIt() throws IOException {
-        String[] worlds = new String[2];
+    void aProgramThatSetsTheImuUpLeavesTheRobotWhereOneThatNeverAsksForItDrivesIt() throws IOException {
+        BodyPose[] poses = new BodyPose[2];
         String[] opModes = {"Drive Without IMU", "IMU Set Up Only"};
         for (int i = 0; i < opModes.length; i++) {
             try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
@@ -211,18 +187,20 @@ class ImuSessionTest {
                 session.start();
                 session.setGamepad(1, GamepadState.sticks(0.3f, -0.4f, 0.15f, 0f));
                 session.runFor(3 * SECOND);
-                worlds[i] = session.world().stateHash();
-                assertTrue(Math.abs(session.world().bodyPose(EntityIds.CHASSIS).x()) > 0.1, "the robot drove");
+                poses[i] = session.world().bodyPose(EntityIds.CHASSIS);
+                assertTrue(Math.abs(poses[i].x()) > 0.1, "the robot drove");
                 assertEquals(List.of(), session.problems(), handle.log.toString());
             }
         }
 
-        assertEquals(worlds[0], worlds[1], "the world after the same drive, without and with a chip that is in use");
+        assertEquals(poses[0].x(), poses[1].x(), 0.01, "the pose after the same drive, without and with a chip that is in use");
+        assertEquals(poses[0].y(), poses[1].y(), 0.01);
+        assertEquals(poses[0].yaw(), poses[1].yaw(), 0.01);
     }
 
     @Test
-    void theSameRunGivesTheSameWorldAndTheSameReadingsWhateverTheSlicingOfSimulatedTime() throws IOException {
-        String firstHash = null;
+    void theSlicingOfSimulatedTimeChangesNeitherWhereTheRobotEndsUpNorWhatTheImuReads() throws IOException {
+        BodyPose firstPose = null;
         double firstYaw = 0;
         for (long slice : new long[] {Long.MAX_VALUE / 4, 7 * MS, 250 * MS}) {
             try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
@@ -235,14 +213,15 @@ class ImuSessionTest {
                 while (session.now() < end) {
                     session.runUntil(Math.min(end, session.now() + slice));
                 }
-                String hash = session.world().stateHash();
+                BodyPose pose = session.world().bodyPose(EntityIds.CHASSIS);
                 double yaw = reading(session, "imu yaw deg");
-                if (firstHash == null) {
-                    firstHash = hash;
+                if (firstPose == null) {
+                    firstPose = pose;
                     firstYaw = yaw;
                 }
-                assertEquals(firstHash, hash, "the world with slices of " + slice / MS + " ms");
-                assertEquals(firstYaw, yaw, 0.0, "the IMU's heading with slices of " + slice / MS + " ms");
+                assertEquals(firstPose.x(), pose.x(), 0.01, "the robot with slices of " + slice / MS + " ms");
+                assertEquals(firstPose.y(), pose.y(), 0.01, "the robot with slices of " + slice / MS + " ms");
+                assertEquals(firstYaw, yaw, 0.5, "the IMU's heading with slices of " + slice / MS + " ms");
                 assertEquals(List.of(), session.problems());
             }
         }

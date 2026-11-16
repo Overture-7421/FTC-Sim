@@ -13,7 +13,6 @@ import dev.ftcsim.hardware.device.WorldRig;
 import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import dev.ftcsim.hardware.i2c.LittleEndian;
 import java.util.Arrays;
-import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 
@@ -43,15 +42,16 @@ class GoBildaPinpointModelTest {
         return crc;
     }
 
-    private static PinpointRig configuredRig(ScriptedBody body) {
-        PinpointRig rig = new PinpointRig(body, pods(1));
-        rig.configureCorrectly();
+    /** A chip whose code has reset the pose and the IMU at power-up, as the drivers' setups do: ready at 250 ms. */
+    private static PinpointRig resetRig(ScriptedBody body) {
+        PinpointRig rig = new PinpointRig(body);
+        rig.writeInt(DEVICE_CONTROL, RESET_POSITION_AND_IMU);
         return rig;
     }
 
     @Test
     void itAnswersAtItsAddressWithItsIdentityAndTheLoopTimeOfA1500HzChip() {
-        PinpointRig rig = new PinpointRig(standing(), pods(1));
+        PinpointRig rig = new PinpointRig(standing());
 
         assertEquals(0x31, rig.chip.address());
         assertEquals(2, rig.readInt(DEVICE_ID));
@@ -61,7 +61,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void aSingleRegisterReadCarriesTheCrcTheDriverChecks() {
-        PinpointRig rig = new PinpointRig(standing(), pods(1));
+        PinpointRig rig = new PinpointRig(standing());
 
         byte[] read = rig.read(DEVICE_VERSION, 5);
 
@@ -69,8 +69,8 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void afterPowerUpItIsNotReadyThenCalibratesThenIsReady() {
-        PinpointRig rig = new PinpointRig(standing(), pods(1));
+    void afterPowerUpItIsNotReadyThenCalibratesThenIsReadyAndNeverReportsAMissingPod() {
+        PinpointRig rig = new PinpointRig(standing());
 
         rig.world.runTo(50 * MS);
         assertEquals(NOT_READY, rig.readInt(DEVICE_STATUS));
@@ -81,22 +81,8 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void aMissingPodIsReportedAsTheFaultTheDriverKnows() {
-        Map<String, Object> onlyForward = new HashMap<>(pods(1));
-        onlyForward.keySet().removeIf(key -> key.startsWith("yPod."));
-        PinpointRig noSideways = new PinpointRig(standing(), onlyForward);
-        PinpointRig none = new PinpointRig(standing(), new HashMap<>());
-
-        noSideways.world.runTo(SECOND);
-        none.world.runTo(SECOND);
-
-        assertEquals(8, noSideways.readInt(DEVICE_STATUS));
-        assertEquals(12, none.readInt(DEVICE_STATUS));
-    }
-
-    @Test
-    void drivingStraightOnAConfiguredChipReadsTheDistanceDrivenAlongTheHeading() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(2, 0.5, 0, 0).build());
+    void drivingStraightReadsTheTrueDistanceDrivenAlongTheHeading() {
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(2, 0.5, 0, 0).build());
 
         rig.world.runTo(3 * SECOND);
 
@@ -106,9 +92,9 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void theChipReportsRelativeToWhereTheRobotStoodWhenItWasReset() {
+    void theChipReportsInTheFrameOfWhereTheRobotStoodWhenItWasReset() {
         // Facing +Y at (2, 3): the chip's own frame has its X along the robot's forward.
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(2, 3, Math.PI / 2).stay(0.5).move(1, 0, 0.4, 0).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(2, 3, Math.PI / 2).stay(0.5).move(1, 0, 0.4, 0).build());
 
         rig.world.runTo(2 * SECOND);
 
@@ -118,7 +104,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void anArcEndsWhereTheGeometryOfTheCircleSays() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(Math.PI / 2, 1, 0, 1).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(Math.PI / 2, 1, 0, 1).build());
 
         rig.world.runTo(Math.round((0.5 + Math.PI / 2) * SECOND) + 100 * MS);
 
@@ -128,63 +114,52 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void spinningInPlaceDoesNotMoveAChipThatKnowsWherePodsAre() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0, 0, Math.PI).build());
+    void spinningInPlaceDoesNotMoveItAndTheHeadingKeepsCountingPastAHalfTurn() {
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(2, 0, 0, 2 * Math.PI).build());
 
-        rig.world.runTo(2 * SECOND);
+        rig.world.runTo(3 * SECOND);
 
         assertEquals(0.0, rig.x(), 0.3);
         assertEquals(0.0, rig.y(), 0.3);
-        assertEquals(Math.PI, rig.heading(), 1e-4);
+        assertEquals(4 * Math.PI, rig.heading(), 1e-4);
     }
 
     @Test
-    void aChipToldTheWrongOffsetsDriftsByWhatTheGeometrySays() {
-        PinpointRig rig = new PinpointRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0, 0, Math.PI).build(), pods(1));
+    void whatTheCodeProgramsAboutItsPodsIsAcceptedAndChangesNothing() {
+        ScriptedBody drive = ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 1, 0, 0).move(1, 0, 0, 1).build();
+        ScriptedBody sameDrive = ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 1, 0, 0).move(1, 0, 0, 1).build();
+        PinpointRig plain = resetRig(drive);
+        PinpointRig misprogrammed = new PinpointRig(sameDrive);
+        misprogrammed.writeInt(DEVICE_CONTROL, X_REVERSED | Y_REVERSED);
+        misprogrammed.writeFloat(YAW_SCALAR, 1.5f);
+        misprogrammed.configure(250.0, -90.0, 3.0);
+
+        plain.world.runTo(3 * SECOND);
+        misprogrammed.world.runTo(3 * SECOND);
+
+        assertEquals(1000.0, plain.x(), 0.1);
+        assertEquals(1.0, plain.heading(), 1e-5);
+        assertEquals(plain.x(), misprogrammed.x(), 1e-3);
+        assertEquals(plain.y(), misprogrammed.y(), 1e-3);
+        assertEquals(plain.heading(), misprogrammed.heading(), 1e-6);
+        assertEquals(250.0f, misprogrammed.readFloat(X_POD_OFFSET), "what was written reads back");
+        assertEquals(1.5f, misprogrammed.readFloat(YAW_SCALAR));
+    }
+
+    @Test
+    void theEncoderRegistersCountTheTrueTravelForwardAndLeftAtTheResolutionTheCodeWrote() {
+        PinpointRig rig = new PinpointRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 1, 0.2, 0).build());
         rig.configure(0, 0, FOUR_BAR_TICKS_PER_MM);
 
         rig.world.runTo(2 * SECOND);
 
-        // Half a turn: the pods' readings, which the chip takes for the tracking point's, add up to (-2 b, 2 a), with
-        // a = 113.5 mm and b = -4 mm of travel per radian.
-        assertEquals(8.0, rig.x(), 0.5);
-        assertEquals(227.0, rig.y(), 0.5);
-    }
-
-    @Test
-    void aChipToldTheWrongResolutionReadsTheWrongDistance() {
-        PinpointRig rig = new PinpointRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 1, 0, 0).build(), pods(1));
-        rig.configure(X_POD_LATERAL_MM, Y_POD_FORWARD_MM, 13.26291192);
-
-        rig.world.runTo(2 * SECOND);
-
-        assertEquals(1500.0, rig.x(), 0.5);
-    }
-
-    @Test
-    void podsMountedBackwardsCountDownUntilRobotCodeTellsTheChipSo() {
-        PinpointRig unset = new PinpointRig(driveForwardAMetre(), pods(-1));
-        unset.configureCorrectly();
-        PinpointRig reversed = new PinpointRig(driveForwardAMetre(), pods(-1));
-        reversed.writeInt(DEVICE_CONTROL, X_REVERSED);
-        reversed.writeInt(DEVICE_CONTROL, Y_REVERSED);
-        reversed.configureCorrectly();
-
-        unset.world.runTo(2 * SECOND);
-        reversed.world.runTo(2 * SECOND);
-
-        assertEquals(-1000.0, unset.x(), 0.2);
-        assertEquals(1000.0, reversed.x(), 0.2);
-        assertEquals(19894, reversed.readInt(X_ENCODER_VALUE));
-    }
-
-    private static ScriptedBody driveForwardAMetre() {
-        return ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 1, 0, 0).build();
+        assertEquals(19894, rig.readInt(X_ENCODER_VALUE));
+        assertEquals(3979, rig.readInt(Y_ENCODER_VALUE));
     }
 
     @Test
     void theChipHoldsItsOutputsWhileItCalibratesAndRestartsFromZeroAfterAReset() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).move(10, 0.5, 0, 0).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).move(10, 0.5, 0, 0).build());
         rig.world.runTo(SECOND);
         assertEquals(375.0, rig.x(), 0.2);
 
@@ -201,7 +176,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void recalibratingKeepsThePose() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).move(1, 0.5, 0, 0).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).move(1, 0.5, 0, 0).build());
         rig.world.runTo(SECOND);
         double before = rig.x();
 
@@ -213,8 +188,8 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void writingThePositionTeleportsTheChipAndItCarriesOnFromThere() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0, 0).build());
+    void writingThePositionMovesTheReportedFrameAndTheChipCarriesOnFromThere() {
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0, 0).build());
         rig.world.runTo(500 * MS);
 
         rig.writeFloat(X_POSITION, 600f);
@@ -230,47 +205,27 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void theYawScalarScalesTheHeadingAndAGyroBiasMakesItDrift() {
-        Map<String, Object> biased = new HashMap<>(pods(1));
-        biased.put("gyroBiasRadPerSec", 0.01);
-        PinpointRig scaled = new PinpointRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0, 0, 1).build(), pods(1));
-        scaled.writeFloat(YAW_SCALAR, 1.01f);
-        PinpointRig drifting = new PinpointRig(standing(), biased);
-
-        scaled.world.runTo(2 * SECOND);
-        drifting.world.runTo(10 * SECOND + 350 * MS);
-
-        assertEquals(1.01, scaled.heading(), 1e-5);
-        assertEquals(1.01f, scaled.readFloat(YAW_SCALAR));
-        assertEquals(0.1, drifting.heading(), 1e-5);
-    }
-
-    @Test
-    void theHeadingKeepsCountingPastAHalfTurn() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(2, 0, 0, 2 * Math.PI).build());
-
-        rig.world.runTo(3 * SECOND);
-
-        assertEquals(4 * Math.PI, rig.heading(), 1e-4);
-    }
-
-    @Test
-    void velocitiesAreTheRateOfTheEstimatedPoseInTheChipsFrame() {
-        PinpointRig driving = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(5, 0.5, 0, 0).build());
-        PinpointRig spinning = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(5, 0, 0, 1).build());
+    void velocitiesAreTheTrueOnesInTheReportedFrame() {
+        PinpointRig driving = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(5, 0.5, 0, 0).build());
+        PinpointRig turned = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(5, 0.5, 0, 0).build());
+        PinpointRig spinning = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(5, 0, 0, 1).build());
+        turned.world.runTo(SECOND);
+        turned.writeFloat(H_ORIENTATION, (float) (Math.PI / 2));
 
         driving.world.runTo(2 * SECOND);
+        turned.world.runTo(2 * SECOND);
         spinning.world.runTo(2 * SECOND);
 
-        // Whole encoder counts per physics step make the velocity jitter by about a percent.
-        assertEquals(500.0, driving.readFloat(X_VELOCITY), 8.0);
-        assertEquals(0.0, driving.readFloat(Y_VELOCITY), 8.0);
+        assertEquals(500.0, driving.readFloat(X_VELOCITY), 1e-3);
+        assertEquals(0.0, driving.readFloat(Y_VELOCITY), 1e-3);
+        assertEquals(0.0, turned.readFloat(X_VELOCITY), 1e-2);
+        assertEquals(500.0, turned.readFloat(Y_VELOCITY), 1e-3);
         assertEquals(1.0, spinning.readFloat(H_VELOCITY), 1e-5);
     }
 
     @Test
     void theDefaultBulkReadIsTheTenRegistersTheDriverExpectsInOrder() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0.1, 0.2).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0.1, 0.2).build());
         rig.world.runTo(1500 * MS);
 
         byte[] bulk = rig.read(BULK_READ, 40);
@@ -284,7 +239,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void aNarrowerBulkScopeReturnsOnlyWhatWasAskedForAndTheCrcFollowsIt() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0, 0).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 0).stay(0.5).move(1, 0.5, 0, 0).build());
         rig.world.runTo(1500 * MS);
 
         rig.write(SET_BULK_READ, new byte[] {X_POSITION, H_ORIENTATION});
@@ -297,7 +252,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void theInertialRegistersGiveTheTiltAndTheOrientationSinceTheLastZeroing() {
-        PinpointRig rig = configuredRig(ScriptedBody.startingAt(0, 0, 1.0).stay(0.5).move(1, 0, 0, 1).build());
+        PinpointRig rig = resetRig(ScriptedBody.startingAt(0, 0, 1.0).stay(0.5).move(1, 0, 0, 1).build());
 
         rig.world.runTo(2 * SECOND);
 
@@ -311,7 +266,7 @@ class GoBildaPinpointModelTest {
 
     @Test
     void theRegistersTheChipDoesNotWriteIgnoreWrites() {
-        PinpointRig rig = new PinpointRig(standing(), pods(1));
+        PinpointRig rig = new PinpointRig(standing());
 
         rig.writeInt(DEVICE_ID, 99);
         rig.writeInt(LOOP_TIME, 1);
@@ -322,8 +277,8 @@ class GoBildaPinpointModelTest {
 
     @Test
     void whatTheChipReportsDoesNotDependOnHowTheWorldWasSteppedOrWhenItWasRead() {
-        PinpointRig whole = configuredRig(wanderingScript());
-        PinpointRig sliced = configuredRig(wanderingScript());
+        PinpointRig whole = resetRig(wanderingScript());
+        PinpointRig sliced = resetRig(wanderingScript());
 
         whole.world.runTo(3 * SECOND);
         for (long t = 0; t < 3 * SECOND; t += 7 * MS) {
@@ -340,16 +295,13 @@ class GoBildaPinpointModelTest {
     }
 
     @Test
-    void aPodWithoutItsResolutionIsReportedByNameWhenTheDeviceIsBuilt() {
-        Map<String, Object> settings = new HashMap<>(pods(1));
-        settings.remove("xPod.ticksPerMetre");
+    void itTakesNoSettings() {
         WorldRig world = new WorldRig(standing(), (origin, direction, maxMeters) -> null);
 
         IllegalArgumentException failure = assertThrows(
                 IllegalArgumentException.class,
-                () -> DeviceModels.standard().create("gobilda-pinpoint", "odopods", settings, world.host));
+                () -> DeviceModels.standard().create(DeviceModels.PINPOINT, "odopods", Map.of("xPod.x", 0.1), world.host));
 
-        assertTrue(failure.getMessage().contains("\"odopods\""), failure.getMessage());
-        assertTrue(failure.getMessage().contains("\"xPod.ticksPerMetre\""), failure.getMessage());
+        assertTrue(failure.getMessage().contains("\"odopods\"") && failure.getMessage().contains("\"xPod.x\""), failure.getMessage());
     }
 }

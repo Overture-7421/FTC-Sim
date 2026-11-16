@@ -2,11 +2,9 @@ package dev.ftcsim.hardware.device;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.ftcsim.contracts.hardware.EncoderSource;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.hardware.i2c.I2cPeripheral;
 import java.util.ArrayList;
@@ -46,13 +44,11 @@ class DeviceModelsTest {
 
     @Test
     void theStandardRegistryHasEveryDeviceTheSimulatorModels() {
-        assertEquals(
-                List.of("gobilda-pinpoint", "rev-color-sensor-v3", "octoquad-ftc-mk2", "bno055-imu"),
-                DeviceModels.standard().typeIds());
+        assertEquals(List.of("gobilda-pinpoint", "rev-color-sensor-v3", "bno055-imu"), DeviceModels.standard().typeIds());
     }
 
     @Test
-    void aRegisteredFactoryBuildsTheDeviceFromTheSettingsOfTheProfile() {
+    void aRegisteredFactoryBuildsTheDeviceFromItsSettings() {
         DeviceModels models = DeviceModels.empty().register("probe", DeviceModelsTest::probe);
 
         I2cPeripheral device = models.create("probe", "thing", Map.of("gain", 4), host);
@@ -68,7 +64,7 @@ class DeviceModelsTest {
 
         assertTrue(failure.getMessage().contains("\"encoders\""), failure.getMessage());
         assertTrue(failure.getMessage().contains("\"octoquad\""), failure.getMessage());
-        assertTrue(failure.getMessage().contains("octoquad-ftc-mk2"), failure.getMessage());
+        assertTrue(failure.getMessage().contains("gobilda-pinpoint"), failure.getMessage());
     }
 
     @Test
@@ -90,28 +86,13 @@ class DeviceModelsTest {
     }
 
     @Test
-    void theHostRunsListenersInTheOrderTheyWereAddedAndOffersTheEncodersItWasGiven() {
+    void theHostRunsListenersInTheOrderTheyWereAdded() {
         List<String> calls = new ArrayList<>();
-        EncoderSource encoder = new EncoderSource() {
-            @Override
-            public long encoderCounts() {
-                return 5;
-            }
-
-            @Override
-            public double encoderCountsPerSecond() {
-                return 0;
-            }
-        };
-        host.provideEncoder("flywheel", encoder);
         host.onStep(nanos -> calls.add("first " + nanos));
         host.onStep(nanos -> calls.add("second " + nanos));
 
         host.step(4_166_666L);
 
         assertArrayEquals(new String[] {"first 4166666", "second 4166666"}, calls.toArray());
-        assertSame(encoder, host.encoder("flywheel"));
-        assertTrue(assertThrows(IllegalArgumentException.class, () -> host.encoder("turret")).getMessage().contains("flywheel"));
-        assertThrows(IllegalStateException.class, () -> host.provideEncoder("flywheel", encoder));
     }
 }

@@ -5,28 +5,25 @@ import dev.ftcsim.ui.host.ProgramPreparer.Failure
 import dev.ftcsim.ui.host.ProgramPreparer.Prepared
 import dev.ftcsim.ui.host.ProgramPreparer.Request
 import dev.ftcsim.ui.host.ProgramPreparer.Step
-import dev.ftcsim.ui.settings.SettingsStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.getAndUpdate
 import kotlinx.coroutines.flow.update
 
 /**
- * The Prepare screen's state: the project that was chosen, the preparation of it and how it ended, and the question
- * whether the person trusts the project. It lives as long as the application, so a preparation goes on, and is
- * shown again as it is, while another screen is shown; it never touches the practice session.
+ * The build's state: the project that was chosen, the preparation of it and how it ended. It lives as long as the
+ * application, so a preparation goes on, and is shown again as it is, while another screen is shown; it never touches
+ * the simulator session.
  *
- * A project's build runs its own scripts on this computer, so no preparation starts before the person has agreed
- * to that for the project's folder, once; [Request.trusted] is true only after that. The preparer reports from a thread
- * of its own, one event at a time; every state is a [StateFlow] that is only replaced, and events from a preparation
+ * A project's build runs its own scripts on this computer. Choosing the project's folder is the person's consent, so
+ * [Request.trusted] is always true. The preparer reports from a thread of its own, one event at a time; every state is a [StateFlow] that is only replaced, and events from a preparation
  * that has ended are ignored.
  */
-class PrepareModel(private val preparer: ProgramPreparer, private val settings: SettingsStore) {
+class PrepareModel(private val preparer: ProgramPreparer) {
     private val mutableState = MutableStateFlow<PrepareState>(PrepareState.Idle)
-    private val mutableConsent = MutableStateFlow<Project?>(null)
     private val lock = Any()
     private var job: ProgramPreparer.Job? = null
+    private var pending: ((PrepareState?) -> Unit)? = null
     @Volatile private var generation = 0L
 
     /** The output of the project's build, as far as the preparation has got. */
@@ -34,32 +31,38 @@ class PrepareModel(private val preparer: ProgramPreparer, private val settings: 
 
     val state: StateFlow<PrepareState> = mutableState.asStateFlow()
 
-    /** The project whose person is being asked for agreement before its build runs, or null. */
-    val consent: StateFlow<Project?> = mutableConsent.asStateFlow()
-
     /**
      * Makes [project] the one the screen is about, with the output of any earlier preparation cleared. Refused, with
      * false, while a preparation is under way: that one has to end or be cancelled first.
      */
-    fun choose(project: Project): Boolean = synchronized(lock) {
-        if (mutableState.value is PrepareState.Running) return false
-        mutableConsent.value = null
-        log.clear()
-        mutableState.value = PrepareState.Ready(project)
-        true
+    fun choose(project: Project): Boolean {
+        val dropped: ((PrepareState?) -> Unit)?
+        synchronized(lock) {
+            if (mutableState.value is PrepareState.Running) return false
+            log.clear()
+            mutableState.value = PrepareState.Ready(project)
+            dropped = pending
+            pending = null
+        }
+        dropped?.invoke(null)
+        return true
     }
 
-    /** Asks for the chosen project to be prepared, again if it already was; with a question first if it is not trusted. */
+    /**
+     * Chooses [project] and prepares it at once. [then] is called
+     * once, from the preparer's thread, with how the preparation ended, or with null if it never began because
+     * another project was chosen. Refused, with false and without calling [then], while a preparation is under way.
+     */
+    fun prepareAndThen(project: Project, then: (PrepareState?) -> Unit): Boolean {
+        if (!choose(project)) return false
+        synchronized(lock) { pending = then }
+        prepare()
+        return true
+    }
+
+    /** Asks for the chosen project to be built, again if it already was. */
     fun prepare() {
         val project = mutableState.value.takeIf { it !is PrepareState.Running }?.project ?: return
-        if (settings.state.value.trusts(project.folder)) start(project) else mutableConsent.value = project
-    }
-
-    /** The person's answer to the question: agreeing starts the preparation and is remembered for the folder. */
-    fun answerConsent(agreed: Boolean) {
-        val project = mutableConsent.getAndUpdate { null } ?: return
-        if (!agreed) return
-        settings.update { it.withTrusted(project.folder) }
         start(project)
     }
 
@@ -79,6 +82,7 @@ class PrepareModel(private val preparer: ProgramPreparer, private val settings: 
     }
 
     private fun start(project: Project) {
+        var notStarted: PrepareState? = null
         synchronized(lock) {
             if (mutableState.value is PrepareState.Running) return
             val mine = ++generation
@@ -87,13 +91,15 @@ class PrepareModel(private val preparer: ProgramPreparer, private val settings: 
             job = try {
                 preparer.prepare(Request(project.folder, true), Events(project, mine))
             } catch (failure: RuntimeException) {
-                mutableState.value = PrepareState.Failed(
+                notStarted = PrepareState.Failed(
                     project,
                     Failure("NOT_STARTED", "The preparation could not be started: ${failure.message ?: failure}", emptyList(), null),
                 )
+                mutableState.value = notStarted
                 null
             }
         }
+        notStarted?.let { takePending()?.invoke(it) }
     }
 
     /** Hears one preparation, and only while it is the one under way. */
@@ -111,7 +117,18 @@ class PrepareModel(private val preparer: ProgramPreparer, private val settings: 
         override fun failed(failure: Failure) = end(PrepareState.Failed(project, failure))
 
         private fun end(result: PrepareState) {
-            mutableState.update { if (mine == generation && it is PrepareState.Running) result else it }
+            var ended = false
+            mutableState.update {
+                ended = mine == generation && it is PrepareState.Running
+                if (ended) result else it
+            }
+            if (ended) takePending()?.invoke(result)
         }
+    }
+
+    private fun takePending(): ((PrepareState?) -> Unit)? = synchronized(lock) {
+        val taken = pending
+        pending = null
+        taken
     }
 }

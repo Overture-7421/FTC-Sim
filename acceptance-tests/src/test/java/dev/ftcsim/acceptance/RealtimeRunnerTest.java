@@ -10,7 +10,6 @@ import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.simulator.RealtimeRunner;
 import dev.ftcsim.simulator.SessionConfig;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -27,7 +26,7 @@ class RealtimeRunnerTest {
 
     private static RealtimeRunner open(double speed, List<String> log, Path storage) throws IOException {
         SessionConfig config = new SessionConfig(
-                RobotProfileLoader.loadBundled("hornet-2026.json"), TestSessions.program(), storage,
+                HornetMapping.spec(), TestSessions.program(), storage,
                 Path.of(System.getProperty("ftcsim.nativeDirectory")), null, null, 0, 0, 0, log::add);
         return RealtimeRunner.open(config, speed);
     }

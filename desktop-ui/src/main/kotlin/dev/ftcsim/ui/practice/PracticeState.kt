@@ -134,6 +134,7 @@ data class Controls(
     val stop: Boolean,
     val pause: Boolean,
     val reset: Boolean,
+    val restart: Boolean,
     val matchReason: String?,
     val startMatch: Boolean,
     val stopMatch: Boolean,
@@ -141,7 +142,10 @@ data class Controls(
     val arm: Boolean get() = matchReason == null
 
     companion object {
-        fun of(session: SessionState, run: RunState, match: MatchDisplay = MatchDisplay.NONE): Controls {
+        /**
+         * @param building whether the project's code is being built, which a restart waits for; the session goes on meanwhile
+         */
+        fun of(session: SessionState, run: RunState, match: MatchDisplay = MatchDisplay.NONE, building: Boolean = false): Controls {
             val open = session.connection == Connection.OPEN && session.info != null
             val idle = run.phase == RobotPhase.IDLE
             val matching = match.inProgress
@@ -153,11 +157,13 @@ data class Controls(
                 stop = open && !matching && !idle,
                 pause = open,
                 reset = open,
+                // A session that failed is what a restart is for: the code may be what was wrong.
+                restart = (open || session.connection == Connection.FAILED) && !building,
                 matchReason = when {
-                    !open -> "The session is not open yet."
-                    match.state == MatchState.ENDED -> "A match has been played. Reset the session to play another."
-                    !idle -> "Stop the OpMode first: a match starts from idle."
-                    session.opModes.none { it.kind() == OpModeKind.TELEOP } -> "This program has no teleop OpMode, which a match needs."
+                    !open -> "No session"
+                    match.state == MatchState.ENDED -> "Reset the world to play another match"
+                    !idle -> "Stop the OpMode first"
+                    session.opModes.none { it.kind() == OpModeKind.TELEOP } -> "No TeleOp OpMode"
                     else -> null
                 },
                 startMatch = open && match.state == MatchState.ARMED,

@@ -18,15 +18,14 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 
 /**
- * The SDK's own drivers for the BNO055, the new {@code IMU} interface, the legacy {@code BNO055IMU}, the Control Hub's
- * embedded drivers and the REV 9-axis IMU, run by robot programs as a team writes them, talking over the simulated hub
- * to the chip model, with a chassis whose true attitude is known. Every number the program reads is compared with
- * what the chassis really does, worked out here from the angles with no help from the model or the SDK.
+ * The SDK's own drivers for the BNO055 inside the Control Hub, the new {@code IMU} interface, the legacy
+ * {@code BNO055IMU} and the hub's embedded drivers, run by robot programs as a team writes them, talking over the
+ * simulated hub to the chip model, with a chassis whose true attitude is known. Every number the program reads is compared
+ * with what the chassis really does, worked out here from the angles with no help from the model or the SDK.
  */
 @Timeout(600)
 class ImuHostTest {
@@ -397,47 +396,6 @@ class ImuHostTest {
                 between(run, "gravityZ", 4.0, 5.0));
     }
 
-    // ---- an external IMU on a bus -------------------------------------------------------------------------------
-
-    @ParameterizedTest(name = "{0}")
-    @CsvSource({
-        "com.qualcomm.hardware.rev.Rev9AxisImu, 41",
-        "com.qualcomm.hardware.adafruit.AdafruitBNO055IMUNew, 40",
-        "com.qualcomm.hardware.andymark.AndyMarkIMU, 40"
-    })
-    void anExternalBno055ImuFromAProfileLineWorksThroughItsOwnDriver(String driver, int address) throws Exception {
-        TestRobot.Builder robot = TestRobot.builder().chassis(leftTurn()).device("extImu", 1, "bno055-imu", Map.of("address", address));
-
-        Run run = run(robot, "External IMU Probe", Map.of("externalDriver", driver), 3 * SECOND, 5 * SECOND, WHOLE);
-
-        assertEquals(List.of(), run.problems());
-        assertEquals(1.0, run.series().get("askedForDriver").get(0), "the driver class the code asked for");
-        assertEquals(1.0, run.series().get("initialized").get(0));
-        assertAllWithin("yaw after the turn", 57.2958, 0.5, between(run, "yaw", 6.3, 8.0));
-        assertAllWithin("turn rate", 0.5, 0.03, between(run, "rateZ", 4.2, 5.8));
-    }
-
-    @Test
-    void anExternalChipThroughTheLegacyInterfaceGetsTheAdafruitDriverAndReadsTheTurn() throws Exception {
-        TestRobot.Builder robot = TestRobot.builder().chassis(leftTurn()).device("extImu", 1, "bno055-imu", Map.of());
-
-        Run run = run(robot, "Legacy IMU Probe", Map.of("name", "extImu"), 3 * SECOND, 5 * SECOND, WHOLE);
-
-        assertEquals(List.of(), run.problems());
-        assertEquals(1.0, run.series().get("initialized").get(0));
-        assertAllWithin("heading after the turn", 57.2958, 0.4, between(run, "firstAngle", 6.3, 8.0));
-        assertAllWithin("gravity is up along the chip's z", 9.81, 0.05, run.series().get("gravityZ"));
-    }
-
-    @Test
-    void aChipAtTheOtherAddressIsNotFoundByTheRevDriverAsOnARobot() throws Exception {
-        TestRobot.Builder robot = TestRobot.builder().chassis(leftTurn()).device("extImu", 1, "bno055-imu", Map.of());
-
-        Run run = run(robot, "External IMU Probe", Map.of(), 3 * SECOND, SECOND, WHOLE);
-
-        assertEquals(0.0, run.series().get("initialized").get(0), "the REV driver looks for the chip at 0x29, where nothing answers");
-    }
-
     // ---- the IMU of the newer Control Hub ------------------------------------------------------------------------
 
     @Test
@@ -451,7 +409,7 @@ class ImuHostTest {
         assertTrue(failure.contains("hardwareMap.get(IMU.class"), "it says what to ask for instead: " + failure);
     }
 
-    // ---- determinism ---------------------------------------------------------------------------------------------
+    // ---- slicing of simulated time -------------------------------------------------------------------------------
 
     @Test
     void everyReadingIsTheSameWhateverTheSlicingOfSimulatedTime() throws Exception {

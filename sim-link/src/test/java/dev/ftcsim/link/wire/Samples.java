@@ -22,9 +22,14 @@ import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
 import dev.ftcsim.contracts.session.Readout;
 import dev.ftcsim.contracts.session.RobotInfo;
+import dev.ftcsim.contracts.session.RobotMapping;
+import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
+import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
 import java.nio.charset.StandardCharsets;
@@ -41,7 +46,29 @@ final class Samples {
 
     static SessionRequest request() {
         return new SessionRequest(
-                "hornet-2026.json", "C:\\Users\\Team 1234\\programs\\hornet", "decode", Alliance.BLUE, -42L, 1.25, -3.5, Math.PI / 3, 0.1);
+                mapping(), "C:\\Users\\Team 1234\\programs\\hornet", "decode", Alliance.BLUE, -42L, 1.25, -3.5, Math.PI / 3, 0.1);
+    }
+
+    /** A mapping that uses every slot, a model, a mirrored motor, text that is not ASCII and a payload NaN. */
+    static RobotMapping mapping() {
+        return new RobotMapping(
+                "Hörnet ✓",
+                List.of(
+                        new MotorMapping("fl", Slot.FRONT_LEFT, "", true),
+                        new MotorMapping("fr", Slot.FRONT_RIGHT, "", false),
+                        new MotorMapping("rl", Slot.REAR_LEFT, "", true),
+                        new MotorMapping("rr", Slot.REAR_RIGHT, "", false),
+                        new MotorMapping("roller", Slot.INTAKE, "goBILDA-5202-1150", false),
+                        new MotorMapping("belt", Slot.CONVEYOR, "ünï", true),
+                        new MotorMapping("shooterA", Slot.SHOOTER, "", false),
+                        new MotorMapping("turret", Slot.TURRET, "goBILDA-5203-435", true)),
+                11.3,
+                96,
+                "goBILDA-5203-435",
+                Double.longBitsToDouble(0x7FF8000000001234L),
+                "UP",
+                "BACKWARD",
+                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30));
     }
 
     static GamepadState gamepad() {
@@ -102,7 +129,8 @@ final class Samples {
                 2.0,
                 1.75,
                 true,
-                match);
+                match,
+                List.of(new UnmappedDevice(UnmappedDevice.Kind.MOTOR, "shooterLeft"), new UnmappedDevice(UnmappedDevice.Kind.I2C, "upSensor")));
     }
 
     static Catalogue catalogue() {
@@ -114,7 +142,8 @@ final class Samples {
                                 "DECODE ✓ 2025–26",
                                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
                                 List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")))),
-                List.of("hornet-2026.json", "ünïcode.json"));
+                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"),
+                        new dev.ftcsim.contracts.session.MotorChoice("ünï", "Ünïcode motor")));
     }
 
     static byte[] utf8(String text) {

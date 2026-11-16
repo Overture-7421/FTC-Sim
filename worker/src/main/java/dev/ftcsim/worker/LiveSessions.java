@@ -46,7 +46,7 @@ final class LiveSessions implements SessionOpener {
             try {
                 SessionInfo info = new SessionInfo(
                         config.field() == null ? null : config.field().description(), opModes(runner),
-                        SessionFactory.robotInfo(config.profile()));
+                        SessionFactory.robotInfo(config.robot()));
                 return new LiveSession(runner, info, storage);
             } catch (Throwable failure) {
                 runner.close();
@@ -150,6 +150,11 @@ final class LiveSessions implements SessionOpener {
         @Override
         public void startMatch() {
             callSimulation(session -> session.startMatch(), "start the match");
+        }
+
+        @Override
+        public void reset() {
+            callSimulation(session -> session.resetWorld(), "reset the world");
         }
 
         /** What the simulation refuses is thrown as it is; trouble reaching it is an {@code IllegalStateException}. */

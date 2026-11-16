@@ -1,4 +1,4 @@
-import groovy.json.JsonSlurper
+import org.apache.tools.ant.filters.FixCrLfFilter
 import org.gradle.plugins.ide.eclipse.EclipsePlugin
 import org.gradle.plugins.ide.eclipse.model.Classpath
 import org.gradle.plugins.ide.eclipse.model.EclipseModel
@@ -22,15 +22,16 @@ tasks.withType<JavaCompile>().configureEach {
     options.compilerArgs.add("-Xlint:-classfile")
 }
 
-// The places to look for a JDK are defined once, in the launcher's manifest; the application carries a copy of that
-// file as a resource, so it travels in the jar and needs no path to the launcher.
-val jdkManifest = rootProject.layout.projectDirectory.file("launcher/scripts/jdk-manifest.json")
+// What the application needs from the Java it runs on besides its version is said once, in src/dist/runtime-options: the
+// launcher starts the Java with it as an argument file, the application carries it as a resource so that the self test can
+// check the running JVM against it, and `run` uses it. The major version is the toolchain's, which the runtime is made from.
+val runtimeOptionsFile = layout.projectDirectory.file("src/dist/runtime-options")
+val jdkMajor = libs.versions.jdk.get()
 
 tasks.processResources {
-    from(jdkManifest) { into("dev/ftcsim/app") }
-    doFirst {
-        require(jdkManifest.asFile.isFile) { "$jdkManifest is missing; the application reads the places to look for a JDK from it" }
-    }
+    from(runtimeOptionsFile) { into("dev/ftcsim/app") }
+    inputs.property("jdkMajor", jdkMajor)
+    filesMatching("**/runtime.properties") { expand("jdkMajor" to jdkMajor) }
 }
 
 // The worker is a program the application starts, and the robot world is a set of jars the worker and the importer read:
@@ -89,18 +90,12 @@ val writeClasspath = tasks.register<WriteClasspathFile>("writeClasspath") {
     dependsOn(workerRuntime, robotWorld)
 }
 
-// What the application needs from the Java it runs on, besides the version, is said once in the launcher's manifest:
-// the launcher starts the application with it, the self test checks the running JVM against it, and `run` uses it.
-val applicationJvmArguments: List<String> = run {
-    val manifest = JsonSlurper().parse(jdkManifest.asFile) as Map<*, *>
-    val arguments = (manifest["application"] as? Map<*, *>)?.get("jvmArguments") as? List<*>
-    requireNotNull(arguments) { "$jdkManifest has no application.jvmArguments" }.map { it as String }
-}
+val applicationJvmArguments: List<String> = runtimeOptionsFile.asFile.readLines().map { it.trim() }.filter { it.isNotEmpty() && !it.startsWith("#") }
 
 tasks.register<JavaExec>("run") {
     group = "application"
-    description = "Runs FTC-Sim as a user would: the window, a worker process and the importer, on the project's JDK 25. " +
-        "Options go after --args, for example --args=\"--exit-after=30 --no-focus\"."
+    description = "Runs FTC-Sim as a user would: the window, a worker process and the importer, on the project's JDK 25 (the toolchain's; " +
+        "the distribution has its own runtime). Options go after --args, for example --args=\"--exit-after=30 --no-focus\"."
     classpath = sourceSets.main.get().runtimeClasspath
     mainClass.set("dev.ftcsim.app.Main")
     javaLauncher.set(javaToolchains.launcherFor(java.toolchain))
@@ -112,9 +107,9 @@ tasks.register<JavaExec>("run") {
 }
 
 // The distribution: the folder a driver unzips (build/dist/FTC-Sim) and its zip. Every jar the application, the worker
-// and the robot world run on is in lib once; the launcher's scripts are laid out beside lib exactly as they are in the
-// launcher module, which is referenced by path and not as a dependency.
-val launcherScripts = rootProject.layout.projectDirectory.dir("launcher/scripts")
+// and the robot world run on is in lib once; src/dist (FTC-Sim.cmd and the options) is laid out beside lib as it is, and the
+// Java runtime that the application and the worker run on is in runtime (runtime.gradle.kts).
+val distSources = layout.projectDirectory.dir("src/dist")
 val distFolder = layout.buildDirectory.dir("dist/FTC-Sim")
 val distZipFile = layout.buildDirectory.file("dist/FTC-Sim.zip")
 val applicationJars = configurations.runtimeClasspath
@@ -142,15 +137,23 @@ val distJar = tasks.register<Jar>("distJar") {
     )
 }
 
-// The licence notices (THIRD-PARTY-NOTICES.txt and the licenses folder) are written from the metadata of the jars of lib.
+// The licence notices (THIRD-PARTY-NOTICES.txt and the licenses folder) are written from the metadata of the jars of lib and
+// from the release file of the JDK the runtime is made from.
+apply(from = "runtime.gradle.kts")
 apply(from = "notices.gradle.kts")
 
 val distFolderTask = tasks.register<Sync>("distFolder") {
     group = "distribution"
-    description = "Lays out the folder of the distribution: the launcher's scripts, the licence notices and lib with every jar once."
+    description = "Lays out the folder of the distribution: FTC-Sim.cmd and its options, the Java runtime, the licence notices and lib with every jar once."
     into(distFolder)
-    from(launcherScripts)
+    // A batch file with Unix line endings misreads its labels, whatever the checkout did to the source.
+    from(distSources) {
+        filesMatching("*.cmd") { filter(mapOf("eol" to FixCrLfFilter.CrLf.newInstance("crlf")), FixCrLfFilter::class.java) }
+    }
     from(tasks.named("thirdPartyNotices"))
+    into("runtime") {
+        from(tasks.named("runtimeImage"))
+    }
     into("lib") {
         from(distJar)
         from(applicationJars, workerRuntime, robotWorld)
@@ -194,7 +197,7 @@ tasks.test {
             "-Dftcsim.classpathFile=${classpathFile.get().asFile}",
             "-Dftcsim.dist=${distFolder.get().asFile}",
             "-Dftcsim.distZip=${distZipFile.get().asFile}",
-            "-Dftcsim.launcherScripts=${launcherScripts.asFile}",
+            "-Dftcsim.distSources=${distSources.asFile}",
         )
     })
 }

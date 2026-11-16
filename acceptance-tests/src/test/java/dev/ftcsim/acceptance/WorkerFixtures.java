@@ -41,4 +41,20 @@ final class WorkerFixtures {
         host.connectTimeout(Duration.ofMinutes(3)).shutdownGrace(Duration.ofSeconds(60));
         return host;
     }
+
+    /** The real machine, except where a property names the JDK or the Android SDK to use. */
+    static Machine machine() {
+        Machine real = Machine.real();
+        String jdk = System.getProperty("ftcsim.jdk");
+        String sdk = System.getProperty("ftcsim.androidSdk");
+        return new Machine(name -> {
+            if (name.equals("JAVA_HOME") && jdk != null) {
+                return jdk;
+            }
+            if (name.equals("ANDROID_HOME") && sdk != null) {
+                return sdk;
+            }
+            return real.environment().apply(name);
+        });
+    }
 }

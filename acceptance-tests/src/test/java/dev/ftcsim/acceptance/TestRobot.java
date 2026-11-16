@@ -2,6 +2,7 @@ package dev.ftcsim.acceptance;
 
 import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
+import dev.ftcsim.contracts.hardware.HardwareDirectory.Sensor;
 import dev.ftcsim.contracts.robot.RobotEnvironment;
 import dev.ftcsim.contracts.world.BodyView;
 import dev.ftcsim.contracts.world.RayView;
@@ -40,7 +41,7 @@ final class TestRobot {
     final LynxBus bus;
     final LynxHub controlHub;
     final WiringTable wiring;
-    /** The robot's cameras; empty unless the builder was given some, and then every camera robot code asks for is unplugged. */
+    /** The robot's camera; empty unless the builder was given one, and then every camera robot code asks for is unplugged. */
     final CameraRack cameras;
     private final List<ShaftPlant> plants;
     private final FixedRateWorld.Task physicsStep;
@@ -92,9 +93,9 @@ final class TestRobot {
         return world;
     }
 
-    private record DeviceSpec(String name, int bus, String typeId, Map<String, ?> settings) {}
+    private record DeviceSpec(int bus, String typeId, Map<String, ?> settings) {}
 
-    private record CameraSpec(String name, String typeId, Map<String, ?> settings) {}
+    private record CameraSpec(String typeId, Map<String, ?> settings) {}
 
     static final class Builder {
         private final WiringTable.Builder wiring =
@@ -103,7 +104,6 @@ final class TestRobot {
         private final List<Integer> ports = new ArrayList<>();
         private final List<DeviceSpec> devices = new ArrayList<>();
         private final List<CameraSpec> cameraSpecs = new ArrayList<>();
-        private final Map<String, Integer> sharedEncoders = new LinkedHashMap<>();
         private final Map<String, List<FieldTag>> gameMaps = new LinkedHashMap<>();
         private List<FieldTag> fieldTags = List.of();
         private IntFunction<BodyView> entities;
@@ -153,22 +153,21 @@ final class TestRobot {
             return this;
         }
 
-        /** A device model of {@code typeId} on an I2C bus of the Control Hub, under the name robot code uses. */
-        Builder device(String name, int bus, String typeId, Map<String, ?> settings) {
-            wiring.i2c(name, HubConfig.EMBEDDED_ADDRESS, bus);
-            devices.add(new DeviceSpec(name, bus, typeId, settings));
+        /** The Pinpoint on the bus the robot's Pinpoint has, whatever name robot code asks for it with. */
+        Builder pinpoint() {
+            devices.add(new DeviceSpec(Sensor.PINPOINT.bus(), DeviceModels.PINPOINT, Map.of()));
             return this;
         }
 
-        /** Lets devices count the encoder of the n-th motor, the way an OctoQuad channel can, under {@code name}. */
-        Builder shareEncoder(String name, int motorIndex) {
-            sharedEncoders.put(name, motorIndex);
+        /** The colour sensor on the bus the robot's colour sensor has, with the given settings (its place), under any name. */
+        Builder colorSensor(Map<String, ?> settings) {
+            devices.add(new DeviceSpec(Sensor.COLOR_SENSOR.bus(), DeviceModels.COLOR_SENSOR, settings));
             return this;
         }
 
-        /** A camera model of {@code typeId} on a USB port, under the name robot code asks the hardware map for. */
-        Builder camera(String name, String typeId, Map<String, ?> settings) {
-            cameraSpecs.add(new CameraSpec(name, typeId, settings));
+        /** The Limelight, with the given settings (its mount and pipelines), which robot code finds under any name. */
+        Builder limelight(Map<String, ?> settings) {
+            cameraSpecs.add(new CameraSpec("limelight-3a", settings));
             return this;
         }
 
@@ -217,7 +216,6 @@ final class TestRobot {
                 host.provideEntities(entities);
             }
             gameMaps.forEach(host::provideGameMap);
-            sharedEncoders.forEach((name, motorIndex) -> host.provideEncoder(name, plants.get(motorIndex)));
             DeviceModels models = DeviceModels.standard();
             if (embeddedImu) {
                 hub.attachInternal(
@@ -225,11 +223,11 @@ final class TestRobot {
                         models.create(DeviceModels.BNO055_IMU, "Control Hub IMU", embeddedImuSettings, host));
             }
             for (DeviceSpec device : devices) {
-                hub.attach(device.bus(), models.create(device.typeId(), device.name(), device.settings(), host));
+                hub.attach(device.bus(), models.create(device.typeId(), device.typeId(), device.settings(), host));
             }
             CameraModels cameraModels = CameraModels.standard();
             for (CameraSpec camera : cameraSpecs) {
-                cameras.add(camera.name(), cameraModels.create(camera.typeId(), camera.name(), camera.settings(), host, CAMERA_SEED));
+                cameras.plug(cameraModels.create(camera.typeId(), "limelight", camera.settings(), host, CAMERA_SEED));
             }
             return (index, nanos) -> {
                 move.accept(nanos);

@@ -45,7 +45,7 @@ import kotlinx.coroutines.launch
  * The list takes the keyboard too: Page Up and Page Down, Home and End.
  */
 @Composable
-fun OutputView(log: OutputLog, modifier: Modifier = Modifier) {
+fun OutputView(log: OutputLog, modifier: Modifier = Modifier, description: String = "Build output") {
     val version by log.version.collectAsState()
     val view = remember(version) { log.view() }
     val listState = rememberLazyListState()
@@ -66,7 +66,7 @@ fun OutputView(log: OutputLog, modifier: Modifier = Modifier) {
                 if (focused) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outlineVariant,
                 MaterialTheme.shapes.small,
             )
-            .semantics { contentDescription = "Output of the preparation" }
+            .semantics { contentDescription = description }
             .onKeyEvent { event ->
                 if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
                 when (event.key) {

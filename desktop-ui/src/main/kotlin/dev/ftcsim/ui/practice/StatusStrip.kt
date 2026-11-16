@@ -24,15 +24,18 @@ import androidx.compose.ui.unit.dp
 import dev.ftcsim.contracts.robot.RobotPhase
 import dev.ftcsim.ui.viewport.ViewportEngine
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.StateFlow
 
 /** The strip under the viewport: where the session is, how long it has run in simulated time, how fast, and how many problems. */
 @Composable
-fun StatusStrip(session: PracticeSession, engine: ViewportEngine, ui: PracticeUi, modifier: Modifier = Modifier) {
+fun StatusStrip(session: PracticeSession, engine: ViewportEngine, ui: PracticeUi, extraProblems: StateFlow<List<Problem>>, modifier: Modifier = Modifier) {
     val state by session.session.collectAsState()
     val run by session.run.collectAsState()
     val match by session.match.collectAsState()
     val timing by session.timing.collectAsState()
-    val problems by session.problems.collectAsState()
+    val own by session.problems.collectAsState()
+    val extra by extraProblems.collectAsState()
+    val problems = own + extra
     val fps by rememberFramesPerSecond(engine)
     val slow = state.connection == Connection.OPEN && !run.paused && !timing.keepsUp(run.speed)
     Surface(modifier.fillMaxWidth(), color = MaterialTheme.colorScheme.surfaceContainerHigh) {
@@ -53,7 +56,7 @@ fun StatusStrip(session: PracticeSession, engine: ViewportEngine, ui: PracticeUi
             if (problems.isNotEmpty()) {
                 val errors = problems.any { it.severity == Severity.ERROR }
                 TextButton(
-                    onClick = { ui.panel = Panel.PROBLEMS },
+                    onClick = { ui.showPanel(Panel.PROBLEMS) },
                     contentPadding = PaddingValues(horizontal = 8.dp),
                     modifier = Modifier.height(28.dp),
                 ) {

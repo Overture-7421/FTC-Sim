@@ -66,21 +66,27 @@ fun ViewportSurface(
             .semantics { contentDescription = "3D viewport. Focus it to drive with the keyboard." },
         contentAlignment = Alignment.Center,
     ) {
-        when (val current = status) {
-            ViewportStatus.Starting -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                CircularProgressIndicator(Modifier.size(32.dp))
-                Text("Starting the 3D viewport", color = Color.White.copy(alpha = 0.8f))
-            }
-            is ViewportStatus.Failed -> Column(
-                Modifier.padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(8.dp),
-            ) {
-                Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
-                Text("The 3D viewport is not available", color = Color.White, style = MaterialTheme.typography.titleMedium)
-                Text(current.message, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
-            }
-            is ViewportStatus.Running -> Unit
+        ViewportStatusMessage(status)
+    }
+}
+
+/** What stands in place of the picture while the render thread is starting or after it failed; nothing once it runs. */
+@Composable
+internal fun ViewportStatusMessage(status: ViewportStatus) {
+    when (status) {
+        ViewportStatus.Starting -> Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            CircularProgressIndicator(Modifier.size(32.dp))
+            Text("Starting the 3D viewport", color = Color.White.copy(alpha = 0.8f))
         }
+        is ViewportStatus.Failed -> Column(
+            Modifier.padding(24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error)
+            Text("The 3D viewport is not available", color = Color.White, style = MaterialTheme.typography.titleMedium)
+            Text(status.message, color = Color.White.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium)
+        }
+        is ViewportStatus.Running -> Unit
     }
 }

@@ -243,7 +243,7 @@ class SimulationKernelTest {
     }
 
     @Test
-    void runsAreIdenticalWhateverTheSlicingAndWhateverElseTheMachineIsDoing() throws Exception {
+    void theRobotSeesTheSameTimesWhateverTheSlicingAndTheLoadOfTheMachine() throws Exception {
         List<List<String>> traces = new ArrayList<>();
         int repetitions = Integer.getInteger("ftcsim.kernelStress", 4);
         BackgroundLoad load = new BackgroundLoad();
@@ -543,7 +543,7 @@ class SimulationKernelTest {
     }
 
     @Test
-    void monitorWaitsAreIdenticalWhateverTheSlicingAndWhateverElseTheMachineIsDoing() throws Exception {
+    void monitorWaitsSeeTheSameTimesWhateverTheSlicingAndTheLoadOfTheMachine() throws Exception {
         List<List<String>> traces = new ArrayList<>();
         int repetitions = Integer.getInteger("ftcsim.kernelStress", 4);
         BackgroundLoad load = new BackgroundLoad();
@@ -667,7 +667,7 @@ class SimulationKernelTest {
     }
 
     @Test
-    void anotherThreadWakingTheRobotFromAWaitIsReportedBecauseItsTimingIsNotReproducible() throws Exception {
+    void anotherThreadWakingTheRobotFromAWaitWakesItAtTheNextTurnAndIsNotAProblem() throws Exception {
         try (KernelFixture fixture = new KernelFixture()) {
             Object monitor = new Object();
             fixture.startRobot("robot", () -> {
@@ -688,9 +688,7 @@ class SimulationKernelTest {
             fixture.kernel.runUntil(2_000_000);
 
             assertEquals(List.of("woke"), fixture.trace);
-            assertTrue(
-                    fixture.kernel.diagnostics().problems().stream().anyMatch(p -> p.contains("outsider")),
-                    fixture.kernel.diagnostics().problems().toString());
+            assertEquals(List.of(), fixture.kernel.diagnostics().problems());
         }
     }
 

@@ -28,20 +28,11 @@ fun SettingsScreen(settings: SettingsStore, engine: ViewportEngine, settingsPath
     fun change(update: (DisplaySettings) -> DisplaySettings) = settings.update { it.copy(display = update(it.display)) }
 
     ScreenPage("Settings", modifier) {
-        SectionCard(
-            "Viewport",
-            description = "A smaller picture and a lower frame rate leave more of the computer to the simulation.",
-        ) {
+        SectionCard("Viewport") {
             Text("Render resolution", style = MaterialTheme.typography.titleSmall)
             ChoiceRow(
                 DisplaySettings.RENDER_SCALES, display.renderScalePercent, { "$it %" },
                 { value -> change { it.copy(renderScalePercent = value) } }, "Render resolution",
-            )
-            Text(
-                if (display.renderScalePercent == 100) "The picture is drawn at the size of the viewport."
-                else "The picture is drawn at ${display.renderScalePercent} % of the viewport's size and stretched to fit.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Text("Frame rate cap", style = MaterialTheme.typography.titleSmall)
             ChoiceRow(
@@ -54,37 +45,26 @@ fun SettingsScreen(settings: SettingsStore, engine: ViewportEngine, settingsPath
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        SectionCard("Performance overlay") {
+        SectionCard("Performance") {
             SwitchRow(
-                "Show the performance overlay",
-                "Frame times, render cost and the rates of frames and snapshots, in a small card over the viewport.",
+                "Show overlay",
+                null,
                 display.performanceOverlay,
             ) { value -> change { it.copy(performanceOverlay = value) } }
         }
-        SectionCard("Where your settings are kept") {
+        SectionCard("Settings file") {
             Text(
-                settingsPath ?: "Nowhere: this run does not save settings.",
+                settingsPath ?: "Not saved",
                 style = MaterialTheme.typography.bodyMedium,
             )
         }
     }
 }
 
-/** What the frame rate will be, from the display's refresh rate (0 when not known) and the cap that was chosen. */
+/** The frame rate the viewport will draw at, from the display's refresh rate (0 when not known) and the cap that was chosen. */
 internal fun frameRateText(refreshHz: Double, capHz: Int): String {
-    if (refreshHz <= 0) {
-        return "The display's refresh rate is not known yet. The viewport never draws faster than the cap or the display."
-    }
+    if (refreshHz <= 0) return "Display rate unknown"
     val target = Pacing.targetHz(refreshHz, capHz)
-    val base = String.format(
-        Locale.ROOT, "Your display refreshes at %.0f Hz, so the viewport draws at most %.0f frames per second", refreshHz, target,
-    )
-    // Below the cap and below the display: an even share of the refresh rate, which keeps frames evenly spaced.
-    return if (target < capHz - TOLERANCE_HZ && target < refreshHz - TOLERANCE_HZ) {
-        "$base: an even share of the display's rate, which looks smoother than $capHz."
-    } else {
-        "$base."
-    }
+    return String.format(Locale.ROOT, "Display %.0f Hz, drawing at %.0f fps", refreshHz, target)
 }
 
-private const val TOLERANCE_HZ = 0.5

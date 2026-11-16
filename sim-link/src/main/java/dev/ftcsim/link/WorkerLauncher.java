@@ -170,7 +170,7 @@ public final class WorkerLauncher {
     private String argumentFile(Path crashReport, Path natives, Path storage) {
         List<String> lines = new ArrayList<>();
         lines.add("--enable-native-access=ALL-UNNAMED");
-        // The robot world seeds ThreadLocalRandom through sun.misc.Unsafe; without this the JDK prints a four-line warning once.
+        // A library that reads memory through sun.misc.Unsafe would make the JDK print a four-line warning once.
         lines.add("--sun-misc-unsafe-memory-access=allow");
         lines.add("-Dfile.encoding=UTF-8");
         lines.add("-Dstdout.encoding=UTF-8");

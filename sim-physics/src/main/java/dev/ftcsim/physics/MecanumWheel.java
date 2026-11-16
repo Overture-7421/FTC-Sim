@@ -91,13 +91,6 @@ final class MecanumWheel {
         return speedRadPerSec;
     }
 
-    void putStateInto(StateDigest digest) {
-        digest.putDouble(command).putDouble(angleRadians).putDouble(speedRadPerSec);
-        if (drive != Drive.COMMAND) {
-            digest.putInt(drive.ordinal()).putDouble(volts);
-        }
-    }
-
     /**
      * Advances the wheel by one step.
      *

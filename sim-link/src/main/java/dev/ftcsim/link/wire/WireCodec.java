@@ -80,6 +80,10 @@ public final class WireCodec {
                 w.unsignedByte(Protocol.COMMAND_REFUSED);
                 w.string(refused.message());
             }
+            case Event.Log log -> {
+                w.unsignedByte(Protocol.LOG);
+                ContractCodec.writeLines(w, log.lines());
+            }
         }
         return w.finish();
     }
@@ -126,6 +130,7 @@ public final class WireCodec {
                         case Protocol.FAILED -> new Event.Failed(r.string("the failure message"));
                         case Protocol.CATALOGUE -> new Event.Catalogue(ContractCodec.readCatalogue(r));
                         case Protocol.COMMAND_REFUSED -> new Event.Refused(r.string("the refusal message"));
+                        case Protocol.LOG -> new Event.Log(ContractCodec.readLines(r));
                         default -> throw new WireException("protocol version " + Protocol.VERSION + " has no event of that kind");
                     };
             r.end();

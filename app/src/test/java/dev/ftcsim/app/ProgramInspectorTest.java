@@ -24,7 +24,7 @@ class ProgramInspectorTest {
         Inspection groovy = inspector.inspect(project);
         assertEquals(Kind.PROJECT, groovy.kind());
         assertEquals("RobotCode", groovy.name());
-        assertTrue(groovy.summary().contains("Gradle build"), groovy.summary());
+        assertTrue(groovy.summary().contains("Team project"), groovy.summary());
 
         Files.move(project.resolve("settings.gradle"), project.resolve("settings.gradle.kts"));
         assertEquals(Kind.PROJECT, inspector.inspect(project).kind());
@@ -40,7 +40,7 @@ class ProgramInspectorTest {
 
         assertEquals(Kind.PREPARED_PROGRAM, inspection.kind());
         assertEquals("RobotCode", inspection.name(), "the project it was made from");
-        assertEquals("A prepared program for FTC SDK 11.1.0 with 2 OpModes.", inspection.summary());
+        assertEquals("Built program: FTC SDK 11.1.0, 2 OpModes", inspection.summary());
     }
 
     @Test
@@ -53,7 +53,7 @@ class ProgramInspectorTest {
         Inspection inspection = inspector.inspect(folder);
 
         assertEquals(Kind.NOT_RECOGNISED, inspection.kind());
-        assertTrue(inspection.summary().startsWith("This folder looks like a prepared program but cannot be used: program/TeamCode.jar has 8 bytes"), inspection.summary());
+        assertTrue(inspection.summary().startsWith("Damaged built program: program/TeamCode.jar has 8 bytes"), inspection.summary());
         assertEquals(1, inspection.summary().lines().count(), inspection.summary());
     }
 
@@ -64,8 +64,8 @@ class ProgramInspectorTest {
         Path plain = Files.createDirectories(root.resolve("Documents"));
         Path file = Files.writeString(root.resolve("notes.txt"), "text");
 
-        assertTrue(inspector.inspect(noWrapper).summary().contains("no Gradle wrapper (gradle\\wrapper\\gradle-wrapper.jar)"));
-        assertTrue(inspector.inspect(plain).summary().contains("neither a team project (it has no settings.gradle)"));
+        assertTrue(inspector.inspect(noWrapper).summary().contains("No Gradle wrapper (gradle\\wrapper\\gradle-wrapper.jar)"));
+        assertTrue(inspector.inspect(plain).summary().contains("No settings.gradle here"));
         assertTrue(inspector.inspect(file).summary().contains("notes.txt is a file, not a folder"));
         assertTrue(inspector.inspect(root.resolve("gone")).summary().contains("gone does not exist"));
         for (Path path : new Path[] {noWrapper, plain, file, root.resolve("gone")}) {

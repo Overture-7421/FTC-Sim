@@ -1,14 +1,14 @@
 package dev.ftcsim.ui.practice
 
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Scaffold
@@ -24,27 +24,35 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
+import dev.ftcsim.ui.common.LogOpener
 import dev.ftcsim.ui.viewport.ViewportEngine
 import dev.ftcsim.ui.viewport.ViewportSurface
 import kotlinx.coroutines.flow.collectLatest
-import kotlinx.coroutines.launch
 
-private val SIDE_PANEL_WIDTH = 400.dp
+private val DETAILS_WIDTH = 420.dp
+private val DETAILS_MARGIN = 72.dp
+private val DETAILS_MIN_HEIGHT = 240.dp
+private val DETAILS_MAX_HEIGHT = 640.dp
 
 /**
- * The Practice screen: the 3D viewport with the camera presets over it, the Driver Station, hardware, score and
- * problem panels beside it, the controls in the top bar and the status strip below. A timed match shows as a
+ * The Simulator screen: the 3D viewport with the camera presets over it and, at its bottom right, the button that opens
+ * the details panel (code, score, problems and setup) over the viewport; the controls are in the top bar and the status
+ * strip below. A timed match shows as a
  * scoreboard over the viewport and takes over the top bar's controls. Menus and dialogs tell the engine's input gate,
  * because input from the keyboard and from controllers must stop while one is open. A command the simulator refuses
  * is a snackbar; the session goes on.
  *
- * @param onSetup called when the person asks to set up a run, from the empty state or after a failure
+ * @param onSetup called when the person asks to open a project, from the empty state or after a failure
+ * @param restart the restart of the robot code: its button's state, the strip under the top bar and the problems it adds
+ * @param onEditRobot goes to the Robot screen, from the Problems tab of the side panel; no button when null
+ * @param logOpener opens the build log of a build problem; no button when null
+ * @param start what the Setup tab of the side panel shows: the field, the alliance and where the robot starts
+ * @param startPosition the control in the top bar that picks where the robot starts; nothing by default
  * @param onRetry asks for the session that failed again
  * @param onReconnect tries to open the link to the simulator again, when that could not be done
  * @param corner what to show over the top end of the viewport, such as the performance overlay
@@ -61,13 +69,17 @@ fun PracticeScreen(
     onReconnect: () -> Unit,
     modifier: Modifier = Modifier,
     onSetup: () -> Unit = {},
+    restart: CodeRestart = CodeRestart.None,
+    onEditRobot: (() -> Unit)? = null,
+    logOpener: LogOpener? = null,
     corner: @Composable (Modifier) -> Unit = {},
+    start: @Composable () -> Unit = {},
+    startPosition: @Composable () -> Unit = {},
     viewport: @Composable (FocusRequester, Modifier) -> Unit = { focus, area ->
-        ViewportSurface(engine, focus, area, onFocusChange = { ui.viewportFocused = it })
+        ViewportSurface(engine, focus, area)
     },
 ) {
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
     val viewportFocus = remember { FocusRequester() }
     val focusViewport = { runCatching { viewportFocus.requestFocus() }; Unit }
 
@@ -87,23 +99,19 @@ fun PracticeScreen(
 
     Scaffold(
         modifier,
-        topBar = { PracticeTopBar(session, ui, focusViewport) },
-        bottomBar = { StatusStrip(session, engine, ui) },
+        topBar = {
+            Column {
+                PracticeTopBar(session, ui, restart, focusViewport, startPosition)
+                RestartStrip(restart)
+            }
+        },
+        bottomBar = { StatusStrip(session, engine, ui, restart.problems) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Row(Modifier.padding(padding).fillMaxSize()) {
-            ViewportRegion(session, engine, ui, viewportFocus, viewport, corner, onSetup, onRetry, onReconnect, Modifier.weight(1f).fillMaxHeight())
-            SidePanel(session, ui, Modifier.width(SIDE_PANEL_WIDTH).fillMaxHeight())
-        }
-    }
-    if (ui.resetDialogOpen) {
-        ResetDialog(
-            onConfirm = {
-                ui.resetDialogOpen = false
-                session.reset()
-                scope.launch { snackbar.showSnackbar("The session was reset") }
-            },
-            onDismiss = { ui.resetDialogOpen = false },
+        ViewportRegion(
+            session, engine, ui, viewportFocus, viewport, corner, onSetup, onRetry, onReconnect,
+            details = { box -> SidePanel(session, ui, restart.problems, box, onEditRobot, logOpener, start) },
+            modifier = Modifier.padding(padding).fillMaxSize(),
         )
     }
     if (ui.matchDialogOpen) {
@@ -131,6 +139,7 @@ private fun ViewportRegion(
     onSetup: () -> Unit,
     onRetry: () -> Unit,
     onReconnect: () -> Unit,
+    details: @Composable (Modifier) -> Unit,
     modifier: Modifier,
 ) {
     val state by session.session.collectAsState()
@@ -138,17 +147,21 @@ private fun ViewportRegion(
     val preset by engine.preset.collectAsState()
     val problems by session.problems.collectAsState()
     val humanActions = state.info?.field()?.humanActions().orEmpty()
-    Box(modifier) {
+    BoxWithConstraints(modifier) {
         viewport(focus, Modifier.fillMaxSize())
         CameraPresetBar(preset, { engine.camera.select(it) }, Modifier.align(Alignment.TopStart).padding(12.dp))
         corner(Modifier.align(Alignment.TopEnd).padding(12.dp))
         if (state.connection == Connection.OPEN) MatchScoreboard(session, Modifier.align(Alignment.TopCenter).padding(top = 72.dp))
-        KeyboardHint(ui.viewportFocused, Modifier.align(Alignment.BottomStart).padding(12.dp))
-        if (humanActions.isNotEmpty()) {
-            HumanActionChips(
-                humanActions, state.connection == Connection.OPEN, session::humanAction,
-                Modifier.align(Alignment.BottomEnd).padding(12.dp),
-            )
+        Column(Modifier.align(Alignment.BottomEnd).padding(12.dp), horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (ui.panelOpen) {
+                details(Modifier.width(DETAILS_WIDTH).height((this@BoxWithConstraints.maxHeight - DETAILS_MARGIN).coerceIn(DETAILS_MIN_HEIGHT, DETAILS_MAX_HEIGHT)))
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                if (humanActions.isNotEmpty()) {
+                    HumanActionChips(humanActions, state.connection == Connection.OPEN, session::humanAction)
+                }
+                DetailsButton(ui.panelOpen, onClick = { ui.panelOpen = !ui.panelOpen })
+            }
         }
         SessionOverlay(link, state, problems.firstOrNull { it.source == "Session" }?.text, onRetry, onReconnect, onSetup)
     }
@@ -179,20 +192,8 @@ private fun ErrorNotice(session: PracticeSession, ui: PracticeUi, snackbar: Snac
                 duration = SnackbarDuration.Long,
             )
             if (result == SnackbarResult.ActionPerformed) {
-                ui.panel = Panel.PROBLEMS
+                ui.showPanel(Panel.PROBLEMS)
             }
         }
     }
-}
-
-@Composable
-private fun ResetDialog(onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        icon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
-        title = { Text("Reset the session?") },
-        text = { Text("The OpMode stops, the robot returns to its start pose and the field is built again.") },
-        confirmButton = { TextButton(onClick = onConfirm) { Text("Reset") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
 }

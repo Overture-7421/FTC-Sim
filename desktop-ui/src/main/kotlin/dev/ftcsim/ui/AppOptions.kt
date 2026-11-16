@@ -6,14 +6,14 @@ import java.nio.file.Paths
 /**
  * What can be asked for on the command line. The options exist for scripted launches: `--exit-after` closes the
  * application by itself, `--no-focus` opens the window without taking the keyboard from whoever is working,
- * `--practice` opens the default practice run and shows it, and `--settings` keeps the user settings in another file
- * so that a scripted run does not touch the real ones.
+ * `--no-last-project` leaves the project that was open last time
+ * closed, and `--settings` keeps the user settings in another file so that a scripted run does not touch the real ones.
  */
 data class AppOptions(
     val exitAfterSeconds: Long? = null,
     val takesFocus: Boolean = true,
-    val openPractice: Boolean = false,
     val settingsFile: Path? = null,
+    val opensLastProject: Boolean = true,
 ) {
     companion object {
         fun parse(args: Array<String>): AppOptions {
@@ -21,7 +21,7 @@ data class AppOptions(
             for (argument in args) {
                 options = when {
                     argument == "--no-focus" -> options.copy(takesFocus = false)
-                    argument == "--practice" -> options.copy(openPractice = true)
+                    argument == "--no-last-project" -> options.copy(opensLastProject = false)
                     argument.startsWith("--settings=") ->
                         options.copy(settingsFile = argument.substringAfter('=').takeIf { it.isNotBlank() }?.let { Paths.get(it) }
                             ?: throw IllegalArgumentException("--settings needs a file path: $argument"))

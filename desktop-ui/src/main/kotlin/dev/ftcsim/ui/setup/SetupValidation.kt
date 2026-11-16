@@ -4,23 +4,18 @@ import dev.ftcsim.contracts.field.Alliance
 import dev.ftcsim.contracts.field.StartPose
 import dev.ftcsim.contracts.session.Catalogue
 import dev.ftcsim.contracts.session.FieldChoice
+import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
-import java.nio.file.Files
-import java.nio.file.InvalidPathException
-import java.nio.file.Path
-import java.nio.file.Paths
 import java.util.Locale
 
 /**
- * What the simulator behind the Setup screen accepts, and the one place that says what a valid form is: the fields
- * with their start poses, the bundled robot profiles, and whether a prepared program has to be chosen. It is made from
- * the catalogue the link reports, so the screen offers exactly what the simulator has.
+ * What the simulator behind the settings panel accepts, and the one place that says what a valid form is: the fields
+ * with their start poses. It is made from the catalogue the link reports, so the screen offers exactly what the
+ * simulator has.
  *
  * @property fields the fields to choose from, with the start poses each offers
- * @property bundledProfiles the robot profiles that ship with the simulator, by name
- * @property programRequired whether a prepared program has to be chosen; a stand-in simulator needs none
  */
-data class SetupRules(val fields: List<FieldChoice>, val bundledProfiles: List<String>, val programRequired: Boolean) {
+data class SetupRules(val fields: List<FieldChoice>) {
     fun field(id: String): FieldChoice? = fields.firstOrNull { it.id() == id }
 
     fun displayName(fieldId: String): String = field(fieldId)?.displayName() ?: fieldId
@@ -33,22 +28,20 @@ data class SetupRules(val fields: List<FieldChoice>, val bundledProfiles: List<S
     fun defaultField(): FieldChoice? = fields.firstOrNull { it.startPoses().isNotEmpty() } ?: fields.firstOrNull()
 
     companion object {
-        fun of(catalogue: Catalogue, programRequired: Boolean) =
-            SetupRules(catalogue.fields(), catalogue.profiles(), programRequired)
+        fun of(catalogue: Catalogue) = SetupRules(catalogue.fields())
     }
 }
 
 /**
- * What the Setup form holds, as the person left it: text and choices that have not been checked yet. The start pose is
- * either one the field offers, by name, or null for numbers of the person's own.
+ * What the settings form holds, as the person left it: text and choices that have not been checked yet. The start pose is
+ * either one the field offers, by name, or null for numbers of the person's own. It is also what the application
+ * remembers for each project, so that opening the project again starts the way it was last run.
  */
 data class SetupInput(
     val field: String = "",
     val alliance: Alliance = Alliance.RED,
     val randomSeed: Boolean = true,
     val seedText: String = "",
-    val profile: String = "",
-    val program: String = "",
     val startPose: String? = null,
     val startX: String = "0",
     val startY: String = "0",
@@ -68,8 +61,6 @@ data class SetupInput(
             alliance = request.alliance(),
             randomSeed = false,
             seedText = request.seed().toString(),
-            profile = request.profile(),
-            program = request.program(),
             startX = formatNumber(request.startX()),
             startY = formatNumber(request.startY()),
             headingDegrees = formatNumber(Math.toDegrees(request.startHeading())),
@@ -85,8 +76,6 @@ data class SetupInput(
 /** Messages for the parts of the form that cannot be used as they are; a null part is fine. */
 data class SetupProblems(
     val field: String? = null,
-    val profile: String? = null,
-    val program: String? = null,
     val seed: String? = null,
     val startPose: String? = null,
     val startX: String? = null,
@@ -94,41 +83,17 @@ data class SetupProblems(
     val heading: String? = null,
 ) {
     val none: Boolean
-        get() = this.field == null && profile == null && program == null && seed == null && startPose == null &&
-            startX == null && startY == null && heading == null
-}
-
-/** What the file system says about a path; behind an interface so that tests need no files. */
-interface PathChecks {
-    fun isFile(path: String): Boolean
-
-    fun isDirectory(path: String): Boolean
-}
-
-/** The checks against the real file system. */
-object FileSystemChecks : PathChecks {
-    override fun isFile(path: String): Boolean = exists(path) { Files.isRegularFile(it) }
-
-    override fun isDirectory(path: String): Boolean = exists(path) { Files.isDirectory(it) }
-
-    private fun exists(path: String, test: (Path) -> Boolean): Boolean =
-        try {
-            test(Paths.get(path))
-        } catch (invalid: InvalidPathException) {
-            false
-        }
+        get() = this.field == null && seed == null && startPose == null && startX == null && startY == null && heading == null
 }
 
 /** The rules of the form, as pure functions so that they can be tested without a screen. */
 object SetupValidation {
     const val MAX_START_METRES = 10.0
 
-    fun problems(input: SetupInput, rules: SetupRules, checks: PathChecks): SetupProblems {
+    fun problems(input: SetupInput, rules: SetupRules): SetupProblems {
         val named = input.startPose != null
         return SetupProblems(
             field = fieldProblem(input.field, rules),
-            profile = profileProblem(input.profile.trim(), rules, checks),
-            program = programProblem(input.program.trim(), rules, checks),
             seed = if (input.randomSeed || input.seedText.trim().toLongOrNull() != null) null else "The seed is a whole number, such as 12345.",
             startPose = if (named && poseOf(input, rules) == null) "This field has no start pose called ${input.startPose}." else null,
             startX = if (named) null else metresProblem(input.startX),
@@ -142,10 +107,12 @@ object SetupValidation {
         input.startPose?.let { name -> rules.field(input.field)?.startPoses()?.firstOrNull { it.name() == name } }
 
     /**
-     * The request the form describes, or null when it cannot be read. The paths are not looked at again: [problems] has
-     * done that, and a request is only made for a form it found nothing wrong with.
+     * The run the form describes for the program and robot mapping of the open project, or null when it cannot be read.
+     *
+     * @param program the folder of the program that was built from the project
+     * @param mapping the project's robot mapping
      */
-    fun request(input: SetupInput, rules: SetupRules, newSeed: () -> Long): SessionRequest? {
+    fun request(input: SetupInput, rules: SetupRules, newSeed: () -> Long, program: String, mapping: RobotMapping): SessionRequest? {
         val seed = if (input.randomSeed) newSeed() else input.seedText.trim().toLongOrNull()
         val pose = poseOf(input, rules)
         if (input.startPose != null && pose == null) return null
@@ -153,11 +120,8 @@ object SetupValidation {
         val y = pose?.y() ?: number(input.startY)
         val heading = pose?.headingRadians() ?: number(input.headingDegrees)?.let(Math::toRadians)
         if (seed == null || x == null || y == null || heading == null) return null
-        return SessionRequest(input.profile.trim(), input.program.trim(), input.field, input.alliance, seed, x, y, heading, 1.0)
+        return SessionRequest(mapping, program, input.field, input.alliance, seed, x, y, heading, 1.0)
     }
-
-    /** Whether the worker would take [reference] as the path of a profile file rather than as a bundled name. */
-    fun isPath(reference: String): Boolean = reference.any { it == '/' || it == '\\' || it == ':' }
 
     /** A number as people write it, with a point or a comma; null when it is none or not finite. */
     fun number(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it.isFinite() }
@@ -168,21 +132,8 @@ object SetupValidation {
         else -> null
     }
 
-    private fun profileProblem(profile: String, rules: SetupRules, checks: PathChecks): String? = when {
-        profile.isEmpty() -> "Choose a robot profile."
-        isPath(profile) -> if (checks.isFile(profile)) null else "There is no profile file at this path."
-        profile in rules.bundledProfiles -> null
-        else -> "There is no bundled profile called $profile. Bundled: ${rules.bundledProfiles.joinToString()}."
-    }
-
-    private fun programProblem(program: String, rules: SetupRules, checks: PathChecks): String? = when {
-        program.isEmpty() -> if (rules.programRequired) "Choose the folder of the prepared program." else null
-        checks.isDirectory(program) -> null
-        checks.isFile(program) -> "A prepared program is a folder, not a file."
-        else -> "There is no folder at this path."
-    }
-
-    private fun metresProblem(text: String): String? {
+    /** What is wrong with a distance typed in metres, or null: it is a number between -10 and 10. */
+    fun metresProblem(text: String): String? {
         val value = number(text)
         return if (value == null || Math.abs(value) > MAX_START_METRES) "Enter metres between -10 and 10, such as 0.5." else null
     }

@@ -54,26 +54,26 @@ class Bno055ModelTest {
     // ---- identity and boot -----------------------------------------------------------------------------------
 
     @Test
-    void itIdentifiesItselfAsABno055AndAnswersAtTheAddressItWasGiven() {
-        Bno055Rig low = new Bno055Rig(standing(0, 0, 0));
-        Bno055Rig high = new Bno055Rig(standing(0, 0, 0), settings("address", 41));
-        low.world.runTo(SECOND);
+    void itIdentifiesItselfAsABno055AtTheControlHubsAddress() {
+        Bno055Rig rig = new Bno055Rig(standing(0, 0, 0));
+        rig.world.runTo(SECOND);
 
-        assertEquals(0x28, low.chip.address());
-        assertEquals(0x29, high.chip.address());
-        assertEquals(0xA0, low.readByte(CHIP_ID));
-        assertEquals(0xFB, low.readByte(ACC_ID));
-        assertEquals(0x32, low.readByte(MAG_ID));
-        assertEquals(0x0F, low.readByte(GYR_ID));
+        assertEquals(0x28, rig.chip.address());
+        assertEquals(0xA0, rig.readByte(CHIP_ID));
+        assertEquals(0xFB, rig.readByte(ACC_ID));
+        assertEquals(0x32, rig.readByte(MAG_ID));
+        assertEquals(0x0F, rig.readByte(GYR_ID));
     }
 
     @Test
-    void anAddressTheChipCannotHaveIsRefusedWithTheTwoItCan() {
-        IllegalArgumentException refused = assertThrows(
-                IllegalArgumentException.class, () -> new Bno055Rig(standing(0, 0, 0), settings("address", 42)));
+    void anAddressOrDriftSettingIsRefusedBecauseTheChipIsIdealAndAtOneAddress() {
+        IllegalArgumentException address = assertThrows(
+                IllegalArgumentException.class, () -> new Bno055Rig(standing(0, 0, 0), settings("address", 41)));
+        IllegalArgumentException drift = assertThrows(
+                IllegalArgumentException.class, () -> new Bno055Rig(standing(0, 0, 0), settings("gyroBiasRadPerSec", 0.01)));
 
-        assertTrue(refused.getMessage().contains("\"address\""), refused.getMessage());
-        assertTrue(refused.getMessage().contains("0x28") && refused.getMessage().contains("0x29"), refused.getMessage());
+        assertTrue(address.getMessage().contains("\"address\""), address.getMessage());
+        assertTrue(drift.getMessage().contains("\"gyroBiasRadPerSec\""), drift.getMessage());
     }
 
     @Test
@@ -389,19 +389,6 @@ class Bno055ModelTest {
                 rig.readVector(GRV_DATA));
     }
 
-    // ---- the one imperfection ----------------------------------------------------------------------------------
-
-    @Test
-    void aGyroBiasDriftsTheHeadingAtTheRateTheProfileSaysAndShowsInTheRateRegisters() {
-        Bno055Rig rig = new Bno055Rig(standing(0, 0, 0), settings("gyroBiasRadPerSec", 0.01));
-        rig.startIn(IMU, UNITS_RADIANS);
-        rig.world.runTo(10 * SECOND);
-
-        // Ten seconds since the chip powered up: the heading, which counts clockwise, has lost 0.1 rad.
-        assertEquals((2 * Math.PI - 0.1) * 900, rig.readShort(EUL_DATA), 2);
-        assertEquals(9, rig.readVector(GYR_DATA)[2], 1);
-    }
-
     @Test
     void aChipThatNobodyUsesLooksAtTheWorldWhenItIsBuiltAndAtItsFirstStepAndNoMore() {
         AtomicInteger looks = new AtomicInteger();
@@ -503,6 +490,6 @@ class Bno055ModelTest {
                 () -> DeviceModels.standard().create(DeviceModels.BNO055_IMU, "imu", Map.of("gyroBias", 1), new Bno055Rig(standing(0, 0, 0)).world.host));
 
         assertTrue(refused.getMessage().contains("\"gyroBias\""), refused.getMessage());
-        assertTrue(refused.getMessage().contains("gyroBiasRadPerSec"), "it says what the chip does read: " + refused.getMessage());
+        assertTrue(refused.getMessage().contains("mount.logo"), "it says what the chip does read: " + refused.getMessage());
     }
 }

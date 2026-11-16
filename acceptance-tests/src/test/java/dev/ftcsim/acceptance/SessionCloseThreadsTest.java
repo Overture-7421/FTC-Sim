@@ -5,8 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -28,7 +27,7 @@ class SessionCloseThreadsTest {
 
     @Test
     void closingASessionEndsTheThreadsALibraryStartedAndReportsTheOneThatWillNotEnd() throws IOException, InterruptedException {
-        RobotProfile hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec hornet = HornetMapping.spec();
         SimulationSession session;
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             session = handle.session;

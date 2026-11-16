@@ -4,6 +4,7 @@ import dev.ftcsim.contracts.session.SimulatorLink;
 import dev.ftcsim.link.WorkerLauncher;
 import dev.ftcsim.ui.host.AppHost;
 import dev.ftcsim.ui.host.ProgramPreparer;
+import dev.ftcsim.ui.host.ProjectMappings;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -14,14 +15,14 @@ import java.util.List;
  * What the window runs on: a simulator in a worker process of its own, and the project importer. The window knows
  * neither; it holds the {@link SimulatorLink} and the {@link ProgramPreparer} that this hands it.
  *
- * <p>The worker runs on the very Java that runs this program (the product is pinned to one JDK, and a worker on another
- * would be a different simulator), from the jars that {@link AppClasspath} lists, with its natives and its logs in the
- * per-user folders of {@link AppFolders}.
+ * <p>The worker runs on the very Java that runs this program (the runtime folder that comes with the distribution; a
+ * worker on another Java would be a different simulator), from the jars that {@link AppClasspath} lists, with its natives
+ * and its logs in the per-user folders of {@link AppFolders}.
  */
 public final class RealHost implements AppHost, AutoCloseable {
 
     /**
-     * Options for the worker's Java besides the ones the launcher always sets. A robot program formats numbers and dates
+     * Options for the worker's Java besides the ones the worker's launcher always sets. A robot program formats numbers and dates
      * with the default locale and time zone, so they are fixed: what a robot prints must not depend on the regional
      * settings of the computer. The worker has no window.
      */
@@ -32,6 +33,7 @@ public final class RealHost implements AppHost, AutoCloseable {
     private final Source<AppClasspath> classpath;
     private final Path java;
     private final ImporterPreparer preparer;
+    private final ProjectMappings mappings;
     private Duration connectTimeout = Duration.ofSeconds(60);
     private Duration shutdownGrace = Duration.ofSeconds(3);
 
@@ -51,6 +53,7 @@ public final class RealHost implements AppHost, AutoCloseable {
         this.classpath = classpath;
         this.java = java;
         this.preparer = ImporterPreparer.forThisMachine(folders, machine, classpath);
+        this.mappings = new ProjectMappingsImpl(folders);
     }
 
     /** How long to wait for the worker to connect after it started; the default suits a user, a test may want longer. */
@@ -96,6 +99,11 @@ public final class RealHost implements AppHost, AutoCloseable {
     @Override
     public ProgramPreparer preparer() {
         return preparer;
+    }
+
+    @Override
+    public ProjectMappings mappings() {
+        return mappings;
     }
 
     /** Stops a preparation that is under way. The link is the window's to close. */

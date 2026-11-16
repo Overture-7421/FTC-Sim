@@ -13,8 +13,7 @@ import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.importer.pack.PreparedProgram;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -78,7 +77,7 @@ class HornetTeleopTest {
     private static void withTeleop(Alliance alliance, double[] start, Scene scene) throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotProfile profile = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec profile = HornetMapping.spec();
         try (TestSessions.Handle handle = TestSessions.open(
                 profile, program, new DecodeField(), new FieldSetup(1, alliance), start[0], start[1], start[2])) {
             SimulationSession session = handle.session;
@@ -112,9 +111,8 @@ class HornetTeleopTest {
     @Test
     void theRightTriggerRunsTheIntakeAndTheLeftTriggerAlignsAndShootsWhatTheRobotCarries() throws Exception {
         withTeleop(Alliance.BLUE, teleopCorner(), session -> {
-            int loaded = session.preload("magazine", PURPLE, 2) + session.preload("magazine", GREEN, 1);
             BodyPose start = session.world().bodyPose(EntityIds.CHASSIS);
-            report("preloaded " + loaded + "; carried " + carried(session, start));
+            report("carried " + carried(session, start));
 
             session.setGamepad(1, triggers(0f, 1f));
             session.runFor(2 * SECOND);

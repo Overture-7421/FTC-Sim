@@ -144,13 +144,6 @@ public final class MecanumChassis {
         return normalForces[wheel.ordinal()];
     }
 
-    void putStateInto(StateDigest digest) {
-        digest.putDouble(batteryVolts);
-        for (MecanumWheel wheel : wheels) {
-            wheel.putStateInto(digest);
-        }
-    }
-
     /** Advances every wheel by one step and returns the forces to apply to the chassis body, in wheel order. */
     List<ContactForce> advance(Motion motion, GroundProbe probe, double dt) {
         Quaternion rotation = motion.rotation();

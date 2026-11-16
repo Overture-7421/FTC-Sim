@@ -86,16 +86,15 @@ class PracticeUiTest {
         ui.opModeMenuOpen = true
         assertTrue(ui.modalOpen)
         ui.opModeMenuOpen = false
-        ui.speedMenuOpen = true
+        ui.moreMenuOpen = true
         assertTrue(ui.modalOpen)
-        ui.speedMenuOpen = false
-        ui.resetDialogOpen = true
+        ui.moreMenuOpen = false
+        ui.restartMenuOpen = true
         assertTrue(ui.modalOpen)
-        ui.resetDialogOpen = false
+        ui.restartMenuOpen = false
         assertFalse(ui.modalOpen)
 
         ui.panel = Panel.PROBLEMS
-        ui.viewportFocused = true
-        assertFalse(ui.modalOpen, "switching tabs and focusing the viewport do not take the keys")
+        assertFalse(ui.modalOpen, "switching tabs does not take the keys")
     }
 }

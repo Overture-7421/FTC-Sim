@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * The simulated robot controller's hubs as the SDK sees them: one USB device carrying the SDK's own
- * {@link LynxModule} for each hub the profile declares, and the SDK's controllers on top of those, created the
+ * {@link LynxModule} for each hub the robot declares, and the SDK's controllers on top of those, created the
  * first time a device needs them. Also remembers which port each name claimed, so that two names can never
  * silently share one physical port, and holds the link to the robot's smart cameras.
  */
@@ -83,7 +83,7 @@ final class SimHubs {
     LynxModule module(int hubAddress) {
         LynxModule module = modules.get(hubAddress);
         if (module == null) {
-            throw new IllegalArgumentException("The robot profile wires a device to hub " + hubAddress
+            throw new IllegalArgumentException("The robot wires a device to hub " + hubAddress
                     + ", which is not one of the hubs it declares: " + modules.keySet());
         }
         return module;

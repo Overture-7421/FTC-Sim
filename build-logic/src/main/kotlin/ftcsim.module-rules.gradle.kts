@@ -10,6 +10,9 @@ plugins {
  * in the configuration workerRuntime only, and only while that configuration is isolated: resolvable but not
  * consumable, extending no configuration and extended by none. That is how a module may hold the jars of a program it
  * starts as a process, to hand their paths to that process, without ever compiling or running against them.
+ *
+ * A project's own test fixtures and tests depend on its main code; that is not an edge. A dependency on another
+ * project's test fixtures, `testFixtures(project(":x"))`, is an edge to `:x` like any other, so it needs "x" in the list.
  */
 abstract class CheckModuleRules : DefaultTask() {
     @get:Input
@@ -69,9 +72,12 @@ val checkModuleRules = tasks.register<CheckModuleRules>("checkModuleRules") {
                 configuration.extendsFrom.isEmpty() && all.none { configuration in it.extendsFrom }
             sub.path to all
                 .flatMap { configuration ->
-                    configuration.dependencies.withType<ProjectDependency>().map {
-                        if (isolated(configuration)) "${it.path}@${configuration.name}" else it.path
-                    }
+                    configuration.dependencies.withType<ProjectDependency>()
+                        // The test-fixtures and test source sets of a project depend on its own main code.
+                        .filter { it.path != sub.path }
+                        .map {
+                            if (isolated(configuration)) "${it.path}@${configuration.name}" else it.path
+                        }
                 }
                 .distinct()
                 .sorted()

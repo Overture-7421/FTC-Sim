@@ -37,6 +37,14 @@ final class TimeRules {
 
     private TimeRules() {}
 
+    /**
+     * What a subclass of {@code Date} does first, {@code super()}, which no factory can stand for: the constructor that
+     * takes the time in milliseconds, given the simulated clock's.
+     */
+    static List<RewriteRules.SeededConstructor> seeded() {
+        return List.of(new RewriteRules.SeededConstructor("java/util/Date", "()V", "(J)V", RewriteRules.HOOKS, "currentTimeMillis"));
+    }
+
     static List<RewriteRule> all() {
         List<RewriteRule> rules = new ArrayList<>();
 

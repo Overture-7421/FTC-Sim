@@ -19,24 +19,22 @@ class LocationsTest {
     Path root;
 
     @Test
-    void theManifestThatTheBuildCopiedFromTheLauncherNamesTheUsualPlaces() throws IOException {
+    void theResourceOfTheApplicationNamesTheUsualPlaces() throws IOException {
         List<String> patterns = JdkPatterns.bundled();
 
         assertTrue(patterns.contains("%ProgramFiles%\\Eclipse Adoptium\\*"), patterns.toString());
         assertTrue(patterns.contains("%ProgramFiles%\\Android\\Android Studio*\\jbr"), patterns.toString());
         assertTrue(patterns.stream().anyMatch(pattern -> pattern.contains(".gradle\\jdks")), patterns.toString());
-        assertTrue(patterns.stream().noneMatch(pattern -> pattern.startsWith("HK")), "the registry is not a folder: " + patterns);
+        assertTrue(patterns.stream().noneMatch(pattern -> pattern.startsWith("HK") || pattern.startsWith("#")), "only folders: " + patterns);
     }
 
     @Test
-    void onlyTheFolderSourcesOfAManifestAreTakenAndAManifestWithoutThemIsRefused() throws IOException {
-        String json = "{\"discovery\":{\"directoryPatterns\":["
-                + "{\"source\":\"CommonDirs\",\"pattern\":\"A\"},{\"source\":\"Registry\",\"pattern\":\"B\"},"
-                + "{\"source\":\"AndroidStudio\",\"pattern\":\"C\"},{\"source\":\"CommonDirs\",\"pattern\":\"\"}]}}";
+    void commentsAndBlankLinesAreLeftOutOfTheListOfPlacesAndAListWithoutPlacesIsRefused() throws IOException {
+        String text = "# a comment\r\nA\r\n\r\n  B  \r\n# C\r\n";
 
-        assertEquals(List.of("A", "C"), JdkPatterns.read(new ByteArrayInputStream(json.getBytes(StandardCharsets.UTF_8))));
-        assertTrue(assertThrows(IOException.class, () -> JdkPatterns.read(new ByteArrayInputStream("{\"discovery\":{}}".getBytes(StandardCharsets.UTF_8))))
-                .getMessage().contains("discovery.directoryPatterns"));
+        assertEquals(List.of("A", "B"), JdkPatterns.read(new ByteArrayInputStream(text.getBytes(StandardCharsets.UTF_8))));
+        assertTrue(assertThrows(IOException.class, () -> JdkPatterns.read(new ByteArrayInputStream("# nothing\n".getBytes(StandardCharsets.UTF_8))))
+                .getMessage().contains("jdk-patterns.txt"));
     }
 
     @Test

@@ -7,17 +7,12 @@ dependencies {
     api(project(":sim-core"))
     api(project(":sim-physics"))
     api(project(":sim-hardware"))
-    api(project(":sim-mechanisms"))
-    api(project(":sim-field"))
+    api(project(":games"))
     implementation(project(":robot-runtime"))
     implementation(project(":platform"))
-    // The profile records carry Jackson annotations, so whoever reads them needs the annotation classes too.
-    api(libs.jackson.databind)
-
-    // The shot sweep puts the bundled robot into a real DECODE field.
-    testImplementation(project(":game-decode"))
 }
 
 tasks.test {
     jvmArgs("--enable-native-access=ALL-UNNAMED")
+    systemProperty("ftcsim.nativeDirectory", layout.buildDirectory.dir("natives").get().asFile.path)
 }

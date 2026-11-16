@@ -26,9 +26,9 @@ final class RewriteRules {
     }
 
     /**
-     * A constructor that is given one more argument, a {@code long} the hook supplies: {@code Random()} becomes
-     * {@code Random(seed)}. It is how a {@code super()} or {@code this()} call, which no factory can replace, gets the
-     * simulator's seed or clock; a {@code new} of the type is replaced by the factory of a {@link RewriteRule}.
+     * A constructor that is given one more argument, a {@code long} the hook supplies: {@code Date()} becomes
+     * {@code Date(millis)}. It is how a {@code super()} or {@code this()} call, which no factory can replace, gets the
+     * simulator's clock; a {@code new} of the type is replaced by the factory of a {@link RewriteRule}.
      *
      * @param descriptor       the constructor as the program calls it
      * @param seededDescriptor the constructor that is called instead, which takes the same arguments and then the long
@@ -77,10 +77,10 @@ final class RewriteRules {
 
     static RewriteRules standard() {
         return new RewriteRules(
-                Stream.of(clockAndMonitorRules(), NetworkRules.all(), TimeRules.all(), RandomRules.all()).flatMap(List::stream).toList(),
+                Stream.of(clockAndMonitorRules(), NetworkRules.all(), TimeRules.all()).flatMap(List::stream).toList(),
                 // Where the SDK's pool threads begin; the thread that runs OpMode code is one of them.
                 List.of(new EntryHook("com/qualcomm/robotcore/util/ThreadPool$ThreadFactoryImpl$1", "run", "()V", "threadStarted")),
-                RandomRules.seeded());
+                TimeRules.seeded());
     }
 
     private static List<RewriteRule> clockAndMonitorRules() {

@@ -60,19 +60,15 @@
         "android-shim",
         "app",
         "desktop-ui",
-        "game-biobuzz",
-        "game-decode",
-        "launcher",
+        "games",
         "platform",
         "project-import",
         "robot-runtime",
         "sdk-common",
         "sim-contracts",
         "sim-core",
-        "sim-field",
         "sim-hardware",
         "sim-link",
-        "sim-mechanisms",
         "sim-physics",
         "simulator",
         "worker"
@@ -93,14 +89,14 @@
     {
       "id": "gradleArgs",
       "type": "promptString",
-      "description": "Arguments for gradlew, for example :sim-physics:goldenHashes or :sim-core:test --tests *FooTest",
+      "description": "Arguments for gradlew, for example :sim-core:test --tests *FooTest",
       "default": "tasks"
     },
     {
       "id": "debugTask",
       "type": "promptString",
-      "description": "Task for --debug-jvm (a JavaExec or Test task), for example :desktop-ui:run or :sim-core:test --tests *FooTest",
-      "default": ":desktop-ui:run"
+      "description": "Task for --debug-jvm (a JavaExec or Test task), for example :desktop-ui:runFake or :sim-core:test --tests *FooTest",
+      "default": ":desktop-ui:runFake"
     }
   ],
   "tasks": [
@@ -164,11 +160,11 @@
       "group": "test"
     },
     {
-      "label": "ftc-sim: run UI",
-      "detail": "Runs :desktop-ui:run until the window is closed.",
+      "label": "ftc-sim: run UI (fake host)",
+      "detail": "Runs :desktop-ui:runFake until the window is closed: the fake host of the test fixtures (a fake simulator and a fake importer), so no robot code runs. Use \"ftc-sim: run app\" for the real thing.",
       "type": "shell",
       "command": ".\\gradlew.bat",
-      "args": ["--console=plain", ":desktop-ui:run"],
+      "args": ["--console=plain", ":desktop-ui:runFake"],
       "presentation": {
         "panel": "dedicated"
       }
@@ -193,10 +189,10 @@
     },
     {
       "label": "ftc-sim: debug UI (wait for debugger on 5005)",
-      "detail": "Starts :desktop-ui:run with --debug-jvm; attach with the launch configuration of the same name.",
+      "detail": "Starts :desktop-ui:runFake with --debug-jvm; attach with the launch configuration of the same name.",
       "type": "shell",
       "command": ".\\gradlew.bat",
-      "args": ["--console=plain", ":desktop-ui:run", "--debug-jvm"],
+      "args": ["--console=plain", ":desktop-ui:runFake", "--debug-jvm"],
       "isBackground": true,
       "runOptions": {
         "instancePolicy": "terminateOldest"
@@ -361,7 +357,7 @@
     },
     {
       "label": "ftc-sim: debug any Gradle task (wait for debugger on 5005)",
-      "detail": "Appends --debug-jvm to a task you type, for example :sim-physics:goldenHashes.",
+      "detail": "Appends --debug-jvm to a task you type, for example :sim-core:test.",
       "type": "shell",
       "command": ".\\gradlew.bat --console=plain ${input:debugTask} --debug-jvm",
       "isBackground": true,

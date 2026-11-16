@@ -4,8 +4,10 @@ import dev.ftcsim.contracts.field.BodyKind;
 import dev.ftcsim.contracts.field.FieldDescription;
 import dev.ftcsim.contracts.field.MatchPhase;
 import dev.ftcsim.contracts.field.Score;
+import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.hooks.Hooks;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.OpModeDescriptor;
 import dev.ftcsim.contracts.robot.RobotHost;
@@ -22,14 +24,11 @@ import dev.ftcsim.core.kernel.KernelDiagnostics;
 import dev.ftcsim.core.kernel.SimulationKernel;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldRun;
-import dev.ftcsim.hardware.device.DeviceModels;
 import dev.ftcsim.hardware.lynx.LynxHub;
 import dev.ftcsim.mechanisms.Mechanisms;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.PieceSpec;
 import dev.ftcsim.physics.Vector3;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.util.ArrayList;
@@ -68,16 +67,27 @@ public final class SimulationSession implements AutoCloseable {
     private static final double STEP_SECONDS = 1.0 / PhysicsWorld.STEPS_PER_SECOND;
 
     private final SessionConfig config;
+    /** How much simulated time the robot program gets to stop when the world is reset. */
+    private static final long RESET_STOP_LIMIT_NANOS = 3_000_000_000L;
+
+    /** What belongs to the world and not to the robot: replaced as a whole when the world is reset. */
+    private static final class LiveWorld {
+        PhysicsWorld world;
+        FieldRun fieldRun;
+        Map<Integer, PieceSpec> pieceSpecs = Map.of();
+        Map<Integer, Integer> kindColours = new HashMap<>();
+        Mechanisms mechanisms;
+        RayView rays;
+    }
+
     private final SimulationKernel kernel;
-    private final PhysicsWorld world;
-    private final FieldRun fieldRun;
+    private final LiveWorld live;
     private final RobotRig rig;
-    private final Mechanisms mechanisms;
     private final RayView rays;
     private final RobotWorldLauncher.RobotWorld robotWorld;
     private final RobotHost host;
     private final DriverStation station;
-    private final TimedMatch match;
+    private TimedMatch match;
 
     private GamepadState first = GamepadState.NEUTRAL;
     private GamepadState second = GamepadState.NEUTRAL;
@@ -87,24 +97,20 @@ public final class SimulationSession implements AutoCloseable {
     private SimulationSession(
             SessionConfig config,
             SimulationKernel kernel,
-            PhysicsWorld world,
-            FieldRun fieldRun,
+            LiveWorld live,
             RobotRig rig,
-            Mechanisms mechanisms,
             RayView rays,
             RobotWorldLauncher.RobotWorld robotWorld,
             AtomicReference<WorldSnapshot> latest) {
         this.config = config;
         this.kernel = kernel;
-        this.world = world;
-        this.fieldRun = fieldRun;
+        this.live = live;
         this.rig = rig;
-        this.mechanisms = mechanisms;
         this.rays = rays;
         this.robotWorld = robotWorld;
         this.host = robotWorld.host();
         this.station = new DriverStation(kernel, host);
-        this.match = new TimedMatch(kernel, station, fieldRun);
+        this.match = new TimedMatch(kernel, station, live.fieldRun);
         this.latest = latest;
     }
 
@@ -118,39 +124,24 @@ public final class SimulationSession implements AutoCloseable {
         FixedRateWorld clockwork = new FixedRateWorld();
         SimulationKernel kernel = new SimulationKernel(
                 clockwork, KernelConfig.defaults(SimulationSession::isOpModeThread).withBackEdgeCostNanos(LOOP_NANOS));
-        PhysicsWorld world = PhysicsWorld.create(config.nativeDirectory());
+        LiveWorld live = buildWorld(config, 0);
         try {
-            FieldRun fieldRun = null;
-            Map<Integer, PieceSpec> pieceSpecs = Map.of();
-            Map<Integer, Integer> kindColours = new HashMap<>();
-            if (config.field() == null) {
-                world.addStaticBox(new Vector3(0, 0, -0.5), new Vector3(FLOOR_HALF_SIZE, FLOOR_HALF_SIZE, 0.5));
-            } else {
-                fieldRun = config.field().start(world, config.fieldSetup());
-                fieldRun.enterPhase(MatchPhase.PRACTICE, 0);
-                pieceSpecs = config.field().pieceSpecs();
-                for (BodyKind kind : config.field().description().bodyKinds()) {
-                    if (!kind.parts().isEmpty()) {
-                        kindColours.put(kind.id(), kind.parts().get(0).rgb());
-                    }
-                }
-            }
-            AtomicReference<Mechanisms> mechanismsOnce = new AtomicReference<>();
-            RayView rays = new WorldRays(
-                    world, EntityIds.CHASSIS, () -> carriedBy(mechanismsOnce.get()), kindColours);
+            RayView rays = (origin, direction, maxMeters) -> live.rays.cast(origin, direction, maxMeters);
+            live.rays = worldRays(live);
             RobotRig rig = RobotRig.build(
-                    config.profile(), world, EntityIds.CHASSIS, config.startX(), config.startY(), config.startHeading(),
-                    kernel.clock()::now, rays, DeviceModels.standard());
-            Mechanisms mechanisms = MechanismFactory.create(config.profile(), rig.plantView(), pieceSpecs);
-            mechanismsOnce.set(mechanisms);
+                    config.robot(), live.world, EntityIds.CHASSIS, config.startX(), config.startY(), config.startHeading(),
+                    kernel.clock()::now, rays, vision(config, live));
+            live.mechanisms = config.robot().mechanisms(rig.plantView(), live.pieceSpecs);
+            loadStartingPieces(live);
 
-            AtomicReference<WorldSnapshot> snapshots = new AtomicReference<>(world.snapshot());
-            FieldRun running = fieldRun;
+            AtomicReference<WorldSnapshot> snapshots = new AtomicReference<>(live.world.snapshot());
             clockwork.every(PhysicsWorld.STEPS_PER_SECOND, (index, nanos) -> {
+                PhysicsWorld world = live.world;
+                Mechanisms mechanisms = live.mechanisms;
                 world.step();
                 WorldSnapshot afterStep = world.snapshot();
-                if (running != null) {
-                    running.afterStep(afterStep);
+                if (live.fieldRun != null) {
+                    live.fieldRun.afterStep(afterStep);
                 }
                 mechanisms.step(STEP_SECONDS, rig.chassisView().sample(), afterStep, world);
                 snapshots.set(withCarriedPieces(world.snapshot(), mechanisms.carried()));
@@ -160,15 +151,52 @@ public final class SimulationSession implements AutoCloseable {
 
             RobotWorldLauncher.RobotWorld robotWorld = RobotWorldLauncher.launch(
                     config.program(), kernel.hooks(), config.storageRoot(), config.log(), rig.environment());
-            SimulationSession session =
-                    new SimulationSession(config, kernel, world, fieldRun, rig, mechanisms, rays, robotWorld, snapshots);
+            SimulationSession session = new SimulationSession(config, kernel, live, rig, rays, robotWorld, snapshots);
             robotWorld.alreadyReported(() -> kernel.diagnostics().abandonedThreads());
             kernel.schedule(EVENT_LOOP_PERIOD_NANOS, session::eventLoopPass);
             return session;
         } catch (Throwable failure) {
-            world.close();
+            live.world.close();
             throw failure;
         }
+    }
+
+    /** A new physics world with the field in it, or a bare floor when there is no field. */
+    private static LiveWorld buildWorld(SessionConfig config, long nowNanos) {
+        LiveWorld built = new LiveWorld();
+        built.world = PhysicsWorld.create(config.nativeDirectory());
+        try {
+            if (config.field() == null) {
+                built.world.addStaticBox(new Vector3(0, 0, -0.5), new Vector3(FLOOR_HALF_SIZE, FLOOR_HALF_SIZE, 0.5));
+            } else {
+                built.fieldRun = config.field().start(built.world, config.fieldSetup());
+                built.fieldRun.enterPhase(MatchPhase.PRACTICE, nowNanos);
+                built.pieceSpecs = config.field().pieceSpecs();
+                for (BodyKind kind : config.field().description().bodyKinds()) {
+                    if (!kind.parts().isEmpty()) {
+                        built.kindColours.put(kind.id(), kind.parts().get(0).rgb());
+                    }
+                }
+            }
+            return built;
+        } catch (Throwable failure) {
+            built.world.close();
+            throw failure;
+        }
+    }
+
+    /** What the robot's camera sees of the field: its tags, and the bodies some of them are stuck on, wherever the world now has them. */
+    private static RobotRig.Vision vision(SessionConfig config, LiveWorld live) {
+        if (config.field() == null) {
+            return RobotRig.Vision.NONE;
+        }
+        return new RobotRig.Vision(
+                config.field().description().tags(), id -> () -> live.world.bodyPose(id),
+                config.fieldSetup() == null ? 0 : config.fieldSetup().seed());
+    }
+
+    private static WorldRays worldRays(LiveWorld live) {
+        return new WorldRays(live.world, EntityIds.CHASSIS, () -> carriedBy(live.mechanisms), live.kindColours);
     }
 
     /** What a viewer sees: the bodies of the world and, drawn where they are, the pieces the robot carries. */
@@ -223,6 +251,38 @@ public final class SimulationSession implements AutoCloseable {
     public void stop() {
         match.stopPressed();
         station.stop();
+    }
+
+    /**
+     * Stops the robot program and puts the world back as it was when the session opened: the chassis at its start, the
+     * field with its pieces where they began, nothing carried, no match. The robot program stays loaded, the hubs and
+     * devices keep their state (a real robot's encoders do not reset when it is carried back), and simulated time goes on.
+     */
+    public void resetWorld() {
+        stop();
+        long limit = now() + RESET_STOP_LIMIT_NANOS;
+        while (host.phase() != RobotPhase.IDLE && now() < limit) {
+            runFor(EVENT_LOOP_PERIOD_NANOS);
+        }
+        host.clearMessages();
+        LiveWorld fresh = buildWorld(config, now());
+        PhysicsWorld old = live.world;
+        try {
+            rig.rebindWorld(fresh.world, config.startX(), config.startY(), config.startHeading());
+        } catch (RuntimeException failure) {
+            fresh.world.close();
+            throw failure;
+        }
+        live.world = fresh.world;
+        live.fieldRun = fresh.fieldRun;
+        live.pieceSpecs = fresh.pieceSpecs;
+        live.kindColours = fresh.kindColours;
+        live.rays = worldRays(live);
+        live.mechanisms = config.robot().mechanisms(rig.plantView(), live.pieceSpecs);
+        loadStartingPieces(live);
+        match = new TimedMatch(kernel, station, live.fieldRun);
+        latest.set(withCarriedPieces(live.world.snapshot(), live.mechanisms.carried()));
+        old.close();
     }
 
     // Timed match -------------------------------------------------------------------------------------------------
@@ -304,24 +364,29 @@ public final class SimulationSession implements AutoCloseable {
     }
 
     public Score score() {
-        return fieldRun == null ? new Score(List.of()) : fieldRun.score();
+        return live.fieldRun == null ? new Score(List.of()) : live.fieldRun.score();
     }
 
-    /** One line for each motor and servo the profile wires: what its port and its plant are doing right now. */
+    /** One line for each motor the mapping wires, and for what the robot carries: what its port and its plant are doing right now. */
     public List<Readout> hardware() {
         List<Readout> readouts = new ArrayList<>();
-        rig.profile().motors().keySet().forEach(name -> {
+        rig.spec().motors().keySet().forEach(name -> {
             MotorPlant plant = rig.plant(name);
             readouts.add(new Readout(
                     name, String.format(Locale.ROOT, "%.0f ticks/s  %.1f A", plant.encoderCountsPerSecond(), plant.currentAmps())));
         });
-        int parent = RobotProfileLoader.parentAddress(rig.profile());
-        rig.profile().servos().forEach((name, servo) -> {
-            LynxHub hub = rig.hub(servo.hub() == null ? parent : servo.hub());
+        Mechanisms mechanisms = live.mechanisms;
+        for (String storage : mechanisms.storageNames()) {
+            int held = mechanisms.contents(storage).size();
             readouts.add(new Readout(
-                    name, hub.servoEnabled(servo.port()) ? hub.servoPulseWidthMicros(servo.port()) + " us" : "off"));
-        });
+                    "storage " + storage, held + " of " + mechanisms.capacity(storage) + (mechanisms.capacity(storage) == 1 ? " piece" : " pieces")));
+        }
         return readouts;
+    }
+
+    /** What the robot program asked the hardware map for under a name the robot mapping does not place, in the order it asked. */
+    public List<UnmappedDevice> unmapped() {
+        return rig.wiring().unmapped();
     }
 
     public RobotRig rig() {
@@ -340,12 +405,17 @@ public final class SimulationSession implements AutoCloseable {
      * @return how many pieces were loaded, which is fewer than asked when the reserve or the storage runs out
      */
     public int preload(String storage, int kind, int count) {
-        if (fieldRun == null) {
+        if (live.fieldRun == null) {
             throw new IllegalStateException("there is no field, so there is nothing to preload from");
         }
+        return loadFromReserve(live, storage, kind, count);
+    }
+
+    private static int loadFromReserve(LiveWorld live, String storage, int kind, int count) {
+        Mechanisms mechanisms = live.mechanisms;
         int loaded = 0;
         while (loaded < count && mechanisms.canLoad(storage, kind)) {
-            OptionalInt piece = fieldRun.takeFromReserve(kind);
+            OptionalInt piece = live.fieldRun.takeFromReserve(kind);
             if (piece.isEmpty()) {
                 break;
             }
@@ -355,16 +425,28 @@ public final class SimulationSession implements AutoCloseable {
         return loaded;
     }
 
+    /** Puts the pieces the field starts the robot with into its storage, as a human loading the robot before a match does. */
+    private static void loadStartingPieces(LiveWorld live) {
+        if (live.fieldRun == null) {
+            return;
+        }
+        for (String storage : live.mechanisms.storageNames()) {
+            for (int kind : live.fieldRun.robotPreloads()) {
+                loadFromReserve(live, storage, kind, 1);
+            }
+        }
+    }
+
     /** A person at the field does one of the actions the field's description lists. */
     public void humanAction(String actionId) {
-        if (fieldRun == null) {
+        if (live.fieldRun == null) {
             throw new IllegalStateException("There is no field, so nobody is standing at it.");
         }
-        fieldRun.perform(actionId);
+        live.fieldRun.perform(actionId);
     }
 
     public PhysicsWorld world() {
-        return world;
+        return live.world;
     }
 
     public SimulationKernel kernel() {
@@ -389,16 +471,19 @@ public final class SimulationSession implements AutoCloseable {
         }
         problems.addAll(match.problems());
         problems.addAll(robotWorld.shutdownProblems());
-        for (RobotProfile.Hub profileHub : rig.profile().hubs()) {
-            LynxHub hub = rig.hub(profileHub.address());
-            String name = "hub " + profileHub.address() + " (" + profileHub.name() + ")";
+        for (HardwareDirectory.Hub robotHub : rig.spec().hubs()) {
+            LynxHub hub = rig.hub(robotHub.address());
+            String name = "hub " + robotHub.address() + " (" + robotHub.name() + ")";
             hub.unsupported().forEach(use -> problems.add(name + " refused a command it does not model: " + use));
             hub.unboundMotorPorts().forEach(port -> problems.add(name + " motor port " + port + " was driven with no motor connected"));
             hub.unboundDigitalPorts().forEach(pin -> problems.add(name + " digital port " + pin + " was read with nothing connected, so it read high"));
             hub.unboundAnalogPorts().forEach(channel -> problems.add(name + " analog port " + channel + " was read with nothing connected, so it read 0 V"));
             hub.unansweredI2cTargets().forEach(target -> problems.add(name + " I2C " + target + " did not answer"));
         }
-        rig.wiring().unmappedNames().forEach(name -> problems.add("'" + name + "' is not in the robot profile, so it was given a port of its own"));
+        rig.wiring().unmappedNames().forEach(name -> problems.add("'" + name + "' is not in the robot mapping, so it was given a port of its own"));
+        problems.addAll(rig.wiring().unsupported());
+        problems.addAll(rig.cameras().problems());
+        problems.addAll(live.mechanisms.problems());
         return problems;
     }
 
@@ -422,7 +507,7 @@ public final class SimulationSession implements AutoCloseable {
                 }
             });
         } finally {
-            world.close();
+            live.world.close();
         }
     }
 }

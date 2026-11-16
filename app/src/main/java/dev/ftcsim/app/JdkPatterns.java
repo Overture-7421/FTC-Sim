@@ -1,45 +1,42 @@
 package dev.ftcsim.app;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Set;
 
 /**
- * The places to look for a JDK on this computer, which are defined once, in the launcher's {@code jdk-manifest.json}
- * (the {@code discovery.directoryPatterns} that the launcher itself searches): the build copies that file into this
- * module as a resource. Patterns are paths with {@code %VARIABLES%} and wildcards.
+ * The places to look for a JDK on this computer, for the project's own Gradle build: the resource {@code jdk-patterns.txt}
+ * of this package. Patterns are paths with {@code %VARIABLES%} and wildcards, one a line; blank lines and lines that
+ * start with {@code #} are comments. The simulator itself runs on the runtime that comes with it and uses none of them.
  */
 final class JdkPatterns {
-    /** The manifest's sources that are folders on disk, in the order the manifest lists them. The registry and the path are not searched. */
-    private static final Set<String> SOURCES = Set.of("CommonDirs", "AndroidStudio");
+    private static final String RESOURCE = "jdk-patterns.txt";
 
     private JdkPatterns() {}
 
-    /** The patterns of the manifest that came with this application. */
+    /** The patterns that came with this application. */
     static List<String> bundled() throws IOException {
-        try (InputStream manifest = JdkPatterns.class.getResourceAsStream("jdk-manifest.json")) {
-            if (manifest == null) {
-                throw new IOException("the application lacks its list of places to look for a JDK (jdk-manifest.json)");
+        try (InputStream patterns = JdkPatterns.class.getResourceAsStream(RESOURCE)) {
+            if (patterns == null) {
+                throw new IOException("the application lacks its list of places to look for a JDK (" + RESOURCE + ")");
             }
-            return read(manifest);
+            return read(patterns);
         }
     }
 
-    static List<String> read(InputStream manifest) throws IOException {
-        JsonNode entries = new ObjectMapper().readTree(manifest).path("discovery").path("directoryPatterns");
-        if (!entries.isArray()) {
-            throw new IOException("jdk-manifest.json has no discovery.directoryPatterns list");
-        }
-        List<String> patterns = new ArrayList<>();
-        for (JsonNode entry : entries) {
-            if (SOURCES.contains(entry.path("source").asText()) && !entry.path("pattern").asText().isBlank()) {
-                patterns.add(entry.path("pattern").asText());
+    static List<String> read(InputStream patterns) throws IOException {
+        List<String> found = new ArrayList<>();
+        for (String line : new String(patterns.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
+            String pattern = line.strip();
+            if (!pattern.isEmpty() && !pattern.startsWith("#")) {
+                found.add(pattern);
             }
         }
-        return patterns;
+        if (found.isEmpty()) {
+            throw new IOException(RESOURCE + " lists no place to look for a JDK");
+        }
+        return found;
     }
 }

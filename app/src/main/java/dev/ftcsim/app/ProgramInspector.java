@@ -18,18 +18,17 @@ final class ProgramInspector {
     Inspection inspect(Path folder) {
         String name = AppFolders.leaf(folder);
         if (!Files.exists(folder)) {
-            return neither(name, folder + " does not exist.");
+            return neither(name, folder + " does not exist");
         }
         if (!Files.isDirectory(folder)) {
-            return neither(name, name + " is a file, not a folder: choose a project's folder or a prepared program's folder.");
+            return neither(name, name + " is a file, not a folder");
         }
         boolean hasSettings = Files.isRegularFile(folder.resolve("settings.gradle")) || Files.isRegularFile(folder.resolve("settings.gradle.kts"));
         if (hasSettings && Files.isRegularFile(folder.resolve(WRAPPER_JAR))) {
             return new Inspection(
                     Kind.PROJECT,
                     name,
-                    "A team project: preparing it runs its own Gradle build on this computer, which takes a minute or more the "
-                            + "first time, and only reads the project's folder.");
+                    "Team project");
         }
         if (Files.isRegularFile(folder.resolve(MANIFEST))) {
             try {
@@ -38,21 +37,19 @@ final class ProgramInspector {
                 return new Inspection(
                         Kind.PREPARED_PROGRAM,
                         program.manifest().project().name(),
-                        "A prepared program for FTC SDK " + program.sdkVersion() + " with " + opModes + (opModes == 1 ? " OpMode." : " OpModes."));
+                        "Built program: FTC SDK " + program.sdkVersion() + ", " + opModes + (opModes == 1 ? " OpMode" : " OpModes"));
             } catch (PackageException damaged) {
-                return neither(name, "This folder looks like a prepared program but cannot be used: " + firstProblem(damaged) + ".");
+                return neither(name, "Damaged built program: " + firstProblem(damaged));
             }
         }
         if (hasSettings) {
             return neither(
                     name,
-                    "This project has no Gradle wrapper (" + WRAPPER_JAR.replace('/', '\\') + "), which is how it is built: open it "
-                            + "in Android Studio once, or run 'gradle wrapper' in it.");
+                    "No Gradle wrapper (" + WRAPPER_JAR.replace('/', '\\') + "). Open the project in Android Studio once.");
         }
         return neither(
                 name,
-                "This is neither a team project (it has no settings.gradle) nor a prepared program (it has no " + MANIFEST
-                        + "): choose the folder that holds settings.gradle and gradlew.bat.");
+                "No settings.gradle here. Choose the project's root folder.");
     }
 
     private static Inspection neither(String name, String reason) {

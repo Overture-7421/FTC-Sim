@@ -1,4 +1,3 @@
-import groovy.json.JsonSlurper
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -22,13 +21,8 @@ import org.w3c.dom.Element
 // a jar whose licence the build cannot determine, or has no licence text for, fails the build with its name. The texts are
 // in app/licenses, copied from the projects themselves, and are not generated.
 //
-// The JDK that FTC-Sim downloads on the first start is not in the zip, and gets its own section from the runtime manifest.
-
-val runtimeManifestFile = rootProject.layout.projectDirectory.file("launcher/scripts/jdk-manifest.json").asFile
-val pinnedRuntimeRelease: String = run {
-    val runtime = (JsonSlurper().parse(runtimeManifestFile) as Map<*, *>)["runtime"] as Map<*, *>
-    (runtime["exactRelease"] as String?) ?: ""
-}
+// The Java runtime in the distribution's runtime folder is made from the toolchain's JDK (see runtime.gradle.kts) and gets its
+// own section, named from that JDK's release file; its licence texts are the ones jlink copies into runtime\legal.
 
 abstract class GenerateNotices : DefaultTask() {
     @get:InputFiles
@@ -39,8 +33,10 @@ abstract class GenerateNotices : DefaultTask() {
     @get:PathSensitive(PathSensitivity.RELATIVE)
     abstract val texts: DirectoryProperty
 
-    @get:Input
-    abstract val runtimeRelease: Property<String>
+    /** The release file of the JDK the runtime is made from: who made it and which build it is. */
+    @get:InputFile
+    @get:PathSensitive(PathSensitivity.NONE)
+    abstract val jdkRelease: RegularFileProperty
 
     @get:OutputDirectory
     abstract val notices: DirectoryProperty
@@ -198,17 +194,20 @@ abstract class GenerateNotices : DefaultTask() {
         text.append("third_party folder, https://skia.googlesource.com/skia/+/refs/heads/main/third_party/. The native libraries of\n")
         text.append("LWJGL are listed on https://www.lwjgl.org/license.\n\n")
 
-        usedTexts += "GPL-2.0-with-classpath-exception.txt"
-        val release = runtimeRelease.get().ifEmpty { "the newest Temurin release of the pinned Java version" }
-        text.append("4. The Java runtime that FTC-Sim downloads\n------------------------------------------\n\n")
-        text.append("Eclipse Temurin $release (OpenJDK)\n")
-        text.append("  FTC-Sim does not contain a Java runtime. On its first start, when the PC has no Java of exactly this build, it\n")
-        text.append("  downloads Temurin from https://github.com/adoptium/temurin25-binaries into %LOCALAPPDATA%\\FTC-Sim\\jdks, checks its\n")
-        text.append("  SHA-256 and uses it only for FTC-Sim. Nothing on the PC is changed.\n")
-        text.append("  Licence: GPL-2.0-with-classpath-exception (GNU General Public License, version 2, with the Classpath Exception)\n")
-        text.append("  Licence URL: https://openjdk.org/legal/gplv2+ce.html\n  Licence text: licenses/GPL-2.0-with-classpath-exception.txt\n")
-        text.append("  Project: https://adoptium.net\n  Source code: https://github.com/adoptium/jdk25u\n")
-        text.append("  The runtime has its own notices and the licences of its third-party parts in its legal folder and in its NOTICE file.\n\n")
+        val release = jdkRelease.get().asFile.readLines()
+            .mapNotNull { line -> Regex("""([A-Z_]+)="(.*)"""").matchEntire(line.trim())?.let { it.groupValues[1] to it.groupValues[2] } }.toMap()
+        val vendor = release["IMPLEMENTOR"] ?: "the vendor of the JDK"
+        val build = release["IMPLEMENTOR_VERSION"] ?: release["JAVA_RUNTIME_VERSION"] ?: release["JAVA_VERSION"] ?: "unknown version"
+        text.append("4. The Java runtime in the runtime folder\n-----------------------------------------\n\n")
+        text.append("$vendor $build, built from OpenJDK\n")
+        text.append("  The runtime folder is a Java runtime made with jlink from that JDK: only the modules FTC-Sim and the robot programs it\n")
+        text.append("  runs need (java.se and a few more), with the JDK's own libraries and launcher. FTC-Sim runs on it and on no other Java;\n")
+        text.append("  nothing on the PC is installed or changed.\n")
+        text.append("  Licence: the one in runtime/legal/java.base/LICENSE, and for each module the texts in runtime/legal/<module>; for an\n")
+        text.append("  OpenJDK build such as Eclipse Temurin that is the GNU General Public License, version 2, with the Classpath Exception\n")
+        text.append("  (https://openjdk.org/legal/gplv2+ce.html). The third-party parts of the runtime (ICU, CLDR, zlib and others) have their\n")
+        text.append("  texts in the same folders.\n")
+        text.append("  Project: https://openjdk.org (source code of the OpenJDK of this version: https://github.com/openjdk/jdk25u; the vendor named above publishes the source of its build)\n\n")
 
         text.append("5. Licence texts\n----------------\n\n")
         for (name in usedTexts) {
@@ -314,7 +313,8 @@ tasks.register<GenerateNotices>("thirdPartyNotices") {
     description = "Writes THIRD-PARTY-NOTICES.txt and the licenses folder of the distribution from the metadata of its libraries."
     jars.from(applicationJars, workerJars, robotJars, tasks.named("distJar"))
     texts.set(layout.projectDirectory.dir("licenses"))
-    runtimeRelease.set(pinnedRuntimeRelease)
+    @Suppress("UNCHECKED_CAST")
+    jdkRelease.set(project.extra["runtimeJdkRelease"] as Provider<RegularFile>)
     notices.set(layout.buildDirectory.dir("dist-parts/notices"))
     resolved = listOf(applicationJars.incoming.artifacts, workerJars.incoming.artifacts, robotJars.incoming.artifacts)
     dependencyHandler = project.dependencies

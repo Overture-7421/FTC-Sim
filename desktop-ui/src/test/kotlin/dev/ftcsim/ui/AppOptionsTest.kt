@@ -17,11 +17,16 @@ class AppOptionsTest {
     }
 
     @Test
-    fun aScriptedLaunchCanOpenPracticeAndKeepItsSettingsInAnotherFile() {
-        val options = AppOptions.parse(arrayOf("--practice", "--settings=build\\tmp\\ui.properties"))
+    fun aScriptedLaunchCanKeepItsSettingsInAnotherFile() {
+        val options = AppOptions.parse(arrayOf("--settings=build\\tmp\\ui.properties"))
 
-        assertEquals(true, options.openPractice)
         assertEquals(Paths.get("build\\tmp\\ui.properties"), options.settingsFile)
+    }
+
+    @Test
+    fun theLastProjectIsOpenedAtStartUnlessTheLaunchSaysNot() {
+        assertEquals(true, AppOptions.parse(emptyArray()).opensLastProject)
+        assertEquals(false, AppOptions.parse(arrayOf("--no-last-project")).opensLastProject)
     }
 
     @Test

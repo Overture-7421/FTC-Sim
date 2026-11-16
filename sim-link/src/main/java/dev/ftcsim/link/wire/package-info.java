@@ -34,7 +34,10 @@
  * <table>
  *   <caption>Commands</caption>
  *   <tr><th>kind<th>name<th>fields
- *   <tr><td>0x10<td>Open<td>profile, program, field (text); alliance; seed (64 bits); startX, startY, startHeading, speed (doubles)
+ *   <tr><td>0x10<td>Open<td>mapping (name (text); motors, each name (text), slot (one byte: front left, front right, rear left,
+ *       rear right, intake, conveyor, shooter, turret), model (text), mirrored (flag); mass, wheel diameter (doubles); drive
+ *       motor (text); turret ratio (double); hub logo and USB directions (text); camera x, y, z, yaw, pitch, roll
+ *       (doubles)); program, field (text); alliance; seed (64 bits); startX, startY, startHeading, speed (doubles)
  *   <tr><td>0x11<td>Init<td>OpMode name (text)
  *   <tr><td>0x12<td>Start<td>-
  *   <tr><td>0x13<td>Stop<td>-
@@ -56,10 +59,11 @@
  *   <tr><th>kind<th>name<th>fields
  *   <tr><td>0x40<td>Opened<td>flag and field description; OpModes; robot info (see {@code SessionInfo})
  *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies (see {@code WorldSnapshot})
- *   <tr><td>0x42<td>Status<td>see {@code SessionStatus}; the match is its last field: state (one byte), elapsed and
- *       duration of the period (64 bits each)
+ *   <tr><td>0x42<td>Status<td>see {@code SessionStatus}; the match is followed by the unplaced names, each a kind (one byte:
+ *       motor, servo, I2C device, digital pin, analog pin) and the name (text)
  *   <tr><td>0x43<td>Failed<td>message (text): a session that was asked for could not be opened, or cannot go on
- *   <tr><td>0x44<td>Catalogue<td>fields (id, name, start poses, human actions); profile names (see {@code Catalogue})
+ *   <tr><td>0x44<td>Catalogue<td>fields (id, name, start poses,  human actions); the motors a mapping may name (id,
+ *       name) (see {@code Catalogue})
  *   <tr><td>0x45<td>Refused<td>message (text): a command was refused and nothing else changed
  * </table>
  *
@@ -73,6 +77,12 @@
  *   <li>2: {@code ArmMatch}, {@code StartMatch}, the {@code Catalogue} event, and the match at the end of {@code Status}
  *   <li>3: the {@code Refused} event; {@code Failed} is only for a session that could not open or go on; a gamepad
  *       number is no longer checked by the decoder but by the worker
+ *   <li>4: the {@code Catalogue} lists the drivetrain motors a robot profile may name
+ *   <li>5: {@code Status} ends with the names the robot program asked the hardware map for that the profile does not
+ *       place, so that the robot editor can offer them
+ *   <li>6: the {@code Log} event (0x46): batches of lines the robot program wrote
+ *   <li>7: {@code Open} carries the robot mapping inline instead of a profile name or path; the {@code Catalogue} no longer
+ *       lists profiles
  * </ul>
  */
 package dev.ftcsim.link.wire;

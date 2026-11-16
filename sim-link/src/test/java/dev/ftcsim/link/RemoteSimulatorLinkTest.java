@@ -120,6 +120,19 @@ class RemoteSimulatorLinkTest {
     }
 
     @Test
+    void logLinesAreToldInOrderBetweenTheOtherEventsAndNeverDropped() throws Exception {
+        try (LinkFixture fixture = LinkFixture.open()) {
+            fixture.send(new Event.Log(java.util.List.of("I/Robot: one", "I/Robot: two")));
+            fixture.send(new Event.Log(java.util.List.of("W/Robot: three")));
+            fixture.send(new Event.Refused("not now"));
+
+            assertEquals(java.util.List.of("I/Robot: one", "I/Robot: two"), fixture.events.next(java.util.List.class));
+            assertEquals(java.util.List.of("W/Robot: three"), fixture.events.next(java.util.List.class));
+            assertEquals(new RecordingListener.Refusal("not now"), fixture.events.next(RecordingListener.Refusal.class));
+        }
+    }
+
+    @Test
     void aCatalogueIsToldToTheListenersThereAtTheTimeAndToThoseThatComeLateAndNeverTwice() throws Exception {
         try (LinkFixture fixture = LinkFixture.open()) {
             fixture.send(new Event.Catalogue(Messages.catalogue("one")));
@@ -409,7 +422,7 @@ class RemoteSimulatorLinkTest {
             assertThrows(IllegalArgumentException.class, () -> fixture.link.setSpeed(Double.NaN));
             assertThrows(NullPointerException.class, () -> fixture.link.init(null));
             assertThrows(NullPointerException.class, () -> fixture.link.open(null));
-            assertThrows(NullPointerException.class, () -> fixture.link.open(Messages.request(null)));
+            assertThrows(NullPointerException.class, () -> fixture.link.open(Messages.requestWithoutMapping()));
             assertThrows(NullPointerException.class, () -> fixture.link.armMatch(null, "Counting"));
             assertThrows(NullPointerException.class, () -> fixture.link.armMatch("", null));
         }

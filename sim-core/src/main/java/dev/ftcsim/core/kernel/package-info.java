@@ -4,10 +4,11 @@
  * integer-nanosecond instants), runs the scheduled callbacks and then runs the robot thread, which a baton
  * ({@code RobotGate}) lets run only between the simulator's moves. {@code KernelHooks} is what the rewritten robot
  * bytecode reaches: clock reads, sleeps, yields, monitors and loop back edges. {@link dev.ftcsim.core.kernel.KernelConfig}
- * says what each of them costs in simulated time, {@link dev.ftcsim.core.kernel.KernelDiagnostics} records everything
- * that weakens determinism, and {@code WorldThreads} keeps threads of the robot world that the kernel does not
- * schedule from running beside simulated time.
+ * says what each of them costs in simulated time, and {@link dev.ftcsim.core.kernel.KernelDiagnostics} records what the
+ * kernel noticed about the robot thread that the user should hear of. Threads of the robot world other than the robot
+ * thread, such as a library's timer, run in real time beside the simulation; the kernel does not hold time back for
+ * them.
  *
- * <p>Nothing here reads a real clock. See {@code docs/architecture/decisions.md}, sections 2 and 10.
+ * <p>Nothing here reads a real clock. See {@code docs/architecture/decisions.md}, sections 2, 9 and 10.
  */
 package dev.ftcsim.core.kernel;

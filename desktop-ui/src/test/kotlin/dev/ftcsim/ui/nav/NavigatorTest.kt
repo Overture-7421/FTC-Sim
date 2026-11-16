@@ -11,65 +11,65 @@ class NavigatorTest {
     private fun now() = navigator.state.value
 
     @Test
-    fun theApplicationStartsAtHomeWithNowhereToGoBackTo() {
-        assertEquals(Destination.HOME, now().current)
+    fun theApplicationStartsAtProjectsWithNowhereToGoBackTo() {
+        assertEquals(Destination.PROJECTS, now().current)
         assertFalse(now().canGoBack)
         assertFalse(navigator.back())
     }
 
     @Test
-    fun theRailListsHomePrepareSetupControlsPracticeAndSettingsInThatOrder() {
+    fun theRailListsProjectsRobotControlsSimulatorAndSettingsInThatOrder() {
         assertEquals(
-            listOf("Home", "Prepare", "Setup", "Controls", "Practice", "Settings"),
+            listOf("Projects", "Robot", "Controls", "Simulator", "Settings"),
             Destination.entries.map { it.label },
         )
     }
 
     @Test
     fun goingSomewhereRemembersWhereYouWereAndBackReturns() {
-        navigator.go(Destination.SETUP)
+        navigator.go(Destination.ROBOT)
         navigator.go(Destination.PRACTICE)
 
         assertEquals(Destination.PRACTICE, now().current)
-        assertEquals(listOf(Destination.HOME, Destination.SETUP), now().back)
+        assertEquals(listOf(Destination.PROJECTS, Destination.ROBOT), now().back)
 
         assertTrue(navigator.back())
-        assertEquals(Destination.SETUP, now().current)
+        assertEquals(Destination.ROBOT, now().current)
         assertTrue(navigator.back())
-        assertEquals(Destination.HOME, now().current)
+        assertEquals(Destination.PROJECTS, now().current)
         assertFalse(navigator.back())
     }
 
     @Test
     fun goingWhereYouAlreadyAreChangesNothing() {
-        navigator.go(Destination.SETUP)
+        navigator.go(Destination.ROBOT)
         val before = now()
 
-        navigator.go(Destination.SETUP)
+        navigator.go(Destination.ROBOT)
 
         assertEquals(before, now())
     }
 
     @Test
     fun aPlaceVisitedAgainMovesToTheFrontOfTheHistoryInsteadOfRepeating() {
-        navigator.go(Destination.SETUP)
+        navigator.go(Destination.ROBOT)
         navigator.go(Destination.PRACTICE)
         navigator.go(Destination.CONTROLS)
         navigator.go(Destination.PRACTICE)
 
         assertEquals(Destination.PRACTICE, now().current)
-        assertEquals(listOf(Destination.HOME, Destination.SETUP, Destination.CONTROLS), now().back)
+        assertEquals(listOf(Destination.PROJECTS, Destination.ROBOT, Destination.CONTROLS), now().back)
 
         navigator.back()
         assertEquals(Destination.CONTROLS, now().current)
-        assertEquals(listOf(Destination.HOME, Destination.SETUP), now().back)
+        assertEquals(listOf(Destination.PROJECTS, Destination.ROBOT), now().back)
     }
 
     @Test
     fun backNeverLeadsToTheScreenYouAreOnAndTheHistoryCannotGrowWithoutEnd() {
         repeat(50) {
-            navigator.go(Destination.SETUP)
-            navigator.go(Destination.HOME)
+            navigator.go(Destination.ROBOT)
+            navigator.go(Destination.PROJECTS)
         }
 
         assertTrue(now().back.size < Destination.entries.size)

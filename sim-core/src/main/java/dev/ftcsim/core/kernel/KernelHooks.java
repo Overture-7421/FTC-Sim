@@ -2,11 +2,7 @@ package dev.ftcsim.core.kernel;
 
 import dev.ftcsim.contracts.hooks.RobotExit;
 import dev.ftcsim.contracts.hooks.RobotHooks;
-import java.util.Random;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
-import java.util.concurrent.atomic.AtomicLong;
 
 /**
  * What a robot program sees when it asks the JDK about time. The robot thread gets simulated time that moves in
@@ -15,20 +11,12 @@ import java.util.concurrent.atomic.AtomicLong;
  */
 final class KernelHooks implements RobotHooks {
     private static final long MAX_SLEEP_NANOS = Long.MAX_VALUE / 4;
-    private static final long ROBOT_STREAM = 0x524F424F54L;
-    private static final long OTHER_STREAM = 0x4F54484552L;
-    private static final long MATH_STREAM = 0x4D415448L;
 
     private final SimulationKernel kernel;
     private final RobotGate gate;
     private final VirtualClock clock;
     private final KernelConfig config;
     private final KernelDiagnostics diagnostics;
-    private final AtomicLong robotSeeds = new AtomicLong();
-    private final AtomicLong otherSeeds = new AtomicLong();
-    private final Random robotMath;
-    private final Random otherMath;
-    private final Set<String> reported = ConcurrentHashMap.newKeySet();
 
     KernelHooks(SimulationKernel kernel, RobotGate gate, VirtualClock clock, KernelConfig config, KernelDiagnostics diagnostics) {
         this.kernel = kernel;
@@ -36,8 +24,6 @@ final class KernelHooks implements RobotHooks {
         this.clock = clock;
         this.config = config;
         this.diagnostics = diagnostics;
-        this.robotMath = new Random(mix(config.seed() ^ ROBOT_STREAM, MATH_STREAM));
-        this.otherMath = new Random(mix(config.seed() ^ OTHER_STREAM, MATH_STREAM));
     }
 
     @Override
@@ -53,38 +39,6 @@ final class KernelHooks implements RobotHooks {
     @Override
     public long currentTimeNanos() {
         return config.epochMillis() * 1_000_000L + nanoTime();
-    }
-
-    /**
-     * The robot thread has a stream of seeds that nothing else draws from, so what it gets never depends on what a
-     * library's thread asked for first; every other thread draws from one stream of its own. A stream is a function of
-     * the kernel's seed and of how many seeds it handed out before.
-     */
-    @Override
-    public long randomSeed() {
-        boolean robot = gate.isRobotLike(Thread.currentThread());
-        long index = (robot ? robotSeeds : otherSeeds).getAndIncrement();
-        return mix(config.seed() ^ (robot ? ROBOT_STREAM : OTHER_STREAM), index);
-    }
-
-    @Override
-    public double mathRandom() {
-        return (gate.isRobotLike(Thread.currentThread()) ? robotMath : otherMath).nextDouble();
-    }
-
-    @Override
-    public void nondeterministic(String description) {
-        if (reported.add(description)) {
-            diagnostics.problem(description);
-        }
-    }
-
-    /** SplitMix64's finaliser over {@code seed + (index + 1) * golden gamma}: distinct for distinct indexes. */
-    private static long mix(long seed, long index) {
-        long z = seed + (index + 1) * 0x9E3779B97F4A7C15L;
-        z = (z ^ (z >>> 30)) * 0xBF58476D1CE4E5B9L;
-        z = (z ^ (z >>> 27)) * 0x94D049BB133111EBL;
-        return z ^ (z >>> 31);
     }
 
     @Override
@@ -241,10 +195,6 @@ final class KernelHooks implements RobotHooks {
         }
         Thread caller = Thread.currentThread();
         if (!gate.enter(caller) && gate.notifyRobotWaiter(monitor)) {
-            if (kernel.isOutsider(caller)) {
-                diagnostics.problem("thread '" + caller.getName() + "' woke the robot thread from a wait; the robot resumes at"
-                        + " whatever simulated time the simulator next looks, which is not reproducible");
-            }
             return;
         }
         if (all) {

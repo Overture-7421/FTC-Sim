@@ -8,8 +8,8 @@ enum class Severity(val label: String) {
     WARNING("Warning"),
 }
 
-/** One thing a person should know about, and where it came from. */
-data class Problem(val severity: Severity, val source: String, val text: String)
+/** One thing a person should know about, and where it came from; [log] is a file with more, such as a build log. */
+data class Problem(val severity: Severity, val source: String, val text: String, val log: java.nio.file.Path? = null)
 
 /**
  * Collects what the port reports into one list. The port gives the simulator's problems as plain text, so they are all

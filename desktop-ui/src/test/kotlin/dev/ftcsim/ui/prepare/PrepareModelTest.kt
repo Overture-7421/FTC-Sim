@@ -17,20 +17,16 @@ import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class PrepareModelTest {
-    private val settings = SettingsStore(null, Executor { it.run() })
     private val folder: Path = Path.of("C:\\Teams\\Tina\\RobotProject")
     private val project = Project(folder, "RobotProject", "A project.")
     private val preparer = ScriptedPreparer()
-    private val model = PrepareModel(preparer, settings)
-
-    private fun trusted() = settings.update { it.withTrusted(folder) }
+    private val model = PrepareModel(preparer)
 
     private fun running() = model.state.value as PrepareState.Running
 
     @Test
     fun nothingIsChosenAtFirstAndNothingIsAskedOrRunning() {
         assertSame(PrepareState.Idle, model.state.value)
-        assertNull(model.consent.value)
         model.cancel()
         model.prepare()
         assertSame(PrepareState.Idle, model.state.value)
@@ -46,93 +42,86 @@ class PrepareModelTest {
     }
 
     @Test
-    fun anUntrustedProjectIsAskedAboutFirstAndNothingRunsUntilTheAnswerIsYes() {
-        model.choose(project)
+    fun prepareAndThenStartsAtOnceForATrustedProjectAndCallsBackOnceWithHowItEnded() {
+        val ended = ArrayList<PrepareState?>()
 
-        model.prepare()
-        assertEquals(project, model.consent.value)
-        assertTrue(preparer.requests.isEmpty(), "nothing runs before the person agrees")
-        assertEquals(PrepareState.Ready(project), model.state.value)
-
-        model.answerConsent(false)
-        assertNull(model.consent.value)
-        assertTrue(preparer.requests.isEmpty())
-        assertFalse(settings.state.value.trusts(folder), "a refusal is not remembered as trust")
-
-        model.prepare()
-        model.answerConsent(true)
+        assertTrue(model.prepareAndThen(project) { ended += it })
         assertTrue(model.state.value is PrepareState.Running)
-        assertEquals(1, preparer.requests.size)
-        assertEquals(folder, preparer.requests.single().projectFolder())
-        assertTrue(preparer.requests.single().trusted(), "trusted only because the person agreed")
-        assertTrue(settings.state.value.trusts(folder), "and the agreement is remembered for the folder")
+        assertTrue(ended.isEmpty(), "nothing is said before the end")
+        preparer.finish()
+        preparer.fail()
+
+        assertEquals(1, ended.size, "once, however many events follow")
+        assertTrue(ended.single() is PrepareState.Finished)
     }
 
     @Test
-    fun aProjectTheyAlreadyAgreedToStartsWithoutAQuestion() {
-        trusted()
+    fun prepareAndThenHearsAFailureAndACancellationLikeAnyOtherEnd() {
+        val ended = ArrayList<PrepareState?>()
+        model.prepareAndThen(project) { ended += it }
+
+        model.cancel()
+        preparer.fail(code = PrepareState.CANCELLED)
+
+        assertEquals(1, preparer.cancels)
+        assertTrue((ended.single() as PrepareState.Failed).cancelled)
+    }
+
+
+
+    @Test
+    fun prepareAndThenIsRefusedWhileAPreparationIsUnderWayAndTheEarlierCallbackStaysTheEarliers() {
+        val first = ArrayList<PrepareState?>()
+        val second = ArrayList<PrepareState?>()
+        model.prepareAndThen(project) { first += it }
+
+        assertFalse(model.prepareAndThen(project) { second += it })
+        preparer.finish()
+
+        assertEquals(1, first.size)
+        assertTrue(second.isEmpty())
+    }
+
+
+    @Test
+    fun aPreparerThatCannotStartIsAnEndToo() {
+        preparer.failToStart = IllegalStateException("no thread")
+        val ended = ArrayList<PrepareState?>()
+
+        model.prepareAndThen(project) { ended += it }
+
+        val failed = ended.single() as PrepareState.Failed
+        assertEquals("NOT_STARTED", failed.failure.code())
+    }
+
+
+    @Test
+    fun aChosenProjectStartsAtOnceWithoutAnyQuestionAndIsTrustedBecauseItWasChosen() {
         model.choose(project)
 
         model.prepare()
 
-        assertNull(model.consent.value)
         assertTrue(model.state.value is PrepareState.Running)
         assertTrue(preparer.requests.single().trusted())
     }
 
-    @Test
-    fun agreeingToOneProjectSaysNothingAboutAnother() {
-        trusted()
-        val other = Project(Path.of("C:\\Teams\\Other\\Project"), "Project", "Another.")
 
-        model.choose(other)
-        model.prepare()
-
-        assertEquals(other, model.consent.value)
-        assertTrue(preparer.requests.isEmpty())
-    }
 
     @Test
-    fun answeringWhenNoQuestionIsAskedDoesNothing() {
-        model.choose(project)
-
-        model.answerConsent(true)
-
-        assertTrue(preparer.requests.isEmpty())
-        assertFalse(settings.state.value.trusts(folder))
-    }
-
-    @Test
-    fun theStepsBuildTheListWithDoneActiveAndWaitingRows() {
-        trusted()
+    fun whatTheBuildIsDoingIsTheLabelOfTheLatestStepAndNothingBeforeTheFirst() {
         model.choose(project)
         model.prepare()
-        assertTrue(running().rows().isEmpty(), "no step has begun")
+        assertNull(running().doing, "no step has begun")
 
         preparer.step(1, label = "Copying")
-        assertEquals(
-            listOf(
-                StepRow(1, 3, "Copying", StepStatus.ACTIVE),
-                StepRow(2, 3, null, StepStatus.WAITING),
-                StepRow(3, 3, null, StepStatus.WAITING),
-            ),
-            running().rows(),
-        )
+        assertEquals("Copying", running().doing)
 
         preparer.step(2, label = "Building")
-        assertEquals(
-            listOf(
-                StepRow(1, 3, "Copying", StepStatus.DONE),
-                StepRow(2, 3, "Building", StepStatus.ACTIVE),
-                StepRow(3, 3, null, StepStatus.WAITING),
-            ),
-            running().rows(),
-        )
+        assertEquals("Building", running().doing)
     }
 
     @Test
     fun outputGoesToTheLogInOrderAndAStartedPreparationBeginsWithAnEmptyOne() {
-        trusted()
         model.choose(project)
         model.log.add("left over from before")
         model.prepare()
@@ -145,7 +134,6 @@ class PrepareModelTest {
 
     @Test
     fun aFinishedPreparationKeepsTheProgramItMade() {
-        trusted()
         model.choose(project)
         model.prepare()
 
@@ -159,7 +147,6 @@ class PrepareModelTest {
 
     @Test
     fun aFailureKeepsItsMessageDetailsAndLogAndIsNotACancellation() {
-        trusted()
         model.choose(project)
         model.prepare()
         val log = Path.of("C:\\work\\build.log")
@@ -175,7 +162,6 @@ class PrepareModelTest {
 
     @Test
     fun cancellingAsksThePreparerOnceAndShowsCancellingUntilItEnds() {
-        trusted()
         model.choose(project)
         model.prepare()
 
@@ -192,7 +178,6 @@ class PrepareModelTest {
 
     @Test
     fun whatAnEndedPreparationSaysLaterChangesNothing() {
-        trusted()
         model.choose(project)
         model.prepare()
         preparer.listener!!.output("one")
@@ -209,26 +194,24 @@ class PrepareModelTest {
 
     @Test
     fun aNewPreparationIgnoresWhatTheOldOneStillSays() {
-        trusted()
         model.choose(project)
         model.prepare()
         val old = preparer.listener!!
         preparer.fail()
 
         model.prepare()
-        assertTrue(running().rows().isEmpty())
+        assertNull(running().doing)
         old.step(ProgramPreparer.Step(2, 3, "Step 2"))
         old.output("stale")
-        assertTrue(running().rows().isEmpty(), "the old preparation is over")
+        assertNull(running().doing, "the old preparation is over")
         assertTrue(model.log.view().lines.isEmpty())
 
         preparer.step(1)
-        assertEquals(StepStatus.ACTIVE, running().rows().first().status)
+        assertEquals("Step 1", running().doing)
     }
 
     @Test
     fun preparingAgainAfterAFailureStartsOverWithACleanLog() {
-        trusted()
         model.choose(project)
         model.prepare()
         preparer.listener!!.output("old line")
@@ -243,7 +226,6 @@ class PrepareModelTest {
 
     @Test
     fun aProjectCannotBeChosenWhileAnotherIsBeingPreparedButCanBeAfterwards() {
-        trusted()
         model.choose(project)
         model.prepare()
 
@@ -256,20 +238,17 @@ class PrepareModelTest {
     }
 
     @Test
-    fun choosingAnotherProjectDropsAPendingQuestionAndTheOldOutput() {
+    fun choosingAnotherProjectDropsTheOldOutput() {
         model.choose(project)
-        model.prepare()
         model.log.add("old")
 
         model.choose(Project(Path.of("C:\\Other"), "Other", ""))
 
-        assertNull(model.consent.value)
         assertTrue(model.log.view().lines.isEmpty())
     }
 
     @Test
     fun aPreparerThatCannotEvenStartIsAFailureInWordsNotACrash() {
-        trusted()
         preparer.failToStart = IllegalStateException("No JDK was found.")
         model.choose(project)
 
@@ -287,11 +266,10 @@ class PrepareModelTest {
         val scheduler = ManualScheduler()
         val work = newWorkFolder()
         val settings = SettingsStore(null, Executor { it.run() })
-        val model = PrepareModel(FakeProgramPreparer(scheduler, work), settings)
+        val model = PrepareModel(FakeProgramPreparer(scheduler, work))
 
         fun prepare(name: String): PrepareState {
             val folder = work.resolve(name)
-            settings.update { it.withTrusted(folder) }
             model.choose(Project(folder, name, ""))
             model.prepare()
             scheduler.advance(120_000)
@@ -336,7 +314,6 @@ class PrepareModelTest {
     fun cancellingAFakePreparationEndsItAsCancelled() {
         val fakes = Fakes()
         val folder = fakes.work.resolve("TeamProject")
-        fakes.settings.update { it.withTrusted(folder) }
         fakes.model.choose(Project(folder, "TeamProject", ""))
         fakes.model.prepare()
         fakes.scheduler.advance(1_000)

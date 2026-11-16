@@ -1,7 +1,7 @@
 package dev.ftcsim.physics;
 
 /**
- * Seesaw hive: a rigid tray that tips between two end stops under a deterministic state machine.
+ * Seesaw hive: a rigid tray that tips between two end stops under a state machine.
  * The tray is kinematic, so pieces on it are carried and pushed by its motion but it never reacts
  * to them. Rotation about +Y by a positive angle lowers the +X end.
  */

@@ -3,6 +3,7 @@ package dev.ftcsim.link.wire;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
+import java.util.List;
 import java.util.Objects;
 
 /** What the worker tells the UI side; one record for every callback of {@code SimulatorLink.Listener}. */
@@ -39,6 +40,13 @@ public sealed interface Event {
     record Catalogue(dev.ftcsim.contracts.session.Catalogue catalogue) implements Event {
         public Catalogue {
             Objects.requireNonNull(catalogue, "catalogue");
+        }
+    }
+
+    /** Lines of the robot program's and the SDK's log, in the order they were written. */
+    record Log(List<String> lines) implements Event {
+        public Log {
+            lines = List.copyOf(lines);
         }
     }
 

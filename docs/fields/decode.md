@@ -1,6 +1,6 @@
 # DECODE (2025-26) field
 
-Package `dev.ftcsim.game.decode` in `game-decode`. `DecodeField` builds the whole field in an empty `PhysicsWorld` and
+Package `dev.ftcsim.game.decode` in `games`. `DecodeField` builds the whole field in an empty `PhysicsWorld` and
 `DecodeRun` plays its rules. Every number below is metres in the field frame (origin at the middle of the field, Z up,
 +X towards the audience, the goals at -X) unless it says otherwise.
 

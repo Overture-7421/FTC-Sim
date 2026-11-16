@@ -1,7 +1,6 @@
 package dev.ftcsim.hardware.device;
 
 import dev.ftcsim.hardware.device.bosch.Bno055Model;
-import dev.ftcsim.hardware.device.digitalchickenlabs.OctoQuadModel;
 import dev.ftcsim.hardware.device.gobilda.GoBildaPinpointModel;
 import dev.ftcsim.hardware.device.rev.RevColorSensorV3Model;
 import dev.ftcsim.hardware.i2c.I2cPeripheral;
@@ -11,15 +10,20 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The device models there are, by the type id a robot profile names them with. Adding a device is writing its model
- * and adding one line to {@link #standard()}; nothing else in the simulator knows what devices exist, except that a
- * robot with a Control Hub has the IMU of the hub without any profile line, which the robot's rig builds from
- * {@link #BNO055_IMU}.
+ * The device models there are, by type id. Adding a device is writing its model and adding one line to
+ * {@link #standard()}; the robot's rig then attaches it on the bus its sensor kind has
+ * ({@link dev.ftcsim.contracts.hardware.HardwareDirectory.Sensor}).
  */
 public final class DeviceModels {
 
-    /** The type id of the Bosch BNO055: the IMU inside a REV hub, and every external IMU the SDK has a driver for. */
+    /** The type id of the Bosch BNO055, the IMU inside a REV Control Hub. */
     public static final String BNO055_IMU = "bno055-imu";
+
+    /** The type id of the goBILDA Pinpoint. */
+    public static final String PINPOINT = "gobilda-pinpoint";
+
+    /** The type id of the REV Color Sensor V3. */
+    public static final String COLOR_SENSOR = "rev-color-sensor-v3";
 
     private final Map<String, DeviceFactory> factories = new LinkedHashMap<>();
 
@@ -31,9 +35,8 @@ public final class DeviceModels {
     /** Every device the simulator models. */
     public static DeviceModels standard() {
         return new DeviceModels()
-                .register("gobilda-pinpoint", GoBildaPinpointModel::create)
-                .register("rev-color-sensor-v3", RevColorSensorV3Model::create)
-                .register("octoquad-ftc-mk2", OctoQuadModel::create)
+                .register(PINPOINT, GoBildaPinpointModel::create)
+                .register(COLOR_SENSOR, RevColorSensorV3Model::create)
                 .register(BNO055_IMU, Bno055Model::create);
     }
 
@@ -50,10 +53,11 @@ public final class DeviceModels {
     }
 
     /**
-     * Builds the device a profile calls {@code deviceName}.
+     * Builds a device.
      *
-     * @param typeId   the profile's type id, which must have been registered
-     * @param settings the profile's settings of the device, numbers and text
+     * @param typeId     the type id, which must have been registered
+     * @param deviceName what the device is called, for messages
+     * @param settings   the device's settings, numbers and text
      * @throws IllegalArgumentException if the type is unknown, or a setting is missing, wrong or not understood
      */
     public I2cPeripheral create(String typeId, String deviceName, Map<String, ?> settings, DeviceContext context) {

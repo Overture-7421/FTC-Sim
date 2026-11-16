@@ -7,8 +7,7 @@ dependencies {
     implementation(project(":sim-link"))
     implementation(project(":simulator"))
     // The fields a request can name, and the reader of the prepared programs that the project importer writes.
-    implementation(project(":game-decode"))
-    implementation(project(":game-biobuzz"))
+    implementation(project(":games"))
     implementation(project(":project-import"))
 }
 

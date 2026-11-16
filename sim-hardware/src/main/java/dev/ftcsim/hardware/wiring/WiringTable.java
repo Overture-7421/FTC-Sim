@@ -1,7 +1,9 @@
 package dev.ftcsim.hardware.wiring;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -9,20 +11,17 @@ import java.util.Map;
 import java.util.Set;
 
 /**
- * Where each named device is plugged in, as the robot profile says, with the next free port for any name the
- * profile does not mention. An assignment, once made, never changes, so a name always finds the same port, and
- * every name that had to be assigned is remembered so the simulator can show it as unbound. The IMU of the embedded
- * hub is the one device that exists without a profile line, so robot code that asks for an IMU under a name the
- * profile does not place gets it (once, under the first name that asks) instead of a free port; it is not unbound.
+ * Where each named device is plugged in. The motors are where the robot mapping put them; a motor, servo or pin the
+ * mapping does not place gets the next free port, once and for all, and is remembered so the simulator can show it as
+ * unbound. The robot's sensors are fixed and found by kind: the IMU of the embedded hub and each {@link Sensor} are
+ * bound to the first name robot code asks for them under, and a second name for the same sensor is refused and
+ * recorded as unsupported, as is anything else the simulator cannot provide.
  */
 public final class WiringTable implements HardwareDirectory {
     private static final int MOTOR_PORTS = 4;
     private static final int SERVO_PORTS = 6;
-    private static final int I2C_BUSES = 4;
     private static final int DIGITAL_CHANNELS = 8;
     private static final int ANALOG_CHANNELS = 4;
-    /** Bus 0 of a Control Hub is taken by its own IMU, so user devices start at bus 1. */
-    private static final int FIRST_USER_I2C_BUS = 1;
 
     private record Slot(int hub, int index) {}
 
@@ -30,17 +29,18 @@ public final class WiringTable implements HardwareDirectory {
     private final MotorSpec defaultMotor;
     private final Map<String, MotorWiring> motors = new LinkedHashMap<>();
     private final Map<String, ServoWiring> servos = new LinkedHashMap<>();
-    private final Map<String, I2cWiring> i2cDevices = new LinkedHashMap<>();
     private final Map<String, DigitalWiring> digitals = new LinkedHashMap<>();
     private final Map<String, AnalogWiring> analogs = new LinkedHashMap<>();
     private final Set<Slot> usedMotorPorts = new LinkedHashSet<>();
     private final Set<Slot> usedServoPorts = new LinkedHashSet<>();
     private final Set<Slot> usedDigitalChannels = new LinkedHashSet<>();
     private final Set<Slot> usedAnalogChannels = new LinkedHashSet<>();
-    private final List<String> assigned = new ArrayList<>();
+    private final List<UnmappedDevice> assigned = new ArrayList<>();
+    private final Map<Sensor, String> sensorNames = new EnumMap<>(Sensor.class);
+    private final Set<String> unsupported = new LinkedHashSet<>();
     private String embeddedImuName;
 
-    /** What a motor the profile does not describe is assumed to be. */
+    /** What a motor the mapping does not describe is assumed to be. */
     public record MotorSpec(double ticksPerRev, double maxRpm) {
         public MotorSpec {
             if (ticksPerRev <= 0 || maxRpm <= 0) {
@@ -70,7 +70,7 @@ public final class WiringTable implements HardwareDirectory {
             Slot slot = nextFree(usedMotorPorts, MOTOR_PORTS, "motor port", name);
             wiring = new MotorWiring(slot.hub(), slot.index(), defaultMotor.ticksPerRev(), defaultMotor.maxRpm(), false);
             motors.put(name, wiring);
-            assigned.add(name);
+            assigned.add(new UnmappedDevice(UnmappedDevice.Kind.MOTOR, name));
         }
         return wiring;
     }
@@ -82,38 +82,38 @@ public final class WiringTable implements HardwareDirectory {
             Slot slot = nextFree(usedServoPorts, SERVO_PORTS, "servo port", name);
             wiring = new ServoWiring(slot.hub(), slot.index(), false);
             servos.put(name, wiring);
-            assigned.add(name);
+            assigned.add(new UnmappedDevice(UnmappedDevice.Kind.SERVO, name));
         }
         return wiring;
     }
 
     @Override
-    public synchronized I2cWiring i2c(String name) {
-        I2cWiring wiring = i2cDevices.get(name);
-        if (wiring == null) {
-            wiring = new I2cWiring(hubs.get(0).address(), FIRST_USER_I2C_BUS, false);
-            i2cDevices.put(name, wiring);
-            assigned.add(name);
+    public synchronized I2cWiring sensor(String name, Sensor kind) {
+        String bound = sensorNames.putIfAbsent(kind, name);
+        if (bound != null && !bound.equals(name)) {
+            throw new IllegalStateException("\"" + name + "\" asks for the " + describe(kind) + ", but the robot has one and \"" + bound
+                    + "\" already is it. A robot configuration names a sensor once, so robot code has to use the same name for it everywhere.");
         }
-        return wiring;
+        return new I2cWiring(hubs.get(0).address(), kind.bus(), true);
     }
 
     @Override
     public synchronized I2cWiring imu(String name) {
-        I2cWiring placed = i2cDevices.get(name);
-        if (placed != null && placed.mapped()) {
-            return placed;
-        }
         Hub embedded = hubs.stream().filter(Hub::embedded).findFirst().orElseThrow(() -> new IllegalStateException(
                 "\"" + name + "\" asks for the IMU of a Control Hub, but this robot has no Control Hub: its hubs are "
-                        + hubs.stream().map(Hub::name).toList() + ". Add an IMU to the robot profile to give it one."));
+                        + hubs.stream().map(Hub::name).toList()));
         if (embeddedImuName != null && !embeddedImuName.equals(name)) {
             throw new IllegalStateException("\"" + name + "\" asks for the IMU of the " + embedded.name() + ", but the "
                     + embedded.name() + " has one IMU and \"" + embeddedImuName + "\" already is it. A robot configuration"
                     + " names the IMU once, so robot code has to use the same name for it everywhere.");
         }
         embeddedImuName = name;
-        return new I2cWiring(embedded.address(), EMBEDDED_IMU_BUS, false);
+        return new I2cWiring(embedded.address(), EMBEDDED_IMU_BUS, true);
+    }
+
+    @Override
+    public synchronized void unsupported(String name, String what) {
+        unsupported.add("'" + name + "' (" + what + ") is not supported by the simulator, so it is not there");
     }
 
     @Override
@@ -123,7 +123,7 @@ public final class WiringTable implements HardwareDirectory {
             Slot slot = nextFree(usedDigitalChannels, DIGITAL_CHANNELS, "digital channel", name);
             wiring = new DigitalWiring(slot.hub(), slot.index(), false);
             digitals.put(name, wiring);
-            assigned.add(name);
+            assigned.add(new UnmappedDevice(UnmappedDevice.Kind.DIGITAL, name));
         }
         return wiring;
     }
@@ -135,14 +135,31 @@ public final class WiringTable implements HardwareDirectory {
             Slot slot = nextFree(usedAnalogChannels, ANALOG_CHANNELS, "analog channel", name);
             wiring = new AnalogWiring(slot.hub(), slot.index(), false);
             analogs.put(name, wiring);
-            assigned.add(name);
+            assigned.add(new UnmappedDevice(UnmappedDevice.Kind.ANALOG, name));
         }
         return wiring;
     }
 
-    /** The names robot code asked for that the profile did not place, in the order they were asked for. */
+    /** The names robot code asked for that the mapping did not place, in the order they were asked for. */
     public synchronized List<String> unmappedNames() {
+        return assigned.stream().map(UnmappedDevice::name).toList();
+    }
+
+    /** The same, with what kind of device each was asked for. */
+    public synchronized List<UnmappedDevice> unmapped() {
         return List.copyOf(assigned);
+    }
+
+    /** What robot code asked for that the simulator cannot provide, one sentence each, in the order it was asked for. */
+    public synchronized List<String> unsupported() {
+        return List.copyOf(unsupported);
+    }
+
+    private static String describe(Sensor kind) {
+        return switch (kind) {
+            case PINPOINT -> "Pinpoint odometry computer";
+            case COLOR_SENSOR -> "colour sensor";
+        };
     }
 
     private Slot nextFree(Set<Slot> used, int perHub, String what, String name) {
@@ -154,7 +171,8 @@ public final class WiringTable implements HardwareDirectory {
                 }
             }
         }
-        throw new IllegalStateException("\"" + name + "\" needs a free " + what + " but all " + used.size() + " of them are taken");
+        throw new IllegalStateException("\"" + name + "\" needs a free " + what + " but all " + used.size() + " of them are taken"
+                + (hubs.size() == 1 ? ". The robot has only the " + hubs.get(0).name() + ": add an Expansion Hub to it" : ""));
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -165,7 +183,7 @@ public final class WiringTable implements HardwareDirectory {
         private final List<Runnable> placements = new ArrayList<>();
         private WiringTable table;
 
-        /** Declares a hub; the first one declared is the one that gets devices the profile does not place. */
+        /** Declares a hub; the first one declared is the one the robot's sensors are on. */
         public Builder hub(int address, String name, boolean parent, boolean embedded) {
             hubs.add(new Hub(address, name, parent, embedded));
             return this;
@@ -178,58 +196,17 @@ public final class WiringTable implements HardwareDirectory {
 
         public Builder motor(String name, int hub, int port, double ticksPerRev, double maxRpm) {
             placements.add(() -> {
-                checkIndex("motor port", port, MOTOR_PORTS);
-                claim(table.usedMotorPorts, hub, port, "motor port", name);
-                table.motors.put(name, new MotorWiring(hub, port, ticksPerRev, maxRpm, true));
-            });
-            return this;
-        }
-
-        public Builder servo(String name, int hub, int port) {
-            placements.add(() -> {
-                checkIndex("servo port", port, SERVO_PORTS);
-                claim(table.usedServoPorts, hub, port, "servo port", name);
-                table.servos.put(name, new ServoWiring(hub, port, true));
-            });
-            return this;
-        }
-
-        public Builder i2c(String name, int hub, int bus) {
-            placements.add(() -> {
-                checkIndex("I2C bus", bus, I2C_BUSES);
-                table.i2cDevices.put(name, new I2cWiring(hub, bus, true));
-            });
-            return this;
-        }
-
-        /**
-         * Says that the device the profile places as {@code name} is the IMU of the embedded hub: no other name can be
-         * that IMU, whether robot code asks for {@code name} or not.
-         */
-        public Builder embeddedImu(String name) {
-            placements.add(() -> {
-                if (table.embeddedImuName != null) {
-                    throw new IllegalArgumentException("\"" + name + "\" and \"" + table.embeddedImuName + "\" are both the IMU of the embedded hub");
+                if (port < 0 || port >= MOTOR_PORTS) {
+                    throw new IllegalArgumentException("motor port " + port + " does not exist; there are " + MOTOR_PORTS);
                 }
-                table.embeddedImuName = name;
-            });
-            return this;
-        }
-
-        public Builder digital(String name, int hub, int channel) {
-            placements.add(() -> {
-                checkIndex("digital channel", channel, DIGITAL_CHANNELS);
-                claim(table.usedDigitalChannels, hub, channel, "digital channel", name);
-                table.digitals.put(name, new DigitalWiring(hub, channel, true));
-            });
-            return this;
-        }
-
-        public Builder analog(String name, int hub, int channel) {
-            placements.add(() -> {
-                checkIndex("analog channel", channel, ANALOG_CHANNELS);
-                claim(table.usedAnalogChannels, hub, channel, "analog channel", name);
-                table.analogs.put(name, new AnalogWiring(hub, channel, true));
+                if (!table.usedMotorPorts.add(new Slot(hub, port))) {
+                    throw new IllegalArgumentException(
+                            "\"" + name + "\" is wired to motor port " + port + " of hub " + hub + ", which another device already uses");
+                }
+                if (hubs.stream().noneMatch(declared -> declared.address() == hub)) {
+                    throw new IllegalArgumentException("a device is wired to hub " + hub + ", which the robot does not declare");
+                }
+                table.motors.put(name, new MotorWiring(hub, port, ticksPerRev, maxRpm, true));
             });
             return this;
         }
@@ -240,34 +217,7 @@ public final class WiringTable implements HardwareDirectory {
             }
             table = new WiringTable(hubs, defaultMotor);
             placements.forEach(Runnable::run);
-            for (HardwareDirectory.Wiring wiring : allPlaced()) {
-                if (hubs.stream().noneMatch(hub -> hub.address() == wiring.hubAddress())) {
-                    throw new IllegalArgumentException("a device is wired to hub " + wiring.hubAddress() + ", which the profile does not declare");
-                }
-            }
             return table;
-        }
-
-        private List<HardwareDirectory.Wiring> allPlaced() {
-            List<HardwareDirectory.Wiring> all = new ArrayList<>();
-            all.addAll(table.motors.values());
-            all.addAll(table.servos.values());
-            all.addAll(table.i2cDevices.values());
-            all.addAll(table.digitals.values());
-            all.addAll(table.analogs.values());
-            return all;
-        }
-
-        private static void checkIndex(String what, int index, int count) {
-            if (index < 0 || index >= count) {
-                throw new IllegalArgumentException(what + " " + index + " does not exist; there are " + count);
-            }
-        }
-
-        private void claim(Set<Slot> used, int hub, int index, String what, String name) {
-            if (!used.add(new Slot(hub, index))) {
-                throw new IllegalArgumentException("\"" + name + "\" is wired to " + what + " " + index + " of hub " + hub + ", which another device already uses");
-            }
         }
     }
 }

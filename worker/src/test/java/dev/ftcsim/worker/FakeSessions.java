@@ -37,8 +37,7 @@ final class FakeSessions implements SessionOpener {
     static final Catalogue CATALOGUE = new Catalogue(
             List.of(
                     new FieldChoice("none", "Bare floor", List.of(), List.of()),
-                    new FieldChoice("fake", "Fake field", List.of(new StartPose("origin", 0, 0, 0)), List.of(new HumanAction("feed", "Feed a piece")))),
-            List.of("robot.json"));
+                    new FieldChoice("fake", "Fake field", List.of(new StartPose("origin", 0, 0, 0)), List.of(new HumanAction("feed", "Feed a piece")))));
 
     /** Everything that happened to any session, in the order it happened. */
     final List<String> calls = Collections.synchronizedList(new ArrayList<>());
@@ -58,7 +57,7 @@ final class FakeSessions implements SessionOpener {
 
     @Override
     public RunningSession open(SessionRequest request) throws IOException {
-        calls.add("open " + request.profile() + " speed " + request.speed());
+        calls.add("open " + request.mapping().name() + " speed " + request.speed());
         if (failToOpen != null) {
             throw failToOpen;
         }
@@ -126,6 +125,11 @@ final class FakeSessions implements SessionOpener {
         public void startMatch() {
             calls.add("start match on " + number);
             refuseIfAsked();
+        }
+
+        @Override
+        public void reset() {
+            calls.add("reset on " + number);
         }
 
         private void refuseIfAsked() {

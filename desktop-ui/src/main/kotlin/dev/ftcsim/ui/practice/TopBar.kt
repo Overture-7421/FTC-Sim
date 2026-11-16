@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -19,7 +20,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconToggleButton
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -31,31 +32,38 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.stateDescription
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.ftcsim.contracts.robot.OpModeDescriptor
 import dev.ftcsim.contracts.robot.OpModeKind
+import dev.ftcsim.contracts.robot.RobotPhase
 import dev.ftcsim.contracts.session.MatchState
 import dev.ftcsim.ui.common.AppIcons
 import dev.ftcsim.ui.common.Tip
+import dev.ftcsim.ui.project.ProjectActivity
 
 /**
- * The top app bar of the Practice screen: the OpMode to run with Init, Start and Stop beside it, enabled the way the
- * Driver Station enables them, and Match, which opens the dialog that arms a timed match; then pause, speed and reset.
- * While a match is armed or under way its own controls take the place of those: Start match, once it is armed, and
- * Stop, which gives the match up or ends it. The free-practice buttons are not shown then, rather than left dead.
+ * The top app bar of the Simulator screen: the OpMode to run, and one button that follows the Driver Station: Init, then
+ * Start, then Stop, enabled the way the Driver Station enables them. Reset world stops the code and puts the robot and
+ * the field back at the start at once, with no question asked; the arrow beside it offers Restart code, which rebuilds
+ * the project and starts the session again with the latest code. Match, pause, speed and Stop are in the menu at the end. While a match is armed or under way its own controls take the place of the OpMode's: Start match, once it is
+ * armed, and Stop, which gives the match up or ends it.
  *
+ * @param startPosition where the robot starts, as the application's own control; nothing by default
  * @param focusViewport called after Init, Start or Stop, so that the keyboard goes to the robot again
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, focusViewport: () -> Unit) {
+fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestart, focusViewport: () -> Unit, startPosition: @Composable () -> Unit = {}) {
     val state by session.session.collectAsState()
     val run by session.run.collectAsState()
     val match by session.match.collectAsState()
     val plan by session.matchPlan.collectAsState()
-    val controls = Controls.of(state, run, match)
+    val activity by restart.activity.collectAsState()
+    val building = activity is ProjectActivity.Building
+    val controls = Controls.of(state, run, match, building = building)
     TopAppBar(
         expandedHeight = 56.dp,
         title = {
@@ -68,46 +76,113 @@ fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, focusViewport: () -
                         onExpandedChange = { ui.opModeMenuOpen = it },
                         onSelect = { session.selectOpMode(it) },
                     )
-                    FilledTonalButton(
-                        onClick = { session.init(); focusViewport() },
-                        enabled = controls.init,
-                        contentPadding = ButtonDefaults.ContentPadding,
-                    ) { Text("Init") }
-                    Button(
-                        onClick = { session.start(); focusViewport() },
-                        enabled = controls.start,
-                        contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-                    ) {
-                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                        Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                        Text("Start")
-                    }
-                    StopButton(controls.stop, "Stop the OpMode") { session.stop(); focusViewport() }
-                    MatchButton(controls) { ui.matchDialogOpen = true }
+                    MainButton(run.phase, controls, session, focusViewport)
                 }
             }
         },
         actions = {
-            Tip(if (run.paused) "Resume the simulation" else "Pause the simulation") {
-                IconToggleButton(
-                    checked = run.paused,
-                    onCheckedChange = { session.togglePause() },
-                    enabled = controls.pause,
+            startPosition()
+            Tip(if (controls.reset) "Stop the code and put everything back at the start" else "No session") {
+                FilledTonalButton(
+                    onClick = { session.reset(); focusViewport() },
+                    enabled = controls.reset,
+                    contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+                    modifier = Modifier.semantics { contentDescription = "Reset world: stop the code and put the robot and the field back at the start" },
                 ) {
-                    Icon(
-                        if (run.paused) Icons.Filled.PlayArrow else AppIcons.Pause,
-                        contentDescription = if (run.paused) "Resume the simulation" else "Pause the simulation",
-                    )
+                    Icon(AppIcons.Replay, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+                    Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+                    Text("Reset world")
                 }
             }
-            SpeedMenu(run.speed, controls.pause, ui.speedMenuOpen, { ui.speedMenuOpen = it }) { session.setSpeed(it) }
-            Tip("Reset the session") {
-                IconButton(onClick = { ui.resetDialogOpen = true }, enabled = controls.reset) {
-                    Icon(AppIcons.Replay, contentDescription = "Reset the session")
-                }
-            }
+            RestartMenu(restart, controls, building, ui, focusViewport)
+            MoreMenu(run, controls, ui, session, focusViewport)
         },
     )
+}
+
+/** The one button of a run: Init from idle, Start once initialised, Stop while it runs. */
+@Composable
+private fun MainButton(phase: RobotPhase, controls: Controls, session: PracticeSession, focusViewport: () -> Unit) {
+    when (phase) {
+        RobotPhase.IDLE -> FilledTonalButton(onClick = { session.init(); focusViewport() }, enabled = controls.init) { Text("Init") }
+        RobotPhase.INIT -> Button(
+            onClick = { session.start(); focusViewport() },
+            enabled = controls.start,
+            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+        ) {
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Start")
+        }
+        RobotPhase.RUNNING -> StopButton(controls.stop, "Stop the OpMode") { session.stop(); focusViewport() }
+    }
+}
+
+/** What else resetting can mean: the robot code again, rebuilt from the project's source. */
+@Composable
+private fun RestartMenu(restart: CodeRestart, controls: Controls, building: Boolean, ui: PracticeUi, focusViewport: () -> Unit) {
+    Box {
+        Tip(if (controls.restart) "Restart code" else if (building) "Building" else "No session") {
+            IconButton(onClick = { ui.restartMenuOpen = true }) { Icon(Icons.Filled.ArrowDropDown, contentDescription = "Restart options") }
+        }
+        DropdownMenu(expanded = ui.restartMenuOpen, onDismissRequest = { ui.restartMenuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text("Restart code")
+                        Text("Build the project again", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                },
+                leadingIcon = { Icon(AppIcons.Restart, contentDescription = null) },
+                enabled = controls.restart,
+                onClick = { ui.restartMenuOpen = false; restart.restart(); focusViewport() },
+            )
+        }
+    }
+}
+
+/** Match, pause, speed and Stop, which are used less than Init, Start and Restart code. */
+@Composable
+private fun MoreMenu(run: RunState, controls: Controls, ui: PracticeUi, session: PracticeSession, focusViewport: () -> Unit) {
+    Box {
+        Tip("More") {
+            IconButton(onClick = { ui.moreMenuOpen = true }) { Icon(Icons.Filled.MoreVert, contentDescription = "More") }
+        }
+        DropdownMenu(expanded = ui.moreMenuOpen, onDismissRequest = { ui.moreMenuOpen = false }) {
+            DropdownMenuItem(
+                text = {
+                    Column {
+                        Text("Match")
+                        controls.matchReason?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                    }
+                },
+                leadingIcon = { Icon(AppIcons.Flag, contentDescription = null) },
+                enabled = controls.arm,
+                onClick = { ui.moreMenuOpen = false; ui.matchDialogOpen = true },
+            )
+            DropdownMenuItem(
+                text = { Text(if (run.paused) "Resume" else "Pause") },
+                leadingIcon = { Icon(if (run.paused) Icons.Filled.PlayArrow else AppIcons.Pause, contentDescription = null) },
+                enabled = controls.pause,
+                onClick = { ui.moreMenuOpen = false; session.togglePause() },
+            )
+            DropdownMenuItem(
+                text = { Text("Stop") },
+                leadingIcon = { Icon(AppIcons.Stop, contentDescription = null) },
+                enabled = controls.stop,
+                onClick = { ui.moreMenuOpen = false; session.stop(); focusViewport() },
+            )
+            HorizontalDivider()
+            SPEEDS.forEach { option ->
+                DropdownMenuItem(
+                    text = { Text("Speed ${formatSpeed(option)}") },
+                    leadingIcon = { if (option == run.speed) Icon(Icons.Filled.Check, contentDescription = "Current speed") },
+                    enabled = controls.pause,
+                    onClick = { ui.moreMenuOpen = false; session.setSpeed(option) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -125,24 +200,6 @@ private fun StopButton(enabled: Boolean, tip: String, onClick: () -> Unit) {
             Icon(AppIcons.Stop, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
             Spacer(Modifier.size(ButtonDefaults.IconSpacing))
             Text("Stop")
-        }
-    }
-}
-
-/** Opens the match dialog; when a match cannot be armed the button is off and says why, in its tooltip and to screen readers. */
-@Composable
-private fun MatchButton(controls: Controls, onClick: () -> Unit) {
-    val reason = controls.matchReason
-    Tip(reason ?: "Play a timed match, with an autonomous and a driver-controlled period") {
-        OutlinedButton(
-            onClick = onClick,
-            enabled = controls.arm,
-            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
-            modifier = Modifier.semantics { if (reason != null) stateDescription = reason },
-        ) {
-            Icon(AppIcons.Flag, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text("Match")
         }
     }
 }
@@ -173,7 +230,7 @@ private fun MatchButtons(armed: Boolean, plan: MatchPlan?, controls: Controls, s
 }
 
 @Composable
-private fun OpModeSelector(
+internal fun OpModeSelector(
     opModes: List<OpModeDescriptor>,
     selected: String?,
     enabled: Boolean,
@@ -213,37 +270,6 @@ private fun OpModeSelector(
                     },
                     onClick = {
                         onSelect(mode.name())
-                        onExpandedChange(false)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun SpeedMenu(
-    speed: Double,
-    enabled: Boolean,
-    expanded: Boolean,
-    onExpandedChange: (Boolean) -> Unit,
-    onSelect: (Double) -> Unit,
-) {
-    Box {
-        TextButton(onClick = { onExpandedChange(true) }, enabled = enabled) {
-            Icon(AppIcons.Speed, contentDescription = "Simulation speed", modifier = Modifier.size(ButtonDefaults.IconSize))
-            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-            Text(formatSpeed(speed))
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { onExpandedChange(false) }) {
-            SPEEDS.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(formatSpeed(option)) },
-                    leadingIcon = {
-                        if (option == speed) Icon(Icons.Filled.Check, contentDescription = "Current speed")
-                    },
-                    onClick = {
-                        onSelect(option)
                         onExpandedChange(false)
                     },
                 )

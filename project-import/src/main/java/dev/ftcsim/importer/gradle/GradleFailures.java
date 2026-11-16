@@ -50,64 +50,58 @@ final class GradleFailures {
         String text = String.join("\n", output);
         Matcher marker = MARKER.matcher(text);
         if (marker.find()) {
-            return fail(Failure.NO_APPLICATION_MODULE, "The project cannot be imported: " + marker.group(2) + ".", around(output, MARKER), logFile);
+            return fail(Failure.NO_APPLICATION_MODULE, "Cannot build this project: " + marker.group(2) + ".", around(output, MARKER), logFile);
         }
         if (LICENCES.matcher(text).find()) {
             return licences(output, context, logFile);
         }
         if (NO_SDK.matcher(text).find()) {
             return fail(Failure.NO_ANDROID_SDK,
-                    "Gradle could not find an Android SDK at " + context.androidSdk() + ". Give the folder that holds "
-                            + "'platforms' and 'build-tools' (Android Studio shows it under Settings > Languages & Frameworks > Android SDK).",
+                    "No Android SDK at " + context.androidSdk() + ". Choose the folder with 'platforms' and 'build-tools'.",
                     around(output, NO_SDK), logFile);
         }
         if (INCOMPLETE_SDK.matcher(text).find()) {
             return fail(Failure.ANDROID_SDK_INCOMPLETE,
-                    "The Android SDK at " + context.androidSdk() + " lacks a component this project needs (" + first(output, INCOMPLETE_SDK)
-                            + "). Install it with Android Studio's SDK Manager or sdkmanager, then import again.",
+                    "The Android SDK at " + context.androidSdk() + " lacks " + first(output, INCOMPLETE_SDK)
+                            + ". Install it in Android Studio's SDK Manager.",
                     around(output, INCOMPLETE_SDK), logFile);
         }
         if (WRONG_JDK.matcher(text).find()) {
             return fail(Failure.WRONG_JDK,
-                    "The JDK at " + context.jdkHome() + " cannot run this project's build (" + first(output, WRONG_JDK)
-                            + "). Projects for recent FTC SDKs build with JDK 17 or 21; it must be a JDK, not a JRE.",
+                    "The JDK at " + context.jdkHome() + " cannot run this build. Use a JDK, version 17 or 21.",
                     around(output, WRONG_JDK), logFile);
         }
         if (MEMORY.matcher(text).find()) {
             return fail(Failure.OUT_OF_MEMORY,
-                    "The project's build ran out of memory. Close other programs, or raise org.gradle.jvmargs in a "
-                            + "gradle.properties of your user Gradle folder, and import again.",
+                    "The build ran out of memory. Close other programs and build again.",
                     around(output, MEMORY), logFile);
         }
         if (OFFLINE.matcher(text).find()) {
             return fail(Failure.OFFLINE_CACHE_COLD,
                     context.offline()
-                            ? "The import is offline, but Gradle's cache lacks something the project needs (" + first(output, OFFLINE)
-                                    + "). Import once with network access; later imports then work offline."
-                            : "Gradle reports a missing cache entry (" + first(output, OFFLINE) + ").",
+                            ? "Offline, and Gradle's cache lacks " + first(output, OFFLINE) + ". Build once with network access."
+                            : "Gradle's cache lacks " + first(output, OFFLINE) + ".",
                     around(output, OFFLINE), logFile);
         }
         if (NETWORK.matcher(text).find()) {
             return fail(Failure.NETWORK_UNAVAILABLE,
-                    "Gradle could not download something the project needs (" + first(output, NETWORK) + "). Check the network "
-                            + "connection and proxy settings, or import offline if everything is already cached.",
+                    "Gradle could not download " + first(output, NETWORK) + ". Check the network and proxy.",
                     around(output, NETWORK), logFile);
         }
         if (DEPENDENCY.matcher(text).find()) {
             String missing = first(output, MISSING_DEPENDENCY);
             return fail(Failure.DEPENDENCY_RESOLUTION,
-                    "A dependency of the project cannot be resolved (" + (missing.isEmpty() ? first(output, DEPENDENCY) : missing)
-                            + "). Check the version and that its repository is declared in the project's build files.",
+                    (missing.isEmpty() ? first(output, DEPENDENCY) : missing) + ". Check its version and repository.",
                     around(output, DEPENDENCY), logFile);
         }
         if (COMPILATION.matcher(text).find()) {
             return fail(Failure.COMPILATION_FAILED,
-                    "The team's code does not compile" + failedTask(output).map(task -> " (" + task + ")").orElse("")
-                            + ". Fix the errors in your editor, then import again.",
+                    "Your code does not compile" + failedTask(output).map(task -> " (" + task + ")").orElse("")
+                            + ". Fix the errors and build again.",
                     errors(output), logFile);
         }
         return fail(Failure.BUILD_FAILED,
-                "The project's Gradle build failed" + failedTask(output).map(task -> " in " + task).orElse("")
+                "The build failed" + failedTask(output).map(task -> " in " + task).orElse("")
                         + wentWrong(output).map(reason -> ": " + reason).orElse("") + ".",
                 wentWrongBlock(output), logFile);
     }
@@ -122,9 +116,9 @@ final class GradleFailures {
         }
         String missing = packages.isEmpty() ? "some components" : String.join(", ", packages);
         return fail(Failure.LICENSES_NOT_ACCEPTED,
-                "The Android SDK licences have not been accepted, so Gradle cannot install " + missing + ". Accept them once with '"
+                "Accept the Android SDK licences for " + missing + ": '"
                         + context.androidSdk().resolve("cmdline-tools").resolve("latest").resolve("bin").resolve("sdkmanager.bat")
-                        + " --licenses' or in Android Studio's SDK Manager, then import again.",
+                        + " --licenses' or Android Studio's SDK Manager.",
                 around(output, LICENCES), logFile);
     }
 

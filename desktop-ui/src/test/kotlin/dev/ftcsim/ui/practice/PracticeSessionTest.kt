@@ -11,6 +11,7 @@ import dev.ftcsim.contracts.snapshot.BodyKinds
 import dev.ftcsim.contracts.snapshot.BodyState
 import dev.ftcsim.contracts.snapshot.WorldSnapshot
 import dev.ftcsim.ui.render.OrbitCamera
+import dev.ftcsim.ui.prepare.OutputLog
 import dev.ftcsim.ui.scene.ViewportFeed
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -150,11 +151,37 @@ class PracticeSessionTest {
         assertNull(session.catalogue.value)
 
         link.listener!!.catalogue(Fixtures.catalogue())
-        assertEquals(listOf("hornet-2026", "practice-bot"), session.catalogue.value!!.profiles())
+        assertEquals(listOf("goBILDA-5203-435", "goBILDA-5203-312"), session.catalogue.value!!.motors().map { it.id() })
 
         session.detach()
         session.attach(StubLink())
         assertNotNull(session.catalogue.value, "until the next link says otherwise")
+    }
+
+    @Test
+    fun theLogOfTheRobotProgramFillsTheConsoleInOrderAndAnotherSessionStartsItAgain() {
+        open()
+
+        link.listener!!.log(listOf("I/System.out: first", "W/Robot: second"))
+        link.listener!!.log(listOf("E/Robot: third"))
+
+        assertEquals(listOf("I/System.out: first", "W/Robot: second", "E/Robot: third"), session.console.view().lines)
+
+        link.listener!!.opened(Fixtures.info())
+
+        assertTrue(session.console.view().lines.isEmpty(), "a new session has a new log")
+    }
+
+    @Test
+    fun theConsoleKeepsOnlyTheNewestLinesWhateverIsLogged() {
+        open()
+
+        link.listener!!.log((1..OutputLog.DEFAULT_CAPACITY + 50).map { "D/Loop: $it" })
+
+        val view = session.console.view()
+        assertEquals(OutputLog.DEFAULT_CAPACITY, view.lines.size)
+        assertEquals("D/Loop: ${OutputLog.DEFAULT_CAPACITY + 50}", view.lines.last())
+        assertEquals(50L, view.first, "the lines that were dropped are counted")
     }
 
     @Test
@@ -364,13 +391,13 @@ class PracticeSessionTest {
     }
 
     @Test
-    fun resettingShowsTheSessionOpeningAgainAndKeepsTheOpModeWhenTheLinkAnnouncesTheNewSession() {
+    fun resettingKeepsTheSessionOpenAndTheOpModeWhenTheLinkAnnouncesTheWorldAgain() {
         open()
         session.selectOpMode("Auto B")
 
         session.reset()
 
-        assertEquals(Connection.OPENING, session.session.value.connection)
+        assertEquals(Connection.OPEN, session.session.value.connection, "a reset is quick, so the window does not go back to opening")
         assertEquals("reset", link.calls.last())
         link.listener!!.opened(Fixtures.info())
         assertEquals(Connection.OPEN, session.session.value.connection)

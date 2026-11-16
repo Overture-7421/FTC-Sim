@@ -248,6 +248,58 @@ class ImporterPreparerTest {
         assertEquals(2, PreparedProgram.open(second.folder()).opModes().size());
     }
 
+    private Prepared prepareVersion(int version) throws Exception {
+        FakeBuild.write(project.resolve("TeamCode").resolve("src").resolve("main").resolve("java").resolve("Drive.java"), "class Drive { int v" + version + "; }");
+        return prepare(true).finished;
+    }
+
+    @Test
+    void onlyTheTwoNewestProgramsOfAProjectAreKeptAndAnUnlistedProgramIsNeverTouched() throws Exception {
+        Path stranger = Files.createDirectories(folders.programs().resolve("RobotCode-000000000000"));
+        Prepared first = prepareVersion(1);
+        Prepared second = prepareVersion(2);
+        assertTrue(Files.isDirectory(first.folder()) && Files.isDirectory(second.folder()));
+
+        Prepared third = prepareVersion(3);
+
+        assertFalse(Files.exists(first.folder()), "the oldest is removed");
+        assertFalse(Files.exists(folders.buildLog(first.folder())), "and so is its build log");
+        assertTrue(Files.isDirectory(second.folder()) && Files.isDirectory(third.folder()));
+        assertTrue(Files.isDirectory(stranger), "a program that was not made by this list stays");
+        try (var leftovers = Files.list(folders.programs())) {
+            assertTrue(leftovers.noneMatch(path -> path.getFileName().toString().startsWith(".discarding-")), "nothing is left half removed");
+        }
+    }
+
+    @Test
+    void reusingAnOlderProgramMakesItTheNewestSoItIsNotTheOneThatGoes() throws Exception {
+        Prepared first = prepareVersion(1);
+        Prepared second = prepareVersion(2);
+        FakeBuild.write(project.resolve("TeamCode").resolve("src").resolve("main").resolve("java").resolve("Drive.java"), "class Drive { int v1; }");
+        assertEquals(first.folder(), prepare(true).finished.folder(), "the same source gives the first program again");
+
+        prepareVersion(3);
+
+        assertTrue(Files.isDirectory(first.folder()), "it was the most recently used");
+        assertFalse(Files.exists(second.folder()));
+    }
+
+    @Test
+    void aProgramThatASessionStillHasOpenStaysUntilTheNextTimeAndIsThenRemoved() throws Exception {
+        Prepared first = prepareVersion(1);
+        prepareVersion(2);
+        Path jar = first.folder().resolve("program").resolve("TeamCode.jar");
+
+        try (var open = Files.newInputStream(jar)) {
+            prepareVersion(3);
+            assertTrue(Files.isDirectory(first.folder()), "Windows would not let go of it, so it was left");
+            assertTrue(open.read() >= -1);
+        }
+        prepareVersion(4);
+
+        assertFalse(Files.exists(first.folder()), "removed once nothing holds it");
+    }
+
     @Test
     void aDamagedProgramOfTheSameSourceIsReplacedOnlyOnceTheNewOneIsComplete() throws Exception {
         Prepared first = prepare(true).finished;
@@ -317,7 +369,7 @@ class ImporterPreparerTest {
         Recorder events = prepare(true);
 
         assertEquals("NO_JDK", events.failure.code());
-        assertTrue(events.failure.message().contains("Android Studio includes a suitable JDK"), events.failure.message());
+        assertTrue(events.failure.message().contains("Install Android Studio"), events.failure.message());
         assertTrue(events.failure.message().contains("Temurin 21"), events.failure.message());
         assertTrue(
                 events.failure.details().stream().anyMatch(line -> line.contains("jdk-25") && line.contains("Java 25")),
@@ -332,7 +384,7 @@ class ImporterPreparerTest {
         events.await();
 
         assertEquals("NOT_A_GRADLE_PROJECT", events.failure.code());
-        assertTrue(events.failure.message().contains("neither a team project"), events.failure.message());
+        assertTrue(events.failure.message().contains("No settings.gradle here"), events.failure.message());
         assertEquals(0, builds.get());
     }
 

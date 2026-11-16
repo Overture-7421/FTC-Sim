@@ -1,11 +1,11 @@
 package dev.ftcsim.ui.settings
 
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.ui.input.GamepadConfig
 import dev.ftcsim.ui.input.KeyboardMap
 import dev.ftcsim.ui.input.PadAssignment
 import dev.ftcsim.ui.input.PadControl
+import dev.ftcsim.ui.setup.SetupInput
 import java.awt.event.KeyEvent
 import java.nio.file.Files
 import java.nio.file.Path
@@ -28,8 +28,7 @@ class SettingsStoreTest {
 
     private fun store(path: Path? = file()) = SettingsStore(path, direct)
 
-    private fun request(seed: Long = 1L, program: String = "C:\\Users\\Tina\\Robot Code\\prepared") =
-        SessionRequest("hornet-2026", program, "decode", Alliance.BLUE, seed, 1.25, -0.5, Math.PI / 2, 1.0)
+    private fun project(number: Int, run: SetupInput? = null) = RecentProject("C:\\Teams\\Project $number", "Project $number", run)
 
     @Test
     fun aMissingFileGivesTheDefaultsAndNoProblem() {
@@ -50,8 +49,11 @@ class SettingsStoreTest {
         val saved = UserSettings(
             display = DisplaySettings(renderScalePercent = 75, frameCapHz = 90, performanceOverlay = true),
             gamepads = gamepads,
-            recents = listOf(request(1L), request(2L, program = "")),
-            trustedProjects = listOf(UserSettings.projectKey(Path.of("C:\\Teams\\Tina\\Project")), "c:\\other\\project"),
+            projects = listOf(
+                project(1, SetupInput("decode", Alliance.BLUE, false, "9", "BLUE goal side", "1.25", "-0.5", "90", true)),
+                project(2, SetupInput("none", Alliance.RED, true, "", null, "0", "0", "0", false)),
+                project(3).copy(robotSkipped = true),
+            ),
         )
 
         store().update { saved }
@@ -126,20 +128,21 @@ class SettingsStoreTest {
             gamepad.2.triggerDeadzone=NaN
             keyboard.A=-5
             keyboard.B=${KeyEvent.VK_P}
-            recent.0.field=decode
-            recent.0.profile=hornet-2026
-            recent.0.alliance=GREEN
-            recent.0.seed=1
-            recent.0.startX=0
-            recent.0.startY=0
-            recent.0.startHeading=0
-            recent.1.field=biobuzz
-            recent.1.profile=hornet-2026
-            recent.1.alliance=red
-            recent.1.seed=42
-            recent.1.startX=0.5
-            recent.1.startY=-0.5
-            recent.1.startHeading=1.5
+            project.0.folder=C:\\one
+            project.0.name=one
+            project.0.run.field=decode
+            project.0.run.alliance=GREEN
+            project.1.folder=C:\\two
+            project.1.name=two
+            project.1.run.field=biobuzz
+            project.1.run.alliance=red
+            project.1.run.randomSeed=false
+            project.1.run.seed=42
+            project.1.run.startX=0.5
+            project.1.run.startY=-0.5
+            project.1.run.heading=90
+            project.1.run.touched=true
+            project.2.name=no folder
             """.trimIndent(),
         )
 
@@ -156,62 +159,97 @@ class SettingsStoreTest {
         assertEquals(GamepadConfig.Pad.DEFAULT_TRIGGER_DEADZONE, settings.gamepads.pad(2).triggerDeadzone())
         assertEquals(KeyboardMap.DEFAULT.keyOf(PadControl.A), settings.gamepads.keyboard().keyOf(PadControl.A))
         assertEquals(KeyEvent.VK_P, settings.gamepads.keyboard().keyOf(PadControl.B))
-        assertEquals(listOf("biobuzz"), settings.recents.map { it.field() }, "the run with an unknown alliance is dropped")
-        assertEquals(Alliance.RED, settings.recents[0].alliance())
+        assertEquals(listOf("one", "two"), settings.projects.map { it.name }, "a project with no folder is dropped")
+        assertNull(settings.projects[0].run, "a run with an unknown alliance is not remembered, the project still is")
+        assertEquals(Alliance.RED, settings.projects[1].run?.alliance)
+        assertEquals("42", settings.projects[1].run?.seedText)
+        assertFalse(settings.projects[1].run!!.randomSeed)
     }
 
     @Test
-    fun recentRunsAreNewestFirstWithoutRepeatsAndAtMostTen() {
+    fun recentProjectsAreNewestFirstWithoutRepeatsAndAtMostTen() {
         val store = store(null)
 
-        for (seed in 1L..12L) {
-            store.update { it.withRecent(request(seed)) }
+        for (number in 1..12) {
+            store.update { it.withProject(project(number)) }
         }
-        assertEquals((12L downTo 3L).toList(), store.state.value.recents.map { it.seed() })
+        assertEquals((12 downTo 3).map { "Project $it" }, store.state.value.projects.map { it.name })
 
-        store.update { it.withRecent(request(5L)) }
-        assertEquals(5L, store.state.value.recents.first().seed(), "opening an old run again brings it to the top")
-        assertEquals(10, store.state.value.recents.size)
-        assertEquals(1, store.state.value.recents.count { it.seed() == 5L })
+        store.update { it.withProject(project(5)) }
+        assertEquals("Project 5", store.state.value.projects.first().name, "opening an old project again brings it to the top")
+        assertEquals(10, store.state.value.projects.size)
+        assertEquals(1, store.state.value.projects.count { it.name == "Project 5" })
 
-        store.update { it.withoutRecent(request(5L)) }
-        assertEquals(9, store.state.value.recents.size)
+        store.update { it.withoutProject(project(5)) }
+        assertEquals(9, store.state.value.projects.size)
     }
 
     @Test
-    fun aRunIsTheSameRunAtAnySpeed() {
-        val settings = UserSettings().withRecent(request(1L).copy(speed = 4.0)).withRecent(request(1L))
+    fun aProjectIsTheSameProjectInAnyLetterCaseAndKeepsHowItWasLastRun() {
+        val run = SetupInput(field = "decode", alliance = Alliance.BLUE, randomSeed = false, seedText = "7", startPose = "BLUE goal side")
+        val settings = UserSettings()
+            .withProject(RecentProject("C:\\Teams\\Tina\\Code", "Code", run))
+            .withProject(RecentProject("c:\\TEAMS\\tina\\code", "Code"))
 
-        assertEquals(1, settings.recents.size)
-        assertEquals(1.0, settings.recents[0].speed())
+        assertEquals(1, settings.projects.size)
+        assertNull(settings.projects[0].run, "the project that was opened last replaces what was remembered")
+        assertEquals(run, UserSettings().withProject(RecentProject("C:\\Teams\\Tina\\Code", "Code", run)).project(Path.of("c:\\teams\\TINA\\code"))?.run)
     }
 
     @Test
-    fun agreeingToAProjectIsRememberedByFolderAcrossRestartsWhateverTheLetterCase() {
-        val folder = Path.of("C:\\Teams\\Tina\\RobotProject")
+    fun howAProjectWasLastRunIsRememberedWithItAndBringsItToTheTop() {
+        val first = RecentProject("C:\\a", "a")
+        val second = RecentProject("C:\\b", "b")
+        val run = SetupInput(field = "none", alliance = Alliance.RED)
+        val settings = UserSettings().withProject(first).withProject(second).withRun(Path.of("C:\\a"), run)
+
+        assertEquals(listOf("a", "b"), settings.projects.map { it.name })
+        assertEquals(run, settings.projects[0].run)
+        assertEquals(settings, settings.withRun(Path.of("C:\\unknown"), run), "a project that was never opened is not added by a run")
+    }
+
+    @Test
+    fun theOpModeThatFindsAProjectsHardwareIsRememberedWithTheProjectAndSurvivesBeingSavedAndReadBack() {
+        val settings = UserSettings().withProject(RecentProject("C:\\a", "a")).withProject(RecentProject("C:\\b", "b"))
+            .withScanOpMode(Path.of("c:\\A"), "Teleop A")
         val store = store()
-        assertFalse(store.state.value.trusts(folder))
+        store.update { settings }
 
-        store.update { it.withTrusted(folder) }
-        store.update { it.withTrusted(Path.of("C:\\TEAMS\\tina\\robotproject")) }
-        val reread = store()
-
-        assertTrue(reread.state.value.trusts(folder))
-        assertTrue(reread.state.value.trusts(Path.of("c:\\teams\\TINA\\robotproject\\")), "Windows paths differ in case and a trailing separator only")
-        assertEquals(1, reread.state.value.trustedProjects.size, "the same folder is remembered once")
-        assertFalse(reread.state.value.trusts(Path.of("C:\\Teams\\Tina\\OtherProject")), "the agreement is for this folder only")
+        assertEquals(listOf(null, "Teleop A"), settings.projects.map { it.scanOpMode })
+        assertEquals("Teleop A", store().state.value.project(Path.of("C:\\a"))?.scanOpMode)
+        assertNull(store().state.value.project(Path.of("C:\\b"))?.scanOpMode)
+        assertEquals(settings, settings.withScanOpMode(Path.of("C:\\unknown"), "x"), "a project that was never opened gets nothing")
     }
 
     @Test
-    fun onlyTheMostRecentHundredAgreementsAreKept() {
-        var settings = UserSettings()
+    fun theLatestChosenOpModeIsRememberedWithTheProjectSurvivesBeingSavedAndReadBackAndSurvivesOpeningAgain() {
+        val settings = UserSettings().withProject(RecentProject("C:\\a", "a")).withProject(RecentProject("C:\\b", "b"))
+            .withOpMode(Path.of("c:\\A"), "Auto B").withScanOpMode(Path.of("c:\\A"), "Teleop A")
+        val store = store()
+        store.update { settings }
 
-        for (number in 1..120) settings = settings.withTrusted(Path.of("C:\\projects\\p$number"))
-
-        assertEquals(UserSettings.MAX_TRUSTED, settings.trustedProjects.size)
-        assertFalse(settings.trusts(Path.of("C:\\projects\\p1")))
-        assertTrue(settings.trusts(Path.of("C:\\projects\\p120")))
+        assertEquals("Auto B", store().state.value.project(Path.of("C:\\a"))?.opMode)
+        assertNull(store().state.value.project(Path.of("C:\\b"))?.opMode)
+        assertEquals(settings, settings.withOpMode(Path.of("C:\\unknown"), "x"), "a project that was never opened gets nothing")
+        val reopened = settings.withProject(RecentProject("C:\\a", "a", null, "Teleop A", false, "Auto B"))
+        assertEquals("Auto B", reopened.project(Path.of("C:\\a"))?.opMode)
     }
+
+    @Test
+    fun theSettingsOfAnEarlierVersionThatRememberedWholeRunsStartWithNoProjects() {
+        Files.createDirectories(file().parent)
+        Files.writeString(
+            file(),
+            "format=1\nrecent.0.field=decode\nrecent.0.profile=hornet-2026\nrecent.0.program=C\\:\\\\p\nrecent.0.alliance=RED\n" +
+                "recent.0.seed=1\nrecent.0.startX=0\nrecent.0.startY=0\nrecent.0.startHeading=0\ntrusted.0=c\\:\\\\teams\\\\code\n",
+        )
+
+        val settings = store().state.value
+
+        assertEquals(emptyList<RecentProject>(), settings.projects)
+    }
+
+
 
     @Test
     fun listenersAreToldNowAndAfterEveryChangeButNotForNothing() {

@@ -6,7 +6,6 @@ import java.util.Comparator;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.function.LongSupplier;
 import java.util.stream.Stream;
@@ -26,16 +25,11 @@ import java.util.stream.Stream;
  */
 public final class LynxBus implements HubWire {
 
-    /** A command that threads the simulation does not schedule ran, and how many times. */
-    public record UnscheduledUse(String command, long count) {}
-
     private final ReentrantLock lock = new ReentrantLock(true);
     private final LongSupplier clockNanos;
     private final BusLatency latency;
     private final List<LynxHub> hubs = new ArrayList<>();
     private final Map<FrameFault, RejectedFrame> rejected = new EnumMap<>(FrameFault.class);
-    private final Map<String, Long> unscheduledMutations = new TreeMap<>();
-    private long unscheduledQueries;
     private long holdOffNanos;
 
     public LynxBus(LongSupplier clockNanos) {
@@ -96,32 +90,6 @@ public final class LynxBus implements HubWire {
         }
     }
 
-    /**
-     * The commands that threads the simulation does not schedule have run so far and that change something, which is
-     * every command but a query, by name in alphabetical order. A run in which there are any is no longer
-     * reproducible: when such a thread acts decides the result.
-     */
-    public List<UnscheduledUse> unscheduledMutations() {
-        lock.lock();
-        try {
-            return unscheduledMutations.entrySet().stream()
-                    .map(use -> new UnscheduledUse(use.getKey(), use.getValue()))
-                    .toList();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /** How many queries threads the simulation does not schedule have made; they change nothing. */
-    public long unscheduledQueries() {
-        lock.lock();
-        try {
-            return unscheduledQueries;
-        } finally {
-            lock.unlock();
-        }
-    }
-
     @Override
     public Exchange transmit(byte[] datagram) {
         lock.lock();
@@ -137,8 +105,7 @@ public final class LynxBus implements HubWire {
     /**
      * Answers from any thread at any time, as the hubs stand at the time the scheduled side last reached: the hubs are
      * not caught up to the clock, the clock is not read, the hold-off is left alone and the exchange takes no time.
-     * Queries are counted and change nothing; any other command is executed and counted by name, see
-     * {@link #unscheduledMutations}.
+     * Queries change nothing; any other command is executed.
      */
     @Override
     public Exchange transmitUnscheduled(byte[] datagram) {
@@ -184,34 +151,18 @@ public final class LynxBus implements HubWire {
             noteRejected(malformed.fault(), reached);
             return new Exchange(List.of(), 0);
         }
-        List<LynxHub.Unscheduled> answers;
+        List<Datagram> answers;
         if (request.destination() == Datagram.BROADCAST) {
-            answers = answeringHubs().map(hub -> hub.handleUnscheduled(request)).toList();
+            answers = answeringHubs().flatMap(hub -> hub.handleUnscheduled(request).stream()).toList();
         } else {
             LynxHub hub = reachableHub(request.destination());
             if (hub == null) {
                 noteRejected(FrameFault.NO_SUCH_MODULE, reached);
                 return new Exchange(List.of(), 0);
             }
-            answers = List.of(hub.handleUnscheduled(request));
+            answers = hub.handleUnscheduled(request);
         }
-        countUnscheduled(answers);
-        return new Exchange(encode(answers.stream().flatMap(answer -> answer.replies().stream()).toList()), 0);
-    }
-
-    /** A datagram counts once, whatever the number of hubs that answer it. */
-    private void countUnscheduled(List<LynxHub.Unscheduled> answers) {
-        for (LynxHub.Unscheduled answer : answers) {
-            if (answer.command() == null) {
-                continue;
-            }
-            if (answer.effect() == CommandTable.Effect.QUERY) {
-                unscheduledQueries++;
-            } else {
-                unscheduledMutations.merge(answer.command().name(), 1L, Long::sum);
-            }
-            return;
-        }
+        return new Exchange(encode(answers), 0);
     }
 
     /**

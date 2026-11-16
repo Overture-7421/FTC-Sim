@@ -2,8 +2,10 @@ package dev.ftcsim.app;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.PrintStream;
@@ -11,6 +13,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -34,9 +37,13 @@ class SelfTestTest {
     }
 
     private Outcome run(SelfTest.Jvm jvm, Source<AppClasspath> classpath) {
+        return run(jvm, classpath, Optional.empty());
+    }
+
+    private Outcome run(SelfTest.Jvm jvm, Source<AppClasspath> classpath, Optional<Path> installedRuntime) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Machine machine = new Machine(name -> name.equals("LOCALAPPDATA") ? temp.resolve("Local").toString() : null);
-        int code = new SelfTest(new PrintStream(bytes, true, StandardCharsets.UTF_8), jvm, machine, () -> new RuntimePin(25, OPTIONS), classpath).run();
+        int code = new SelfTest(new PrintStream(bytes, true, StandardCharsets.UTF_8), jvm, machine, () -> new RuntimePin(25, OPTIONS), classpath, installedRuntime).run();
         return new Outcome(code, bytes.toString(StandardCharsets.UTF_8));
     }
 
@@ -50,8 +57,37 @@ class SelfTestTest {
     void theBundledPinIsTheJavaTheBuildRunsOnAndCarriesTheOptionsTheWindowNeeds() throws IOException {
         RuntimePin pin = RuntimePin.bundled();
 
-        assertEquals(Runtime.version().feature(), pin.major(), "the launcher's manifest pins the JDK the project's toolchain builds and tests on");
+        assertEquals(Runtime.version().feature(), pin.major(), "the runtime is made from the JDK the project's toolchain builds and tests on");
         assertTrue(pin.jvmArguments().containsAll(OPTIONS), pin.jvmArguments().toString());
+    }
+
+    @Test
+    void aRuntimeFolderThatIsMissingOrIsNotTheJavaThatRunsItIsReportedAndOneThatIsTheJavaIsAccepted() throws IOException {
+        Path runtime = Files.createDirectories(temp.resolve("FTC-Sim").resolve("runtime"));
+        SelfTest.Jvm running = new SelfTest.Jvm(25, "25.0.1", "Test Vendor", "amd64", "Windows 11", runtime, OPTIONS);
+
+        Outcome missing = run(running, noClasspath(), Optional.of(runtime));
+        Files.createDirectories(runtime.resolve("bin"));
+        Files.writeString(runtime.resolve("bin").resolve("java.exe"), "stand-in");
+        Outcome same = run(running, noClasspath(), Optional.of(runtime));
+        Outcome other = run(jvm(25, "amd64", "Windows 11", OPTIONS), noClasspath(), Optional.of(runtime));
+        Outcome development = run(running, noClasspath());
+
+        assertTrue(missing.output().contains("FAIL  runtime folder: " + runtime + " has no bin\\java.exe"), missing.output());
+        assertTrue(same.output().contains("ok    runtime folder: " + runtime + " is the Java that runs FTC-Sim"), same.output());
+        assertTrue(other.output().contains("FAIL  runtime folder: FTC-Sim runs on C:\\jdk and not on the runtime folder of its installation"), other.output());
+        assertTrue(development.output().contains("skip  the Java is not the runtime folder of an installation"), development.output());
+    }
+
+    @Test
+    void theRuntimeDescriptionIsReadFromItsTwoResourcesAndAnEmptyOneIsRefused() throws IOException {
+        RuntimePin pin = RuntimePin.read(
+                new ByteArrayInputStream("major=25\n".getBytes(StandardCharsets.UTF_8)),
+                new ByteArrayInputStream("# a comment\r\n--one\r\n\r\n  --two=2  \r\n".getBytes(StandardCharsets.UTF_8)));
+
+        assertEquals(new RuntimePin(25, List.of("--one", "--two=2")), pin);
+        assertThrows(IOException.class, () -> RuntimePin.read(new ByteArrayInputStream("major=x".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("--one".getBytes(StandardCharsets.UTF_8))));
+        assertThrows(IOException.class, () -> RuntimePin.read(new ByteArrayInputStream("major=25".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("# nothing".getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test

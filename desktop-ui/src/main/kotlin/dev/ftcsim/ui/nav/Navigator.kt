@@ -7,11 +7,10 @@ import kotlinx.coroutines.flow.update
 
 /** The places the navigation rail leads to, in the order it lists them. */
 enum class Destination(val label: String) {
-    HOME("Home"),
-    PREPARE("Prepare"),
-    SETUP("Setup"),
+    PROJECTS("Projects"),
+    ROBOT("Robot"),
     CONTROLS("Controls"),
-    PRACTICE("Practice"),
+    PRACTICE("Simulator"),
     SETTINGS("Settings"),
 }
 
@@ -25,7 +24,7 @@ data class NavState(val current: Destination, val back: List<Destination> = empt
  * the front instead of repeating it, so Back always leads to somewhere different from where the person is, and the
  * history can never hold more places than there are destinations. Holds no screen state: every screen keeps its own.
  */
-class Navigator(start: Destination = Destination.HOME) {
+class Navigator(start: Destination = Destination.PROJECTS) {
     private val mutable = MutableStateFlow(NavState(start))
 
     val state: StateFlow<NavState> = mutable.asStateFlow()

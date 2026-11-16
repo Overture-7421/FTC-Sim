@@ -3,8 +3,7 @@ package dev.ftcsim.acceptance;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -20,7 +19,7 @@ class SessionSpeedTest {
 
     @Test
     void aProgramThatOnlySpinsRunsFasterThanTheClock() throws Exception {
-        RobotProfile hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec hornet = HornetMapping.spec();
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             SimulationSession session = handle.session;
             session.init("Busy Wait");

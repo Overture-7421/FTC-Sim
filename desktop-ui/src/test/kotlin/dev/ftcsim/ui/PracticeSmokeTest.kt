@@ -15,6 +15,8 @@ import dev.ftcsim.ui.practice.Connection
 import dev.ftcsim.ui.practice.LinkState
 import dev.ftcsim.ui.practice.MatchPlan
 import dev.ftcsim.ui.prepare.PrepareState
+import dev.ftcsim.ui.project.ProjectActivity
+import dev.ftcsim.ui.link.FakeSimulatorLink
 import java.awt.event.KeyEvent.VK_W
 import java.io.IOException
 import java.nio.file.Files
@@ -56,19 +58,13 @@ class PracticeSmokeTest {
             count(app) { r, g, b -> g > r + 40 && g > b + 40 } > MIN_PIXELS
 
     @Test
-    fun theApplicationOpensOnHomeAndTheSetupScreenStartsARunThatTheViewportDraws() {
+    fun theApplicationOpensOnProjectsAndAnOpenedSessionIsDrawnByTheViewport() {
         HeadlessApp().use { app ->
-            assertEquals(Destination.HOME, app.ui.navigator.state.value.current)
-            app.savePng(app.settle(), "home.png")
+            assertEquals(Destination.PROJECTS, app.ui.navigator.state.value.current)
+            app.savePng(app.settle(), "projects.png")
 
-            app.ui.navigator.go(Destination.SETUP)
-            app.savePng(app.settle(), "setup.png")
-            assertTrue(
-                app.pump { app.rules()?.let { app.ui.setup.ready(it) } == true },
-                "the link tells what it offers, and the form is then checked off the UI thread and found right",
-            )
-            val request = app.ui.setup.request(app.rules())!!
-            app.services.startRun(request)
+            val request = FakeSimulatorLink.defaultRequest()
+            app.services.openSession(request)
             app.ui.navigator.go(Destination.PRACTICE)
             app.awaitViewport()
 
@@ -86,57 +82,58 @@ class PracticeSmokeTest {
                 for (x in RAIL until app.width - SIDE_PANEL step 7) distinct += picture.getColor(x, y)
             }
             assertTrue(distinct.size > 50, "a lit scene has many shades, found ${distinct.size}")
-            assertEquals(request, app.settings.state.value.recents.first(), "the run is remembered")
+            assertEquals(request, app.services.session.requested)
         }
     }
 
     @Test
-    fun aProjectIsPreparedItsProgramSetUpAndPlayedAsAMatchOnTheFakeLink() {
+    fun aProjectIsBuiltItsRobotDescribedAndItsMatchPlayedOnTheFakeLink() {
         val scheduler = ManualScheduler()
         val work = newWorkFolder()
         val project = Files.createDirectories(work.resolve("TeamProject"))
         Files.writeString(project.resolve("settings.gradle"), "include ':TeamCode'")
         HeadlessApp(host = testHost(scheduler, work)).use { app ->
-            app.savePng(app.settle(), "flow-1-home.png")
+            app.savePng(app.settle(), "flow-1-projects.png")
 
-            runBlocking { app.ui.openFolder(project, Destination.HOME) }
-            assertEquals(Destination.PREPARE, app.ui.navigator.state.value.current, "a project goes to the Prepare screen")
-            assertTrue(app.ui.prepare.state.value is PrepareState.Ready)
-            app.savePng(app.settle(), "flow-2-prepare-ready.png")
-
-            app.ui.prepare.prepare()
-            assertEquals(project, app.ui.prepare.consent.value!!.folder, "an untrusted project is asked about first")
-            app.savePng(app.settle(), "flow-3-prepare-consent.png")
-            app.ui.prepare.answerConsent(true)
-            scheduler.advance(2_500)
+            runBlocking { app.ui.openFolder(project, Destination.PROJECTS) }
+            assertEquals(Destination.PROJECTS, app.ui.navigator.state.value.current, "the build is shown on the Projects screen")
             assertTrue(app.ui.prepare.state.value is PrepareState.Running)
-            app.savePng(app.settle(), "flow-4-prepare-running.png")
+            scheduler.advance(2_500)
+            app.savePng(app.settle(), "flow-2-build-running.png")
             scheduler.advance(60_000)
-            val finished = app.ui.prepare.state.value as PrepareState.Finished
-            app.savePng(app.settle(), "flow-5-prepare-finished.png")
-
-            app.ui.useProgram(finished.program.folder())
-            assertEquals(Destination.SETUP, app.ui.navigator.state.value.current)
-            assertTrue(app.pump { app.rules()?.let { app.ui.setup.ready(it) } == true }, "the form with the prepared program is found right")
-            app.savePng(app.settle(), "flow-6-setup.png")
-            val request = app.ui.setup.request(app.rules())!!
-            assertEquals(finished.program.folder().toString(), request.program())
-            app.services.startRun(request)
-            app.ui.navigator.go(Destination.PRACTICE)
+            assertTrue(app.pump { app.ui.runner.activity.value is ProjectActivity.NeedsGame }, "a project that never ran asks for its game")
+            app.savePng(app.settle(), "flow-3-game.png")
+            app.ui.runner.continueWithGame()
+            assertTrue(app.pump { app.ui.runner.open.value != null && app.ui.runner.activity.value == ProjectActivity.Idle }, "the simulator starts after the choice")
+            assertTrue(
+                app.pump { app.ui.navigator.state.value.current == Destination.ROBOT },
+                "a project without ftcsim.json describes its robot next",
+            )
+            app.savePng(app.settle(), "flow-4-devices.png")
+            app.ui.runner.skipRobot()
+            assertEquals(Destination.PRACTICE, app.ui.navigator.state.value.current)
             app.awaitViewport()
+            app.savePng(app.settle(), "flow-5-simulator.png")
 
             val session = app.services.session
             val plan = MatchPlan.suggest(session.session.value.opModes, session.session.value.selectedOpMode)!!
             session.armMatch(plan.autonomous, plan.teleOp)
             assertTrue(app.pump { session.match.value.state == MatchState.ARMED }, "the fake link arms the match")
-            app.savePng(app.settle(), "flow-7-match-armed.png")
+            app.savePng(app.settle(), "flow-6-match-armed.png")
             session.startMatch()
             assertTrue(app.pump { session.match.value.timed }, "the match starts its first period")
             app.pump(2) { false }
-            app.savePng(app.settle(), "flow-8-match-running.png")
+            app.savePng(app.settle(), "flow-7-match-running.png")
             session.stop()
             assertTrue(app.pump { session.match.value.state == MatchState.ENDED }, "Stop ends a match that is under way")
-            app.savePng(app.settle(), "flow-9-match-ended.png")
+            app.savePng(app.settle(), "flow-8-match-ended.png")
+
+            app.ui.runner.restart()
+            assertTrue(app.pump { app.ui.runner.activity.value is ProjectActivity.Building })
+            app.savePng(app.settle(), "flow-9-restart-building.png")
+            scheduler.advance(60_000)
+            assertTrue(app.pump { app.ui.runner.activity.value == ProjectActivity.Idle }, "the code is restarted")
+            assertTrue(app.pump { app.services.session.session.value.connection == Connection.OPEN })
         }
     }
 
@@ -166,7 +163,7 @@ class PracticeSmokeTest {
             app.savePng(app.frame(), "practice-driving.png")
             assertTrue(moved, "the chassis should have driven forward")
 
-            app.ui.practice.resetDialogOpen = true
+            app.ui.practice.moreMenuOpen = true
             assertTrue(app.pump { app.services.input.keys().held().isEmpty() }, "opening a dialog releases the held key")
             assertFalse(app.key(KeyEvent(Key.W, KeyEventType.KeyDown)).and(app.services.input.keys().held().isNotEmpty()))
             app.savePng(app.frame(), "practice-dialog.png")
@@ -228,9 +225,8 @@ class PracticeSmokeTest {
     fun everyScreenDrawsSomethingAtTheSizeOfALaptopWindow() {
         HeadlessApp(startViewport = false).use { app ->
             for ((destination, name) in listOf(
-                Destination.HOME to "home.png",
-                Destination.PREPARE to "prepare.png",
-                Destination.SETUP to "setup.png",
+                Destination.PROJECTS to "projects.png",
+                Destination.ROBOT to "robot.png",
                 Destination.CONTROLS to "controls.png",
                 Destination.SETTINGS to "settings.png",
                 Destination.PRACTICE to "practice-empty.png",
@@ -281,7 +277,7 @@ class PracticeSmokeTest {
     @Test
     fun thePagesThatScrollAreCompleteAtFullLength() {
         HeadlessApp(height = 1900, startViewport = false).use { app ->
-            for ((destination, name) in listOf(Destination.SETUP to "setup-full.png", Destination.CONTROLS to "controls-full.png")) {
+            for ((destination, name) in listOf(Destination.SETTINGS to "settings-full.png", Destination.CONTROLS to "controls-full.png")) {
                 app.ui.navigator.go(destination)
                 app.savePng(app.settle(), name)
             }

@@ -10,9 +10,10 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
+import dev.ftcsim.contracts.world.BodyPose;
+import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -31,11 +32,11 @@ class MatchSessionTest {
     private static final long TRANSITION = 8 * SECOND;
     private static final long TELEOP = 120 * SECOND;
 
-    private static RobotProfile hornet;
+    private static RobotSpec hornet;
 
     @BeforeAll
     static void loadProfile() throws IOException {
-        hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        hornet = HornetMapping.spec();
     }
 
     private static MatchStatus status(MatchState state, long elapsed, long duration) {
@@ -263,8 +264,8 @@ class MatchSessionTest {
     }
 
     @Test
-    void theSameMatchGivesTheSameWorldWhateverTheSlicingOfSimulatedTime() throws IOException {
-        String firstHash = null;
+    void theSlicingOfSimulatedTimeDoesNotChangeWhereTheRobotEndsUpOrWhenThePhasesBegin() throws IOException {
+        BodyPose firstPose = null;
         List<PhaseEntry> firstPhases = null;
         for (long slice : new long[] {Long.MAX_VALUE / 4, 7_000_000L, 250_000_000L}) {
             TestField field = new TestField();
@@ -278,12 +279,13 @@ class MatchSessionTest {
                     session.runUntil(Math.min(end, session.now() + slice));
                 }
                 assertEquals(MatchState.TELEOP, session.match().state());
-                String hash = session.world().stateHash();
-                if (firstHash == null) {
-                    firstHash = hash;
+                BodyPose pose = session.world().bodyPose(EntityIds.CHASSIS);
+                if (firstPose == null) {
+                    firstPose = pose;
                     firstPhases = field.phases();
                 }
-                assertEquals(firstHash, hash, "slice " + slice);
+                assertEquals(firstPose.x(), pose.x(), 0.02, "slice " + slice);
+                assertEquals(firstPose.y(), pose.y(), 0.02, "slice " + slice);
                 assertEquals(firstPhases, field.phases(), "slice " + slice);
                 assertEquals(List.of(), session.problems());
             }

@@ -210,7 +210,7 @@ public final class LimelightModel implements CameraModel {
         return map;
     }
 
-    /** Reads and checks the profile's settings; nothing here needs a world. */
+    /** Reads and checks the settings; nothing here needs a world. */
     static Settings read(DeviceConfig config) {
         double pitch = config.number("mount.pitchDegrees", 0);
         if (Math.abs(pitch) > 90) {
@@ -343,7 +343,7 @@ public final class LimelightModel implements CameraModel {
                 }
                 switches.addLast(new long[] {arrival + SWITCH_DELAY_NANOS, index});
                 if (!pipelines.containsKey(index)) {
-                    refusals.note("pipeline " + index + " is not configured in the robot profile, so the camera finds nothing in it", nowNanos);
+                    refusals.note("pipeline " + index + " is not configured, so the camera finds nothing in it", nowNanos);
                 }
                 return Reply.status(Reply.OK, POST_LATENCY_NANOS);
             }

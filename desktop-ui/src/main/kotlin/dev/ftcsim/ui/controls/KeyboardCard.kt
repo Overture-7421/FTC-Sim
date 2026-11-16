@@ -71,12 +71,6 @@ fun KeyboardCard(
     OutlinedCard(modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             Text("Keyboard", style = MaterialTheme.typography.titleMedium, modifier = Modifier.semantics { heading() })
-            Text(
-                "Set the keyboard as the source of a gamepad above, then try the keys here. " +
-                    "To change a key, press its button and then the new key; Escape cancels.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
             KeyTestArea(input, heldKeys)
             if (shared.isNotEmpty()) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.Top) {
@@ -84,7 +78,7 @@ fun KeyboardCard(
                     Column {
                         shared.forEach { (key, controls) ->
                             Text(
-                                "${KeyboardMap.keyName(key)} is used for ${controls.joinToString(" and ") { it.label() }}. A key can stand for one control only.",
+                                "${KeyboardMap.keyName(key)} is on ${controls.joinToString(" and ") { it.label() }}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.error,
                             )
@@ -126,14 +120,14 @@ private fun KeyTestArea(input: ViewportInput, held: Set<Int>) {
             .heldKeyCapture(input, focus) { focused = it }
             .pointerInput(focus) { detectTapGestures(onPress = { focus.requestFocus() }) }
             .border(2.dp, ring, MaterialTheme.shapes.small)
-            .semantics { contentDescription = "Key test area. Focus it and press keys to try the mapping." },
+            .semantics { contentDescription = "Key test area" },
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.surfaceVariant,
     ) {
         Text(
             when {
-                !focused -> "Click here, or tab to here, to try the keys"
-                held.isEmpty() -> "Press keys to try the mapping"
+                !focused -> "Click to test keys"
+                held.isEmpty() -> "Press keys"
                 else -> "Held: " + held.joinToString(", ") { KeyboardMap.keyName(it) }
             },
             style = MaterialTheme.typography.bodyMedium,
@@ -188,11 +182,11 @@ private fun KeyCapture(control: PadControl, model: ControlsModel) {
                 if (event.type == KeyEventType.KeyDown) model.offerKey(event.key.nativeKeyCode)
                 true
             }
-            .semantics { contentDescription = "Press the new key for ${control.label()}. Escape cancels." },
+            .semantics { contentDescription = "Press the new key for ${control.label()}" },
         shape = MaterialTheme.shapes.small,
         color = MaterialTheme.colorScheme.primaryContainer,
         contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
     ) {
-        Text("Press a key", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
+        Text("Press a key, Esc cancels", style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
     }
 }

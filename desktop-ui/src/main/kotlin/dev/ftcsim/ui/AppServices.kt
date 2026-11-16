@@ -6,8 +6,11 @@ import dev.ftcsim.ui.glfw.GamepadPoller
 import dev.ftcsim.ui.glfw.GlfwThread
 import dev.ftcsim.ui.host.AppHost
 import dev.ftcsim.ui.host.ProgramPreparer
+import dev.ftcsim.ui.host.ProjectMappings
 import dev.ftcsim.ui.input.GamepadRouter
 import dev.ftcsim.ui.input.ViewportInput
+import dev.ftcsim.ui.practice.Connection
+import dev.ftcsim.ui.practice.LinkState
 import dev.ftcsim.ui.practice.PracticeSession
 import dev.ftcsim.ui.render.OrbitCamera
 import dev.ftcsim.ui.scene.ViewportFeed
@@ -34,20 +37,30 @@ class AppServices(private val host: AppHost, val settings: SettingsStore) : Auto
     val camera = OrbitCamera().also { it.select(OrbitCamera.Preset.DRIVER) }
     val input = ViewportInput(camera)
     val engine = ViewportEngine(feed, camera, input)
+
     val session = PracticeSession(feed, camera)
     val router = GamepadRouter({ gamepad, state -> session.setGamepad(gamepad, state) }, input.keys())
     val performance = PerformanceMeter(engine, feed)
     val preparer: ProgramPreparer = host.preparer()
 
-    /** Whether a run needs a prepared program, which only the host knows. */
-    val programRequired: Boolean = host.programRequired()
+    /** The robot mappings that live in the team's projects. */
+    val mappings: ProjectMappings = host.mappings()
+
+    /** Whether the window runs on a stand-in host that runs no robot code, which it says everywhere. */
+    val isFake: Boolean = host.isFake()
 
     private val links: ExecutorService = Executors.newSingleThreadExecutor { task ->
         Thread(task, "link-opener").also { it.isDaemon = true }
     }
+
+    /** Where the disk is read and written for the person's projects, off the UI thread. */
+    val io: ExecutorService = Executors.newCachedThreadPool { task ->
+        Thread(task, "ftcsim-io").also { it.isDaemon = true }
+    }
     private val opens = AtomicInteger()
 
     @Volatile private var glfw: GlfwThread? = null
+    @Volatile private var refreshHz = 0.0
     @Volatile private var poller: GamepadPoller? = null
     @Volatile private var closed = false
     private var applied: UserSettings? = null
@@ -115,14 +128,29 @@ class AppServices(private val host: AppHost, val settings: SettingsStore) : Auto
         }
     }
 
-    /** Opens [request] as the practice session, replacing the one that is open, and remembers it as a recent run. */
-    fun startRun(request: SessionRequest) {
-        settings.update { it.withRecent(request) }
-        session.open(request)
+    /**
+     * Opens [request] as the session, replacing the one that is open. A session that failed, or a link that could not be
+     * had, is asked for on a link made anew, since neither can be asked again. So is a session that replaces one that was
+     * opened: a worker that has held a robot world keeps about 20 MB of the old one for every world opened after it
+     * (measured on Hornet, `docs/architecture/app.md`), and a team restarts its code all day.
+     */
+    fun openSession(request: SessionRequest) {
+        if (closed) return
+        val state = session.session.value.connection
+        when {
+            state == Connection.FAILED -> open(session.restart(request))
+            session.link.value is LinkState.Unavailable -> {
+                session.open(request)
+                reconnect()
+            }
+            state != Connection.NONE && session.link.value == LinkState.Connected -> open(session.restart(request))
+            else -> session.open(request)
+        }
     }
 
     /** Starts controller polling and the render thread, for a display refreshing at [refreshHz]. */
     fun startViewport(refreshHz: Double) {
+        this.refreshHz = refreshHz
         thread(name = "viewport-startup", isDaemon = true) {
             try {
                 val started = GlfwThread.start()
@@ -143,6 +171,7 @@ class AppServices(private val host: AppHost, val settings: SettingsStore) : Auto
     override fun close() {
         closed = true
         links.shutdown()
+        io.shutdown()
         engine.close()
         poller?.close()
         glfw?.close()

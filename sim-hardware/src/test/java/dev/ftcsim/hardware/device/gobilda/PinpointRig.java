@@ -5,7 +5,6 @@ import dev.ftcsim.hardware.device.WorldRig;
 import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import dev.ftcsim.hardware.i2c.I2cPeripheral;
 import dev.ftcsim.hardware.i2c.LittleEndian;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -44,37 +43,17 @@ final class PinpointRig {
     static final int RECALIBRATE_IMU = 1;
     static final int RESET_POSITION_AND_IMU = 1 << 1;
     static final int Y_REVERSED = 1 << 2;
-    static final int Y_FORWARD = 1 << 3;
     static final int X_REVERSED = 1 << 4;
-    static final int X_FORWARD = 1 << 5;
 
     /** The goBILDA 4-bar pod: a 2000 count encoder on a 32 mm wheel. */
     static final double FOUR_BAR_TICKS_PER_MM = 19.89436789;
 
-    /** The forward pod is 113.5 mm right of the tracking point, the sideways pod 4 mm behind it. */
-    static final double X_POD_LATERAL_MM = -113.5;
-    static final double Y_POD_FORWARD_MM = -4.0;
-
     final WorldRig world;
     final I2cPeripheral chip;
 
-    PinpointRig(ScriptedBody body, Map<String, Object> settings) {
+    PinpointRig(ScriptedBody body) {
         world = new WorldRig(body, (origin, direction, maxMeters) -> null);
-        chip = DeviceModels.standard().create("gobilda-pinpoint", "odo", settings, world.host);
-    }
-
-    /** The settings of two pods mounted as the goBILDA 4-bar pods are, counting up for forward and left travel. */
-    static Map<String, Object> pods(int direction) {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("xPod.x", 0.02);
-        settings.put("xPod.y", X_POD_LATERAL_MM / 1000);
-        settings.put("xPod.ticksPerMetre", FOUR_BAR_TICKS_PER_MM * 1000);
-        settings.put("xPod.direction", direction);
-        settings.put("yPod.x", Y_POD_FORWARD_MM / 1000);
-        settings.put("yPod.y", 0.03);
-        settings.put("yPod.ticksPerMetre", FOUR_BAR_TICKS_PER_MM * 1000);
-        settings.put("yPod.direction", direction);
-        return settings;
+        chip = DeviceModels.standard().create(DeviceModels.PINPOINT, "odo", Map.of(), world.host);
     }
 
     /** What robot code does to configure the chip: its pod offsets, resolution and a reset of the pose and IMU. */
@@ -83,11 +62,6 @@ final class PinpointRig {
         writeFloat(Y_POD_OFFSET, (float) yOffsetMm);
         writeFloat(MM_PER_TICK, (float) ticksPerMm);
         writeInt(DEVICE_CONTROL, RESET_POSITION_AND_IMU);
-    }
-
-    /** The correct configuration for the pods of {@link #pods}. */
-    void configureCorrectly() {
-        configure(X_POD_LATERAL_MM, Y_POD_FORWARD_MM, FOUR_BAR_TICKS_PER_MM);
     }
 
     byte[] read(int register, int count) {

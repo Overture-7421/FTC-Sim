@@ -26,8 +26,13 @@ class DriveLossesTest {
 
     /** The generic robot with its drag replaced by the given losses: no viscous drag in the rollers, and zero for what is not given. */
     private static MecanumConfig config(double wheelDamping, double wheelFriction, double rollingResistance) {
-        return DriveLossesScenario.withDrag(
-                wheelDamping, wheelFriction, MecanumConfig.generic18Inch().rollerFriction(), 0.0, rollingResistance);
+        MecanumConfig generic = MecanumConfig.generic18Inch();
+        return new MecanumConfig(
+                generic.massKg(), generic.lengthM(), generic.widthM(), generic.heightM(), generic.groundClearanceM(),
+                generic.comHeightM(), generic.wheelRadiusM(), generic.wheelbaseM(), generic.trackM(), generic.motor(),
+                generic.wheelInertiaKgM2(), wheelDamping, generic.tireStiffnessNPerM(), generic.tireDampingNsPerM(),
+                generic.tractionFriction(), generic.slipStiffnessNsPerM(), generic.rollerFriction(), 0.0, wheelFriction,
+                rollingResistance);
     }
 
     /** What the robot's mass and the reflected inertia of its four wheels resist a push along the floor with. */

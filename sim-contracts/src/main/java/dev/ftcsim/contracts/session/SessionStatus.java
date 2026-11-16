@@ -1,6 +1,7 @@
 package dev.ftcsim.contracts.session;
 
 import dev.ftcsim.contracts.field.Score;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import java.util.List;
@@ -18,6 +19,8 @@ import java.util.Objects;
  * @param paused        whether simulated time is standing still
  * @param hardware      one line per motor, servo and device the robot program has used, in a stable order
  * @param match         where a timed match is and how far into its period; {@link MatchStatus#NONE} in free practice
+ * @param unmapped      what the robot program asked the hardware map for under a name the robot mapping does not place, in
+ *                      the order it asked; empty when the mapping places everything the program uses
  */
 public record SessionStatus(
         long simTimeNanos,
@@ -29,12 +32,29 @@ public record SessionStatus(
         double speed,
         double achievedSpeed,
         boolean paused,
-        MatchStatus match) {
+        MatchStatus match,
+        List<UnmappedDevice> unmapped) {
 
     public SessionStatus {
         problems = List.copyOf(problems);
         hardware = List.copyOf(hardware);
+        unmapped = List.copyOf(unmapped);
         Objects.requireNonNull(match, "match");
+    }
+
+    /** A status of a run whose mapping places everything its program uses. */
+    public SessionStatus(
+            long simTimeNanos,
+            RobotPhase phase,
+            TelemetrySnapshot telemetry,
+            Score score,
+            List<String> problems,
+            List<Readout> hardware,
+            double speed,
+            double achievedSpeed,
+            boolean paused,
+            MatchStatus match) {
+        this(simTimeNanos, phase, telemetry, score, problems, hardware, speed, achievedSpeed, paused, match, List.of());
     }
 
     /** A status of free practice, with no timed match. */

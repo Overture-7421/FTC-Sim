@@ -5,8 +5,9 @@ import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * Things the kernel noticed that weaken the determinism guarantee. A deterministic run has none of the
- * {@link #problems()}; a run with some is still executed but is reported as not reproducible.
+ * Things the kernel noticed that the team or the user may want to know about: a robot thread that came back from a
+ * wait the simulator does not control, a second thread that looks like the robot thread, a thread that would not end
+ * and was given up on. A run with {@link #problems()} is still executed.
  */
 public final class KernelDiagnostics {
     /** The robot program asked to end the process, with System.exit or Runtime.exit, or Runtime.halt. */
@@ -18,16 +19,9 @@ public final class KernelDiagnostics {
     private final List<ExitRequest> exitRequests = new CopyOnWriteArrayList<>();
     private final AtomicLong handoffs = new AtomicLong();
     private final AtomicLong unwinds = new AtomicLong();
-    private final AtomicLong worldWaits = new AtomicLong();
-    private final AtomicLong worldWaitNanos = new AtomicLong();
 
     void problem(String description) {
         problems.add(description);
-    }
-
-    void worldWaited(long realNanos) {
-        worldWaits.incrementAndGet();
-        worldWaitNanos.addAndGet(realNanos);
     }
 
     void nativeLibraryDeclined(String name) {
@@ -51,7 +45,7 @@ public final class KernelDiagnostics {
         exitRequests.add(request);
     }
 
-    /** Conditions under which the run cannot be promised reproducible, in the order they were found. */
+    /** What the kernel noticed about the robot thread that the user should hear of, in the order it was found. */
     public List<String> problems() {
         return List.copyOf(problems);
     }
@@ -69,20 +63,6 @@ public final class KernelDiagnostics {
     /** How many times the robot thread threw {@code RobotUnwind} because it was asked to end. */
     public long unwinds() {
         return unwinds.get();
-    }
-
-    /**
-     * How many times the simulator held simulated time back to let a thread of the robot world, other than the robot
-     * thread, come to rest: a library's own thread that starts the library up, or a timer that fires. Such a thread runs in
-     * real time; what it does is finished before the robot thread's next turn, so it never depends on how fast it ran.
-     */
-    public long worldWaits() {
-        return worldWaits.get();
-    }
-
-    /** The real time those waits took altogether, in nanoseconds. */
-    public long worldWaitNanos() {
-        return worldWaitNanos.get();
     }
 
     /** Names of the robot threads the kernel gave up on, which may still be running outside the simulation. */

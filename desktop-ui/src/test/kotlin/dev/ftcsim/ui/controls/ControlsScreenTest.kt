@@ -144,7 +144,7 @@ class ControlsScreenTest {
 
         onNodeWithContentDescription("Left stick up: W. Press to change.").performClick()
         waitForIdle()
-        onNodeWithContentDescription("Press the new key for Left stick up. Escape cancels.").performKeyInput { pressKey(Key.P) }
+        onNodeWithContentDescription("Press the new key for Left stick up").performKeyInput { pressKey(Key.P) }
         waitForIdle()
 
         assertEquals(KeyEvent.VK_P, rig.keyboard().keyOf(PadControl.LEFT_STICK_UP))
@@ -160,12 +160,12 @@ class ControlsScreenTest {
 
         onNodeWithContentDescription("A: K. Press to change.").performClick()
         waitForIdle()
-        onNodeWithContentDescription("Press the new key for A. Escape cancels.").performKeyInput { pressKey(Key.W) }
+        onNodeWithContentDescription("Press the new key for A").performKeyInput { pressKey(Key.W) }
         waitForIdle()
 
-        onNodeWithText("W already stands for Left stick up. Clear that first, or press another key.").assertExists()
+        onNodeWithText("W is already on Left stick up").assertExists()
         assertEquals(KeyEvent.VK_K, rig.keyboard().keyOf(PadControl.A))
-        onNodeWithContentDescription("Press the new key for A. Escape cancels.").performKeyInput { pressKey(Key.Escape) }
+        onNodeWithContentDescription("Press the new key for A").performKeyInput { pressKey(Key.Escape) }
         waitForIdle()
 
         onNodeWithContentDescription("A: K. Press to change.").assertExists()
@@ -195,7 +195,7 @@ class ControlsScreenTest {
         show(rig)
         poll()
 
-        onNodeWithText("K is used for A and B. A key can stand for one control only.").assertExists()
+        onNodeWithText("K is on A and B").assertExists()
     }
 
     @Test
@@ -203,7 +203,7 @@ class ControlsScreenTest {
         val rig = Rig()
         show(rig)
         poll()
-        val area = onNodeWithContentDescription("Key test area. Focus it and press keys to try the mapping.")
+        val area = onNodeWithContentDescription("Key test area")
 
         area.performKeyInput { pressKey(Key.W) }
         assertTrue(rig.input.keys().held().isEmpty(), "nothing is taken without focus")

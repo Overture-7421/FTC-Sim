@@ -1,11 +1,11 @@
 package dev.ftcsim.ui.settings
 
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.ui.input.GamepadConfig
 import dev.ftcsim.ui.input.KeyboardMap
 import dev.ftcsim.ui.input.PadAssignment
 import dev.ftcsim.ui.input.PadControl
+import dev.ftcsim.ui.setup.SetupInput
 import java.util.Properties
 
 /**
@@ -16,8 +16,7 @@ internal object SettingsCodec {
     const val FORMAT = 1
     const val FORMAT_KEY = "format"
 
-    private val RECENT_FIELD_KEY = Regex("""recent\.(\d+)\.field""")
-    private val TRUSTED_KEY = Regex("""trusted\.(\d+)""")
+    private val PROJECT_FOLDER_KEY = Regex("""project\.(\d+)\.folder""")
 
     fun encode(settings: UserSettings): Properties {
         val out = Properties()
@@ -26,7 +25,7 @@ internal object SettingsCodec {
             out.setProperty("display.renderScalePercent", renderScalePercent.toString())
             out.setProperty("display.frameCapHz", frameCapHz.toString())
             out.setProperty("display.performanceOverlay", performanceOverlay.toString())
-        }
+            }
         for (gamepad in 1..2) {
             val pad = settings.gamepads.pad(gamepad)
             val prefix = "gamepad.$gamepad."
@@ -39,36 +38,33 @@ internal object SettingsCodec {
         for ((control, key) in settings.gamepads.keyboard().bindings()) {
             out.setProperty("keyboard.${control.name}", key.toString())
         }
-        settings.recents.forEachIndexed { index, request ->
-            val prefix = "recent.$index."
-            out.setProperty(prefix + "profile", request.profile())
-            out.setProperty(prefix + "program", request.program())
-            out.setProperty(prefix + "field", request.field())
-            out.setProperty(prefix + "alliance", request.alliance().name)
-            out.setProperty(prefix + "seed", request.seed().toString())
-            out.setProperty(prefix + "startX", request.startX().toString())
-            out.setProperty(prefix + "startY", request.startY().toString())
-            out.setProperty(prefix + "startHeading", request.startHeading().toString())
+        settings.projects.forEachIndexed { index, project ->
+            val prefix = "project.$index."
+            out.setProperty(prefix + "folder", project.folder)
+            out.setProperty(prefix + "name", project.name)
+            project.scanOpMode?.let { out.setProperty(prefix + "scanOpMode", it) }
+            project.opMode?.let { out.setProperty(prefix + "opMode", it) }
+            if (project.robotSkipped) out.setProperty(prefix + "robotSkipped", "true")
+            project.run?.let { run ->
+                out.setProperty(prefix + "run.field", run.field)
+                out.setProperty(prefix + "run.alliance", run.alliance.name)
+                out.setProperty(prefix + "run.randomSeed", run.randomSeed.toString())
+                out.setProperty(prefix + "run.seed", run.seedText)
+                run.startPose?.let { out.setProperty(prefix + "run.startPose", it) }
+                out.setProperty(prefix + "run.startX", run.startX)
+                out.setProperty(prefix + "run.startY", run.startY)
+                out.setProperty(prefix + "run.heading", run.headingDegrees)
+                out.setProperty(prefix + "run.touched", run.startTouched.toString())
+            }
         }
-        settings.trustedProjects.forEachIndexed { index, key -> out.setProperty("trusted.$index", key) }
         return out
     }
 
     fun decode(properties: Properties): UserSettings = UserSettings(
         display = decodeDisplay(properties),
         gamepads = GamepadConfig(decodePad(properties, 1), decodePad(properties, 2), decodeKeyboard(properties)),
-        recents = decodeRecents(properties),
-        trustedProjects = decodeTrusted(properties),
+        projects = decodeProjects(properties),
     )
-
-    private fun decodeTrusted(p: Properties): List<String> =
-        p.stringPropertyNames()
-            .mapNotNull { TRUSTED_KEY.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
-            .distinct()
-            .sorted()
-            .mapNotNull { p.text("trusted.$it") }
-            .distinct()
-            .takeLast(UserSettings.MAX_TRUSTED)
 
     private fun decodeDisplay(p: Properties): DisplaySettings {
         val defaults = DisplaySettings()
@@ -108,28 +104,37 @@ internal object SettingsCodec {
         return map
     }
 
-    private fun decodeRecents(p: Properties): List<SessionRequest> =
+    private fun decodeProjects(p: Properties): List<RecentProject> =
         p.stringPropertyNames()
-            .mapNotNull { RECENT_FIELD_KEY.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
+            .mapNotNull { PROJECT_FOLDER_KEY.matchEntire(it)?.groupValues?.get(1)?.toIntOrNull() }
             .distinct()
             .sorted()
-            .mapNotNull { decodeRecent(p, "recent.$it.") }
-            .take(UserSettings.MAX_RECENTS)
+            .mapNotNull { decodeProject(p, "project.$it.") }
+            .take(UserSettings.MAX_PROJECTS)
 
-    private fun decodeRecent(p: Properties, prefix: String): SessionRequest? {
+    private fun decodeProject(p: Properties, prefix: String): RecentProject? {
+        val folder = p.text(prefix + "folder") ?: return null
+        val name = p.text(prefix + "name") ?: folder
+        return RecentProject(
+            folder, name, decodeRun(p, prefix + "run."), p.text(prefix + "scanOpMode"), p.text(prefix + "robotSkipped") == "true", p.text(prefix + "opMode"),
+        )
+    }
+
+    /** What a project was last run with; a run with anything unreadable in it is not remembered, and the project starts from its defaults. */
+    private fun decodeRun(p: Properties, prefix: String): SetupInput? {
         val field = p.text(prefix + "field") ?: return null
-        val profile = p.text(prefix + "profile") ?: return null
         val alliance = p.text(prefix + "alliance")?.let { text -> Alliance.entries.firstOrNull { it.name.equals(text, ignoreCase = true) } }
-        return SessionRequest(
-            profile,
-            p.getProperty(prefix + "program").orEmpty(),
-            field,
-            alliance ?: return null,
-            p.text(prefix + "seed")?.toLongOrNull() ?: return null,
-            p.double(prefix + "startX") ?: return null,
-            p.double(prefix + "startY") ?: return null,
-            p.double(prefix + "startHeading") ?: return null,
-            1.0,
+            ?: return null
+        return SetupInput(
+            field = field,
+            alliance = alliance,
+            randomSeed = p.text(prefix + "randomSeed")?.toBooleanStrictOrNull() ?: true,
+            seedText = p.getProperty(prefix + "seed").orEmpty(),
+            startPose = p.text(prefix + "startPose"),
+            startX = p.text(prefix + "startX") ?: "0",
+            startY = p.text(prefix + "startY") ?: "0",
+            headingDegrees = p.text(prefix + "heading") ?: "0",
+            startTouched = p.text(prefix + "touched")?.toBooleanStrictOrNull() ?: false,
         )
     }
 
@@ -138,6 +143,4 @@ internal object SettingsCodec {
     private fun Properties.int(key: String): Int? = text(key)?.toIntOrNull()
 
     private fun Properties.float(key: String): Float? = text(key)?.toFloatOrNull()?.takeIf { it.isFinite() }
-
-    private fun Properties.double(key: String): Double? = text(key)?.toDoubleOrNull()?.takeIf { it.isFinite() }
 }

@@ -2,7 +2,6 @@ package dev.ftcsim.hardware.device.scripted;
 
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.BodyView;
-import dev.ftcsim.hardware.device.odometry.DeadReckoner;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -45,6 +44,7 @@ public final class ScriptedBody implements BodyView {
     }
 
     private static final double NANOS_PER_SECOND = 1e9;
+    private static final double SMALL_ANGLE = 1e-4;
 
     private final List<Move> moves;
     private final BodyPose finalPose;
@@ -80,18 +80,33 @@ public final class ScriptedBody implements BodyView {
         return at(nowNanos);
     }
 
+    /** The pose after {@code nanos}: the move is the pose exponential, which follows the arc the chassis drove, not its chord. */
     private static BodyPose poseOf(Move move, long nanos) {
         double seconds = (nanos - move.startNanos()) / NANOS_PER_SECOND;
-        DeadReckoner reckoner = new DeadReckoner();
-        reckoner.setPose(move.start().x(), move.start().y(), move.start().yaw());
-        reckoner.advance(move.forward() * seconds, move.left() * seconds, move.yawRate() * seconds, 0, 0);
-        double cos = StrictMath.cos(reckoner.heading());
-        double sin = StrictMath.sin(reckoner.heading());
+        double forward = move.forward() * seconds;
+        double left = move.left() * seconds;
+        double turn = move.yawRate() * seconds;
+        double sine;
+        double bulge;
+        if (Math.abs(turn) < SMALL_ANGLE) {
+            sine = 1.0 - turn * turn / 6.0;
+            bulge = turn / 2.0;
+        } else {
+            sine = StrictMath.sin(turn) / turn;
+            bulge = (1.0 - StrictMath.cos(turn)) / turn;
+        }
+        double alongStart = sine * forward - bulge * left;
+        double acrossStart = bulge * forward + sine * left;
+        double startCos = StrictMath.cos(move.start().yaw());
+        double startSin = StrictMath.sin(move.start().yaw());
+        double heading = move.start().yaw() + turn;
+        double cos = StrictMath.cos(heading);
+        double sin = StrictMath.sin(heading);
         return BodyPose.planar(
                 nanos,
-                reckoner.x(),
-                reckoner.y(),
-                reckoner.heading(),
+                move.start().x() + alongStart * startCos - acrossStart * startSin,
+                move.start().y() + alongStart * startSin + acrossStart * startCos,
+                heading,
                 move.forward() * cos - move.left() * sin,
                 move.forward() * sin + move.left() * cos,
                 move.yawRate());

@@ -76,7 +76,7 @@ fun MatchBanner(match: MatchDisplay, score: Score, modifier: Modifier = Modifier
                 else -> {
                     Title(match.state)
                     Text("Final score ${score.total()}", style = MaterialTheme.typography.headlineMedium)
-                    Text("Reset the session to play another match.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Reset the world to play another match.", style = MaterialTheme.typography.bodyMedium)
                 }
             }
         }
@@ -116,18 +116,13 @@ fun MatchDialog(opModes: List<OpModeDescriptor>, picked: String?, onArm: (MatchP
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 ChoiceGroup(
                     "Autonomous period", listOf<String?>(null) + autonomousModes, autonomous,
-                    { it ?: "None: the match starts with the driver-controlled period" }, { autonomous = it },
+                    { it ?: "None" }, { autonomous = it },
                 )
                 if (teleOpModes.isEmpty()) {
-                    Text("This program has no TeleOp OpMode, which a match needs.", color = MaterialTheme.colorScheme.error)
+                    Text("No TeleOp OpMode", color = MaterialTheme.colorScheme.error)
                 } else {
-                    ChoiceGroup("Driver-controlled period", teleOpModes, teleOp, { it }, { teleOp = it })
+                    ChoiceGroup("TeleOp period", teleOpModes, teleOp, { it }, { teleOp = it })
                 }
-                Text(
-                    "The simulator times the periods in simulated time, so pausing the simulation or changing its speed changes the countdown with it.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
             }
         },
         confirmButton = {

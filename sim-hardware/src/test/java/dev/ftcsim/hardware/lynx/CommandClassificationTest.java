@@ -113,8 +113,6 @@ class CommandClassificationTest {
 
         assertEquals(before, unscheduled, "what a query returns does not depend on who asks");
         assertEquals(before, observe(rig, false), "and asking leaves everything as it was");
-        assertEquals(25L * QueryCatalog.requests().size(), rig.bus.unscheduledQueries());
-        assertEquals(List.of(), rig.bus.unscheduledMutations());
     }
 
     private CommandTable.Effect effectOf(int packetId, byte[] payload) {

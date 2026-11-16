@@ -2,85 +2,82 @@ package dev.ftcsim.hardware.camera;
 
 import dev.ftcsim.contracts.hardware.CameraWire;
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
 /**
- * The cameras of one robot, found by the name robot code asks for them with, behind the {@link CameraWire} that the
- * SDK adapter talks to. A request for a name the robot does not have is unanswered, as a request to an address with
- * nothing plugged in would be, and is remembered for {@link #problems()}.
+ * The robot's Limelight, found by the name robot code asks for it with, behind the {@link CameraWire} that the SDK
+ * adapter talks to. The robot has one camera and robot code finds it under any name: the first name that asks is its
+ * name. A request for any other name is unanswered, as a request to an address with nothing plugged in would be, and is
+ * remembered for {@link #problems()}.
  */
 public final class CameraRack implements CameraWire {
 
-    private final Map<String, CameraModel> cameras = new LinkedHashMap<>();
+    private CameraModel camera;
+    private String name;
     private final Set<String> missing = new LinkedHashSet<>();
 
-    /** Plugs a camera in under the name robot code asks the hardware map for. */
-    public CameraRack add(String name, CameraModel camera) {
-        if (cameras.putIfAbsent(name, Objects.requireNonNull(camera, "camera")) != null) {
-            throw new IllegalStateException("the robot already has a camera called \"" + name + "\"");
+    /** Plugs the robot's camera in. */
+    public CameraRack plug(CameraModel camera) {
+        if (this.camera != null) {
+            throw new IllegalStateException("the robot already has a camera");
         }
+        this.camera = Objects.requireNonNull(camera, "camera");
         return this;
     }
 
-    public List<String> names() {
-        return List.copyOf(cameras.keySet());
-    }
-
     @Override
-    public boolean connect(String camera) {
-        if (cameras.containsKey(camera)) {
+    public boolean connect(String cameraName) {
+        if (camera != null && (name == null || name.equals(cameraName))) {
+            name = cameraName;
             return true;
         }
-        missing.add(camera);
+        missing.add(cameraName);
         return false;
     }
 
     @Override
-    public Reply get(String camera, String path, long nowNanos) {
-        CameraModel model = cameras.get(camera);
-        if (model == null) {
-            missing.add(camera);
-            return Reply.unreachable();
-        }
-        return model.get(path, nowNanos);
+    public Reply get(String cameraName, String path, long nowNanos) {
+        CameraModel model = modelOf(cameraName);
+        return model == null ? Reply.unreachable() : model.get(path, nowNanos);
     }
 
     @Override
-    public Reply post(String camera, String path, String body, long nowNanos) {
-        CameraModel model = cameras.get(camera);
-        if (model == null) {
-            missing.add(camera);
-            return Reply.unreachable();
-        }
-        return model.post(path, body, nowNanos);
+    public Reply post(String cameraName, String path, String body, long nowNanos) {
+        CameraModel model = modelOf(cameraName);
+        return model == null ? Reply.unreachable() : model.post(path, body, nowNanos);
     }
 
     @Override
-    public Reply delete(String camera, String path, long nowNanos) {
-        CameraModel model = cameras.get(camera);
-        if (model == null) {
-            missing.add(camera);
-            return Reply.unreachable();
+    public Reply delete(String cameraName, String path, long nowNanos) {
+        CameraModel model = modelOf(cameraName);
+        return model == null ? Reply.unreachable() : model.delete(path, nowNanos);
+    }
+
+    private CameraModel modelOf(String cameraName) {
+        if (camera != null && cameraName.equals(name)) {
+            return camera;
         }
-        return model.delete(path, nowNanos);
+        missing.add(cameraName);
+        return null;
     }
 
     /**
-     * Everything that weakens the claim that the robot's cameras behave as its code expects: cameras the code asked
-     * for that the robot profile does not have, and requests the camera models do not honour.
+     * Everything that weakens the claim that the robot's camera behaves as its code expects: cameras the code asked
+     * for beyond the one the robot has, and requests the camera model does not honour.
      */
     public List<String> problems() {
         List<String> problems = new ArrayList<>();
-        for (String name : missing) {
-            problems.add("camera \"" + name + "\": robot code asked for it but the robot profile has no camera by that name,"
-                    + " so it is unplugged: no result is ever valid and every request to it fails; it has " + names());
+        for (String missingName : missing) {
+            problems.add("camera \"" + missingName + "\": robot code asked for it but the robot has "
+                    + (name == null ? "no camera" : "one camera, \"" + name + "\"")
+                    + ", so it is unplugged: no result is ever valid and every request to it fails");
         }
-        cameras.forEach((name, camera) -> camera.problems().forEach(problem -> problems.add("camera \"" + name + "\": " + problem)));
+        if (camera != null) {
+            camera.problems().forEach(problem -> problems.add("camera \"" + (name == null ? "Limelight" : name) + "\": " + problem));
+        }
         return problems;
     }
 }

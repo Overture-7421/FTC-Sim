@@ -11,17 +11,23 @@ import dev.ftcsim.contracts.field.Scenery;
 import dev.ftcsim.contracts.field.Score;
 import dev.ftcsim.contracts.field.Shape;
 import dev.ftcsim.contracts.field.StartPose;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.OpModeDescriptor;
 import dev.ftcsim.contracts.robot.OpModeKind;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import dev.ftcsim.contracts.session.Catalogue;
+import dev.ftcsim.contracts.session.MotorChoice;
 import dev.ftcsim.contracts.session.FieldChoice;
 import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
 import dev.ftcsim.contracts.session.Readout;
 import dev.ftcsim.contracts.session.RobotInfo;
+import dev.ftcsim.contracts.session.RobotMapping;
+import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
+import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -48,7 +54,7 @@ final class ContractCodec {
     // Requests and sessions -----------------------------------------------------------------------------------
 
     static void writeRequest(WireWriter w, SessionRequest request) {
-        w.string(request.profile());
+        writeMapping(w, request.mapping());
         w.string(request.program());
         w.string(request.field());
         w.unsignedByte(code(request.alliance()));
@@ -60,12 +66,56 @@ final class ContractCodec {
     }
 
     static SessionRequest readRequest(WireReader r) throws WireException {
-        String profile = r.string("the profile");
+        RobotMapping mapping = readMapping(r);
         String program = r.string("the program");
         String field = r.string("the field");
         Alliance alliance = alliance(r.unsignedByte());
         return new SessionRequest(
-                profile, program, field, alliance, r.longInteger(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
+                mapping, program, field, alliance, r.longInteger(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
+    }
+
+    private static void writeMapping(WireWriter w, RobotMapping mapping) {
+        w.string(mapping.name());
+        w.count(mapping.motors().size(), "the mapped motors");
+        for (MotorMapping motor : mapping.motors()) {
+            w.string(motor.name());
+            w.unsignedByte(code(motor.slot()));
+            w.string(motor.model());
+            w.bool(motor.mirrored());
+        }
+        w.doubleBits(mapping.massKg());
+        w.doubleBits(mapping.wheelDiameterMm());
+        w.string(mapping.driveMotor());
+        w.doubleBits(mapping.turretRatio());
+        w.string(mapping.hubLogo());
+        w.string(mapping.hubUsb());
+        CameraMount camera = mapping.camera();
+        w.doubleBits(camera.x());
+        w.doubleBits(camera.y());
+        w.doubleBits(camera.z());
+        w.doubleBits(camera.yawDegrees());
+        w.doubleBits(camera.pitchDegrees());
+        w.doubleBits(camera.rollDegrees());
+    }
+
+    private static RobotMapping readMapping(WireReader r) throws WireException {
+        String name = r.string("the robot name");
+        int count = r.count(2 * STRING_BYTES + 2, "the mapped motors");
+        List<MotorMapping> motors = new ArrayList<>(count);
+        for (int i = 0; i < count; i++) {
+            String motorName = r.string("a mapped motor name");
+            Slot slot = slot(r.unsignedByte());
+            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool()));
+        }
+        double massKg = r.doubleBits();
+        double wheelDiameterMm = r.doubleBits();
+        String driveMotor = r.string("the drive motor");
+        double turretRatio = r.doubleBits();
+        String hubLogo = r.string("the hub logo direction");
+        String hubUsb = r.string("the hub USB direction");
+        CameraMount camera =
+                new CameraMount(r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera);
     }
 
     static void writeInfo(WireWriter w, SessionInfo info) {
@@ -215,7 +265,11 @@ final class ContractCodec {
             writeStartPoses(w, field.startPoses());
             writeHumanActions(w, field.humanActions());
         }
-        writeStrings(w, catalogue.profiles(), "the profiles");
+        w.count(catalogue.motors().size(), "the motors");
+        for (MotorChoice motor : catalogue.motors()) {
+            w.string(motor.id());
+            w.string(motor.displayName());
+        }
     }
 
     static Catalogue readCatalogue(WireReader r) throws WireException {
@@ -227,7 +281,12 @@ final class ContractCodec {
             List<StartPose> starts = readStartPoses(r);
             fields.add(new FieldChoice(id, displayName, starts, readHumanActions(r)));
         }
-        return new Catalogue(fields, readStrings(r, "the profiles"));
+        int motorCount = r.count(2 * STRING_BYTES, "the motors");
+        List<MotorChoice> motors = new ArrayList<>(motorCount);
+        for (int i = 0; i < motorCount; i++) {
+            motors.add(new MotorChoice(r.string("a motor id"), r.string("a motor name")));
+        }
+        return new Catalogue(fields, motors);
     }
 
     private static void writePart(WireWriter w, FieldPart part) {
@@ -338,6 +397,11 @@ final class ContractCodec {
         w.unsignedByte(code(match.state()));
         w.longInteger(match.phaseElapsedNanos());
         w.longInteger(match.phaseDurationNanos());
+        w.count(status.unmapped().size(), "the unplaced names");
+        for (UnmappedDevice device : status.unmapped()) {
+            w.unsignedByte(code(device.kind()));
+            w.string(device.name());
+        }
     }
 
     static SessionStatus readStatus(WireReader r) throws WireException {
@@ -360,8 +424,13 @@ final class ContractCodec {
         double achievedSpeed = r.doubleBits();
         boolean paused = r.bool();
         MatchStatus match = new MatchStatus(matchState(r.unsignedByte()), r.longInteger(), r.longInteger());
+        int unmappedCount = r.count(1 + STRING_BYTES, "the unplaced names");
+        List<UnmappedDevice> unmapped = new ArrayList<>(unmappedCount);
+        for (int i = 0; i < unmappedCount; i++) {
+            unmapped.add(new UnmappedDevice(unmappedKind(r.unsignedByte()), r.string("an unplaced name")));
+        }
         return new SessionStatus(
-                simTimeNanos, phase, telemetry, new Score(scoreLines), problems, readouts, speed, achievedSpeed, paused, match);
+                simTimeNanos, phase, telemetry, new Score(scoreLines), problems, readouts, speed, achievedSpeed, paused, match, unmapped);
     }
 
     // Gamepads ---------------------------------------------------------------------------------------------------
@@ -408,6 +477,14 @@ final class ContractCodec {
 
     // Lists and enumerations -------------------------------------------------------------------------------------
 
+    static void writeLines(WireWriter w, List<String> lines) {
+        writeStrings(w, lines, "the log lines");
+    }
+
+    static List<String> readLines(WireReader r) throws WireException {
+        return readStrings(r, "the log lines");
+    }
+
     private static void writeStrings(WireWriter w, List<String> strings, String what) {
         w.count(strings.size(), what);
         for (String string : strings) {
@@ -436,6 +513,33 @@ final class ContractCodec {
             case 0 -> Alliance.RED;
             case 1 -> Alliance.BLUE;
             default -> throw new WireException("unknown alliance code " + code);
+        };
+    }
+
+    private static int code(Slot slot) {
+        return switch (Objects.requireNonNull(slot, "slot")) {
+            case FRONT_LEFT -> 0;
+            case FRONT_RIGHT -> 1;
+            case REAR_LEFT -> 2;
+            case REAR_RIGHT -> 3;
+            case INTAKE -> 4;
+            case CONVEYOR -> 5;
+            case SHOOTER -> 6;
+            case TURRET -> 7;
+        };
+    }
+
+    private static Slot slot(int code) throws WireException {
+        return switch (code) {
+            case 0 -> Slot.FRONT_LEFT;
+            case 1 -> Slot.FRONT_RIGHT;
+            case 2 -> Slot.REAR_LEFT;
+            case 3 -> Slot.REAR_RIGHT;
+            case 4 -> Slot.INTAKE;
+            case 5 -> Slot.CONVEYOR;
+            case 6 -> Slot.SHOOTER;
+            case 7 -> Slot.TURRET;
+            default -> throw new WireException("unknown robot slot code " + code);
         };
     }
 
@@ -491,6 +595,27 @@ final class ContractCodec {
             case 4 -> MatchState.TELEOP;
             case 5 -> MatchState.ENDED;
             default -> throw new WireException("unknown match state code " + code);
+        };
+    }
+
+    private static int code(UnmappedDevice.Kind kind) {
+        return switch (Objects.requireNonNull(kind, "kind")) {
+            case MOTOR -> 0;
+            case SERVO -> 1;
+            case I2C -> 2;
+            case DIGITAL -> 3;
+            case ANALOG -> 4;
+        };
+    }
+
+    private static UnmappedDevice.Kind unmappedKind(int code) throws WireException {
+        return switch (code) {
+            case 0 -> UnmappedDevice.Kind.MOTOR;
+            case 1 -> UnmappedDevice.Kind.SERVO;
+            case 2 -> UnmappedDevice.Kind.I2C;
+            case 3 -> UnmappedDevice.Kind.DIGITAL;
+            case 4 -> UnmappedDevice.Kind.ANALOG;
+            default -> throw new WireException("unknown unplaced device kind code " + code);
         };
     }
 }

@@ -3,28 +3,32 @@ package dev.ftcsim.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import dev.ftcsim.contracts.session.MotorChoice
 import dev.ftcsim.ui.controls.ControlsModel
 import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.nav.Navigator
 import dev.ftcsim.ui.practice.PracticeUi
 import dev.ftcsim.ui.prepare.FolderFound
 import dev.ftcsim.ui.prepare.PrepareModel
+import dev.ftcsim.ui.prepare.Project
 import dev.ftcsim.ui.prepare.look
-import dev.ftcsim.ui.setup.FileSystemChecks
-import dev.ftcsim.ui.setup.PathChecks
-import dev.ftcsim.ui.setup.SetupInput
+import dev.ftcsim.ui.project.HardwareScan
+import dev.ftcsim.ui.project.OpModeMemory
+import dev.ftcsim.ui.project.ProjectRunner
+import dev.ftcsim.ui.robot.MappingModel
 import dev.ftcsim.ui.setup.SetupModel
+import java.nio.file.InvalidPathException
 import java.nio.file.Path
 import java.util.concurrent.ThreadLocalRandom
 
 /**
- * What each screen remembers while another one is shown: where the person is, the Practice screen's menus and tab,
- * the Setup form, the Controls screen's rebinding and the Prepare screen's preparation. Nothing here is simulation
- * state; it lives as long as the application and is used from the UI thread only.
+ * What each screen remembers while another one is shown: where the person is, the Simulator screen's menus and tab, the
+ * Setup form, the Robot page, the Controls screen's rebinding and the build, and the [runner] that opens projects and
+ * restarts their code. Nothing here is simulation state; it lives as long as the application and is used from the UI
+ * thread, apart from what the runner documents.
  */
 class AppUi(
     private val services: AppServices,
-    checks: PathChecks = FileSystemChecks,
     newSeed: () -> Long = { ThreadLocalRandom.current().nextLong(MAX_RANDOM_SEED) },
 ) {
     /** Why a folder that was chosen on [screen] could not be used, shown there until it is dismissed or another is chosen. */
@@ -32,36 +36,59 @@ class AppUi(
 
     val navigator = Navigator()
     val practice = PracticeUi()
-    val setup = SetupModel(checks, newSeed, services.settings.state.value.recents.firstOrNull()?.let { SetupInput.from(it) } ?: SetupInput())
+    val setup = SetupModel(newSeed)
     val controls = ControlsModel(services.settings)
-    val prepare = PrepareModel(services.preparer, services.settings)
+    val prepare = PrepareModel(services.preparer)
+    val runner = ProjectRunner(services, prepare, setup, navigator, services.io)
+    val scan = HardwareScan(services.session, services.settings, runner.open)
+    val opModes = OpModeMemory(services.session, services.settings, runner.open)
 
     var folderNotice by mutableStateOf<FolderNotice?>(null)
         private set
 
+    private var mapping: Pair<Path, MappingModel>? = null
+
+    /**
+     * The Robot page of [project], with what has been placed so far: the same one for as long as the project, the motors on
+     * offer and whether its game has a turret are the same, so that leaving the screen in the middle of it loses nothing.
+     */
+    fun mapping(project: Project, motors: List<MotorChoice>, turret: Boolean): MappingModel {
+        mapping?.takeIf { it.first == project.folder && it.second.motors == motors && it.second.turret == turret }?.let { return it.second }
+        return MappingModel(project.name, motors, turret).also { mapping = project.folder to it }
+    }
+
     /**
      * The person chose [folder] on [from]: finds out what it is, off the UI thread, and goes where it leads. A team's
-     * project goes to the Prepare screen, a prepared program to the Setup screen with its folder filled in, and
-     * anything else stays where it was, with the reason.
+     * project is opened, which builds it and shows the Project screen meanwhile; a built program is not a project and is
+     * said not to be; anything else stays where it was, with the reason.
      */
     suspend fun openFolder(folder: Path, from: Destination) {
         when (val found = services.preparer.look(folder)) {
-            is FolderFound.IsProject -> {
-                folderNotice = if (prepare.choose(found.project)) null else FolderNotice(Destination.PREPARE, PREPARING_NOW)
-                navigator.go(Destination.PREPARE)
-            }
-            is FolderFound.IsProgram -> {
-                folderNotice = null
-                useProgram(found.folder)
-            }
+            is FolderFound.IsProject -> folderNotice = if (runner.open(found.project)) null else FolderNotice(from, BUILDING_NOW)
+            is FolderFound.IsProgram -> folderNotice = FolderNotice(from, BUILT_PROGRAM)
             is FolderFound.IsNeither -> folderNotice = FolderNotice(from, found.reason)
         }
     }
 
-    /** Fills the Setup form's program in with [folder] and goes there. */
-    fun useProgram(folder: Path) {
-        setup.edit { it.copy(program = folder.toString()) }
-        navigator.go(Destination.SETUP)
+    /**
+     * Opens the project that was open when the application last closed, the way Open project does: the program built
+     * from the same source is reused, and a changed project is built with its progress shown. A project that is no
+     * longer there is said so on Projects, and so is one that is no longer set up for the simulator (it stays there instead
+     * of leading to the Robot page). Does nothing when there is no last project.
+     */
+    suspend fun openLast() {
+        val last = services.settings.state.value.projects.firstOrNull() ?: return
+        val folder = try {
+            Path.of(last.folder)
+        } catch (invalid: InvalidPathException) {
+            null
+        }
+        val found = folder?.let { services.preparer.look(it) }
+        if (found is FolderFound.IsProject) {
+            runner.openAtStart(found.project)
+        } else {
+            folderNotice = FolderNotice(Destination.PROJECTS, "${last.name} is no longer at ${last.folder}")
+        }
     }
 
     fun dismissFolderNotice() {
@@ -70,6 +97,7 @@ class AppUi(
 
     private companion object {
         const val MAX_RANDOM_SEED = 1_000_000_000L
-        const val PREPARING_NOW = "A project is being prepared. Cancel that preparation or wait for it to finish before opening another."
+        const val BUILDING_NOW = "Another project is building"
+        const val BUILT_PROGRAM = "This is a built program. Open the project folder, the one with settings.gradle"
     }
 }

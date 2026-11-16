@@ -5,8 +5,8 @@ import java.io.IOException;
 
 /**
  * What the application around the window provides to it: a way to a simulator and a way to prepare programs. The
- * window knows nothing about worker processes, JDKs or Gradle; the application's {@code main} builds one of these,
- * and the window's own {@code main} builds one on a fake link for developing the interface.
+ * window knows nothing about worker processes, JDKs or Gradle; the application's {@code main} builds one of these. The
+ * test fixtures build one on a fake link for developing the interface and for the tests.
  */
 public interface AppHost {
 
@@ -22,11 +22,14 @@ public interface AppHost {
     /** Prepares team projects. */
     ProgramPreparer preparer();
 
+    /** Reads and writes the robot mappings that live in the team's projects. */
+    ProjectMappings mappings();
+
     /**
-     * Whether a run needs a prepared program, which the Setup screen then asks for. A real simulator always does; the
-     * stand-in that serves the window's own development runs no robot program and says no.
+     * Whether this host runs no robot code at all: a stand-in for developing the window, which the window says in
+     * its title and on every screen so that nobody mistakes it for the simulator.
      */
-    default boolean programRequired() {
-        return true;
+    default boolean isFake() {
+        return false;
     }
 }

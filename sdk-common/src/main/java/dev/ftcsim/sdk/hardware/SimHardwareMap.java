@@ -37,6 +37,9 @@ final class SimHardwareMap extends HardwareMap {
             String name = deviceName.trim();
             T device = tryGet(classOrInterface, name);
             if (device == null) {
+                if (providerFor(classOrInterface) == null && !allDevicesMap.containsKey(name)) {
+                    hubs.directory().unsupported(name, classOrInterface.getSimpleName());
+                }
                 throw new IllegalArgumentException(describeMiss(classOrInterface, name));
             }
             return device;

@@ -41,12 +41,6 @@ fun ControlsScreen(
         }
     }
     ScreenPage("Controls", modifier, maxWidth = 1120.dp) {
-        Text(
-            "Gamepad 1 and gamepad 2 always exist. A gamepad with nothing assigned stays untouched. " +
-                "The robot is driven only while the Practice screen is shown.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
             GamepadCard(1, config.pad(1), live.pads[0], live.controllers, model, Modifier.weight(1f))
             GamepadCard(2, config.pad(2), live.pads[1], live.controllers, model, Modifier.weight(1f))

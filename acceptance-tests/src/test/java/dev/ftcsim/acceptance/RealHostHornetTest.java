@@ -2,7 +2,6 @@ package dev.ftcsim.acceptance;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
@@ -23,11 +22,8 @@ import dev.ftcsim.ui.host.ProgramPreparer;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -87,7 +83,7 @@ class RealHostHornetTest {
             StartPose start = field.startPoses().get(0);
 
             link.open(new SessionRequest(
-                    "hornet-2026.json", prepared.directory().toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
+                    HornetMapping.mapping(), prepared.directory().toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
             ui.waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             assertTrue(ui.opened.get(0).opModes().stream().anyMatch(opMode -> opMode.name().equals(OP_MODE)), ui.opened.get(0).opModes().toString());
 
@@ -144,59 +140,6 @@ class RealHostHornetTest {
         ui.waitFor(() -> ui.status.simTimeNanos() >= until, what);
     }
 
-    /** What the window would be told while a project is prepared. */
-    private static final class Events implements ProgramPreparer.Listener {
-        final List<ProgramPreparer.Step> steps = Collections.synchronizedList(new ArrayList<>());
-        final List<String> output = Collections.synchronizedList(new ArrayList<>());
-        final CountDownLatch ended = new CountDownLatch(1);
-        volatile ProgramPreparer.Prepared prepared;
-        volatile ProgramPreparer.Failure failure;
-
-        @Override
-        public void step(ProgramPreparer.Step step) {
-            steps.add(step);
-        }
-
-        @Override
-        public void output(String line) {
-            output.add(line);
-        }
-
-        @Override
-        public void finished(ProgramPreparer.Prepared program) {
-            prepared = program;
-            ended.countDown();
-        }
-
-        @Override
-        public void failed(ProgramPreparer.Failure latest) {
-            failure = latest;
-            ended.countDown();
-        }
-
-        Events await(Duration patience) throws InterruptedException {
-            assertTrue(ended.await(patience.toSeconds(), TimeUnit.SECONDS), "the preparation did not end; steps " + steps);
-            assertNull(failure, () -> "the preparation failed: " + failure + "; its output ended with " + output.subList(Math.max(0, output.size() - 15), output.size()));
-            return this;
-        }
-    }
-
-    /** The real machine, except where a property names the JDK or the Android SDK to use. */
-    private static Machine machine() {
-        Machine real = Machine.real();
-        String jdk = System.getProperty("ftcsim.jdk");
-        String sdk = System.getProperty("ftcsim.androidSdk");
-        return new Machine(name -> {
-            if (name.equals("JAVA_HOME") && jdk != null) {
-                return jdk;
-            }
-            if (name.equals("ANDROID_HOME") && sdk != null) {
-                return sdk;
-            }
-            return real.environment().apply(name);
-        });
-    }
-
     @Test
     void thePreparerMakesAPackageOfTheHornetCheckoutLeavesTheCheckoutAloneAndDoesNotBuildTheSameSourceTwice() throws Exception {
         String checkout = System.getProperty("ftcsim.hornet");
@@ -205,14 +148,14 @@ class RealHostHornetTest {
         }
         assumeTrue(checkout != null, HOW_TO_PREPARE);
         Path project = Path.of(checkout);
-        RealHost host = WorkerFixtures.realHost(temp, machine());
+        RealHost host = WorkerFixtures.realHost(temp, WorkerFixtures.machine());
         try {
             ProgramPreparer preparer = host.preparer();
             ProgramPreparer.Inspection inspection = preparer.inspect(project);
             assertEquals(ProgramPreparer.Kind.PROJECT, inspection.kind(), inspection.summary());
             SourceManifest before = SourceManifest.scan(project, ImportProgress.SILENT);
 
-            Events first = new Events();
+            PrepareEvents first = new PrepareEvents();
             long started = System.nanoTime();
             preparer.prepare(new ProgramPreparer.Request(project, true), first);
             first.await(Duration.ofMinutes(40));
@@ -238,7 +181,7 @@ class RealHostHornetTest {
                     before.compareWith(SourceManifest.scan(project, ImportProgress.SILENT)).isEmpty(),
                     "the checkout is exactly as it was; the importer's own hashes of its source and build files agree");
 
-            Events second = new Events();
+            PrepareEvents second = new PrepareEvents();
             started = System.nanoTime();
             preparer.prepare(new ProgramPreparer.Request(project, false), second);
             second.await(Duration.ofMinutes(5));

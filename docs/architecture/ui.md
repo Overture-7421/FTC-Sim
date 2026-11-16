@@ -3,135 +3,242 @@
 `desktop-ui` is the simulator's window: Material 3 chrome (Compose Multiplatform for Desktop) around a 3D viewport
 (LWJGL, OpenGL 3.3). It draws what a `SimulatorLink` tells it and sends back what the driver does; it owns no simulation
 state and depends only on `sim-contracts` and `platform`. Kotlin is used only for Compose and the state holders beside
-it; the renderer, the input logic, the fake link, the fake program preparer and the host seam are Java.
+it; the renderer, the input logic and the host seam are Java. The fake host that the window can be developed on lives in
+the module's **test fixtures** (`src\testFixtures`, Gradle's `java-test-fixtures`), not in the shipped window: the
+window has no `main` of its own, and the real one is `app`'s.
 
 ```
-.\gradlew.bat :desktop-ui:run                                  opens the app on the fake host (fake link, fake preparer)
-.\gradlew.bat :desktop-ui:run --args="--no-focus --practice --exit-after=8 --settings=C:\temp\ui.properties"
+.\gradlew.bat :desktop-ui:runFake                              opens the window on the FAKE host (fake link, fake preparer, no robot code)
+.\gradlew.bat :desktop-ui:runFake --args="--no-focus --practice --exit-after=8 --settings=C:\temp\ui.properties"
                                                                scripted launch: no focus stolen, opens the default
-                                                               practice run, closes itself, keeps its settings elsewhere
-.\gradlew.bat :desktop-ui:check                                tests, about 420, nothing waits on real time to be right
+                                                               fake session, closes itself, keeps its settings elsewhere
+.\gradlew.bat :desktop-ui:check                                tests, about 500, nothing waits on real time to be right
 ```
 
 ## The host seam
 
 The window is started by whoever has the real things to show: `dev.ftcsim.ui.App.run(AppHost host, String[] args)` (a
-Java-callable static method; the `app` module's `main` calls it). `AppHost` has two parts of its own and one answer:
+Java-callable static method; the `app` module's `main` calls it; `App.run(host, options, started)` is the same with
+parsed options and a hook that runs once the services exist). `AppHost` has three parts of its own:
 
 - `openLink()` returns the `SimulatorLink` and may start a worker process, so it can take seconds and can fail with an
   `IOException` whose message is for people. `AppServices` calls it **off the UI thread**, on a single thread named
   `link-opener`, and hands the result to the session. Until it is there, a session that is asked for waits for it
-  (`Connecting to the simulator...` on Practice and Setup); when it cannot be had, Practice and Setup show the message
+  ("Connecting" on the Simulator); when it cannot be had, the Simulator and Projects show the message
   with **Try again**, which opens a link again. The link is closed when the window closes (a link that arrives after the
   window was closed is closed on the spot).
 - `preparer()` returns the `ProgramPreparer`: `inspect(folder)` says what a folder is (a team's project, an already
-  prepared program, or neither, with the reason), `prepare(request, listener)` runs the project's own Gradle build and
-  reports steps, output and the end. The Prepare screen below is its only user.
-- `programRequired()` (added to the seam with a default of `true`) says whether a run needs a prepared program. The fake
-  host answers `false` because it runs no robot program; the real host keeps the default.
+  built program, or neither, with the reason), `prepare(request, listener)` runs the project's own Gradle build and
+  reports steps, output and the end. The project runner (below) and the Projects screen are its users.
+- `mappings()` returns the `ProjectMappings`: `find(project)` looks for the project's `ftcsim.json` and returns the
+  whole mapping with the `run` defaults and whether the file is FTC-Sim's own copy (`keptByApp`); a file this version does not
+  read is found too, with its `problem` and no mapping. `save(project, RobotMapping)` writes the whole mapping (copying a file it
+  cannot read to `ftcsim.old.json` first) and `saveRunDefaults(project, RunDefaults)` rewrites the `run` block. All of them touch
+  the disk, so they are called off the UI thread.
+- `isFake()` says that nothing real runs; the window then says FAKE HOST in its title and on a banner on every screen.
+  Only the fake host answers true, so the banner is reachable only through `:desktop-ui:runFake` and the tests.
 
-`main` of `desktop-ui` builds a `FakeAppHost` and calls `run`, so `:desktop-ui:run` keeps working for interface work.
-`FakeAppHost` has a `FakeSimulatorLink` that takes 0.6 s to open (so the window can be seen waiting) and a
-`FakeProgramPreparer`.
+`dev.ftcsim.ui.FakeApp` (test fixtures) builds a `FakeAppHost` and calls `App.run`, which is what `:desktop-ui:runFake`
+starts, for interface work (the VS Code task is called `ftc-sim: run UI (fake host)`); `--practice` is its own option and
+also opens the default fake session. The fixtures are `FakeAppHost`, `FakeSimulatorLink`, `FakeWorld`, `FakeField`,
+`FakeProgramPreparer`, `FakeProjectMappings` and their `Scheduler` and `MatchTimes`; the tests of `desktop-ui` use them
+through `testFixtures`, and no other module depends on them (a dependency from another module would have to be allowed
+in `moduleRules`). The shipped window, `app` and the worker contain none of it. `FakeAppHost` has a `FakeSimulatorLink` that takes 0.6 s to open
+(so the window can be seen waiting), a `FakeProgramPreparer` and a `FakeProjectMappings`, which keeps mappings in memory.
+It is why the window can show four OpModes and a field that looks like nothing in the manual: the fake link has no robot
+program and no real field. The real field and the real OpModes come only from the `app` module's host.
 
-`FakeProgramPreparer` recognises folders by a marker file (`manifest.json` is a prepared program, `settings.gradle` or
-`.gradle.kts` a project, anything else is not recognised and says what is missing) and plays a preparation of six
+`FakeProgramPreparer` recognises folders by a marker file (`manifest.json` is a built program, `settings.gradle` or
+`.gradle.kts` a project, anything else is not recognised and says what is missing) and plays a build of six
 steps with plausible Gradle output on a `Scheduler`, so a test moves time by hand (`ManualScheduler`) and the application
 lets real time pass. The outcome follows the folder's name so every state can be seen: a name containing `broken` fails to
 compile at step 2 with the error lines and a build log file, `no-sdk` finds no Android SDK at step 1, anything else
-succeeds with a program, an SDK version, three OpModes and two warnings. A request that is not trusted is refused, a
-cancel ends with `CANCELLED` a moment later.
+succeeds with a program, an SDK version, three OpModes and two warnings. A cancel ends with `CANCELLED` a moment later.
 
 ## The shell and the screens
 
-A Material 3 navigation rail on the left lists **Home, Prepare, Setup, Controls, Practice and Settings** with a Back
-button above it. `Navigator` keeps the history as the places visited before, each at most once, so Back always leads
-somewhere different from where you are and the history cannot grow without end. Ctrl+1 to Ctrl+6 go to the destinations in
-rail order and Alt+Left goes back, from wherever the focus is; every rail item is a standard focusable item, so Tab and
-Enter work. Only the shown destination is composed, so each screen's own state lives outside the composition (`AppUi`: the
-Practice menus and tab, the Setup form, the Controls rebinding, the preparation) and the session, viewport and settings live
-in `AppServices`; leaving Practice therefore does not stop the run, leaving Prepare does not stop a preparation, and coming
-back shows each as it is.
+The window is **project-first**: a person opens the folder of their team's robot code and everything else follows from
+it. There is no "practice run" and no "practice package" to know about; a built program is an implementation detail that
+the application keeps for itself.
 
-- **Home**: a "New practice run" button, "Open project" and "Open practice package" (each a folder chooser) and the recent
-  runs, newest first: field, alliance, profile, seed and program, with one-click Open and a remove button. An empty list says
-  so. A run is the same run at any speed; opening an old one moves it to the top; ten are kept. A recent run names its field by
-  the catalogue's display name, or by the field's id until the catalogue has arrived.
-- **Choosing a folder** (Home and Prepare share one routine, `AppUi.openFolder`): the preparer's `inspect` runs off the UI
-  thread; a **project** goes to Prepare with it chosen, a **prepared program** goes to Setup with the program filled in, and
-  anything else stays where it was chosen with the reason in a dismissible card ("That folder cannot be used"). The card
-  belongs to the screen it was raised on and is gone when the person goes elsewhere. Opening a project while another is
-  being prepared is refused in words, and the preparation is left alone.
-- **Prepare**: see below.
-- **Setup**: built from the catalogue the link reports (`Listener.catalogue`): the **field** chooser (display names), the
-  **alliance**, the **seed** (random, drawn when the run starts and kept with it, or fixed), the **robot profile** (a menu of
-  the bundled names and "Choose a file..."), the **program** (a folder of a prepared package, with Browse; required only
-  when the host says so), and the **start pose**: the chosen field's start poses (`FieldChoice.startPoses`), as many as the
-  alliance may use, or "Custom position" with numbers. The port gives a start pose a name and numbers and nothing about
-  alliances, so `StartPoses` goes by the names the games use: a pose whose name begins with RED or BLUE (any case) belongs
-  to that alliance, any other name to both; a field whose poses name no alliance offers them all. Switching alliance moves a
-  pose of the other alliance to the first one of the new; switching field takes the first pose of the new field in a form
-  nobody has touched and keeps numbers the person typed. Before the catalogue arrives the screen says "Connecting to the
-  simulator...", the parts that depend on it wait, and Start practice says why it is off ("Waiting for the simulator."). What
-  is wrong with a field is said under it, with an icon as well as colour. `SetupRules` is the one place that says what a valid
-  form is; the form is checked off the UI thread (the file system is asked about the paths there) and **Start practice**
-  works only for the exact form and the exact catalogue that were checked and found right. Starting builds a
-  `SessionRequest`, remembers the run, opens it on the session and goes to Practice. A profile without `/`, `\` or `:` is a
-  bundled name, anything else must be an existing file; a program is an existing folder.
+A Material 3 navigation rail on the left lists **Projects, Robot, Controls, Simulator and Settings** with a Back
+button above it (in the code the Simulator is `Destination.PRACTICE`). `Navigator` keeps the history as the places visited
+before, each at most once, so Back always leads somewhere different from where you are and the history cannot grow without
+end. Ctrl+1 to Ctrl+5 go to the destinations in rail order and Alt+Left goes back, from wherever the focus is; every rail
+item is a standard focusable item, so Tab and Enter work. Only the shown destination is composed, so each screen's own state
+lives outside the composition (`AppUi`: the Simulator menus and tab, the settings form, the Controls rebinding, the build)
+and the session, viewport and settings live in `AppServices`; leaving Simulator therefore does not stop the run, leaving
+Projects does not stop a build, and coming back shows each as it is.
+
+### Writing the text
+
+The window has few words on purpose. A student reads labels and buttons; a sentence appears only for an error, an empty
+state or a real danger.
+
+- Labels and buttons first. No sentence that explains why ("so that ..."), no pointer to another screen ("see the Robot
+  page"), no message that repeats what the screen already shows, no full stop at the end of a line of text.
+- An error says what is wrong and, when the person can do something about it, what, in one line; the detail goes behind
+  **Show details**.
+- One word for one thing: **Project** (the team's folder), **Build** (what turns it into a program), **Robot** (the
+  `ftcsim.json`), **Motors** (the names the code asks the hub for), **Setup** (field, alliance, start position),
+  **Simulator**, **Code** (telemetry, hardware, console) and **OpMode**.
+- The words session, worker, preparer, import and Gradle are not used in what a student reads, except in the build log and
+  the console, which show what the tools said.
+
+### The screens
+
+- **Projects**: one **Open project** button (a folder chooser) and the **recent projects**, newest first: the project's name
+  and folder and what it was last run with (field and alliance), with one-click **Open** and a remove button. Ten are
+  kept. The folder to choose is the one with `settings.gradle`; any other folder says so in a short error that can be
+  dismissed. Choosing the folder is the consent to build it: there is no trust dialog (`Request.trusted` stays in the
+  contract and is always true from here). The build view, the question for the game and a failure also live on this screen
+  (below).
+- **Opening a project** (`AppUi.openFolder`, used by Projects and at start): the preparer's `inspect` runs off the UI
+  thread; a **project** is opened by the `ProjectRunner`, a **built program** is refused with the name of the kind of
+  folder to open instead, and anything else is refused with the reason. Opening a project while another is being built is
+  refused, and the build is left alone.
+- **At start** the application opens the project that was open last time, exactly as Open project does (so a changed
+  source is built again and an unchanged one is not), unless `--no-last-project` is given, and shows the Simulator when it
+  is done. If the folder is gone the screen says so; if the project is no longer set up for the simulator (no usable
+  `ftcsim.json`, and the Robot page not skipped) it stays on Projects with a message instead of going on to the Robot page,
+  which only a project the person opens now leads to. With no last project the window stays on Projects and nothing is opened.
+- **Robot**: see "Robot" below.
 - **Controls**: see Input below.
 - **Settings**: render resolution (50, 75 or 100 percent of the viewport's size; the smaller picture is drawn by the
-  render thread and stretched with filtering), the frame cap (60, 90 or 144, never above the display: the page says what
-  the display's refresh rate makes of it), the performance overlay (default off), and where the settings file is.
-- **Practice**: below.
+  render thread and stretched with filtering), the frame cap (60, 90 or 144, never above the display: "Display 144 Hz,
+  drawing at 144 fps"), the performance overlay (default off), and where the settings file is.
+- **Simulator**: below.
+
+### The flow of a project
+
+`ProjectRunner` is the one place that moves a person from a folder to a moving robot. Its `ProjectActivity` is `Idle`,
+`Building`, `NeedsGame(project, program, stored)` or `Failed(project, message)`; `RobotState` is `FromFile` or
+`Undescribed` (with the problem of a file that is there and cannot be read).
+What the person should read goes out on the runner's `messages` flow (a snackbar) and what stays wrong goes to its
+`problems` flow (the Problems tab).
+
+1. **Build.** `BuildView` shows the project's name, "Step N of M: label" in the preparer's words, **Cancel** and a closed
+   **Show log**. `PrepareModel` (state flows, no Compose; `PrepareModel(preparer)`) holds the build and its end, so
+   nothing waits for the preparer on the UI thread and the build outlives the screen. The log is selectable monospace text
+   in a lazy list; the newest 2000 lines are kept (`OutputLog`, which says how many were dropped) and the build log file
+   has all of it. A good build goes straight on; a failure is `BuildFailedView`: one line, **Show details** and **Build
+   again**. A cancellation is shown neutrally, not as an error.
+2. **Game.** A project that has no remembered run on this computer and no `run.field` in its `ftcsim.json` is asked once
+   for its game (`GameChoice`: BIOBUZZ or DECODE, the newest preselected, **Continue**). `continueWithGame()` carries on.
+   Every other project starts with what it was last run with, else what the `run` block says.
+3. **Start.** The session starts and the Simulator is shown (when the person is still on Projects or at the start; someone
+   who went to Controls meanwhile is left there and finds it running). The runner reads the project's `ftcsim.json` off the
+   UI thread and puts its `RobotMapping` in the `SessionRequest`; a project **without** a usable `ftcsim.json` runs with
+   `RobotMapping.empty(projectName)`, a robot with no motors mapped (the simulator assumes no names, so every motor the code asks
+   for is unmapped, the wheels too), and a problem says so ("No ftcsim.json: no motors are mapped"). A file that is there and
+   is not a schema 2 file (an older version, or one that does not parse) is never read as a mapping and never overwritten
+   silently: the problem is "ftcsim.json is from an older version" (or what could not be read), the project is treated as
+   having no mapping, and saving first copies the file to `ftcsim.old.json`. The first time, the Robot screen is shown after
+   the session opens so that the robot can be mapped. `skipRobot()` remembers the choice
+   (`RecentProject.robotSkipped`, stored as `project.N.robotSkipped`) and the page does not open by itself again.
+4. **Robot file.** `saveRobot(mapping)` writes the whole mapping through `mappings.save(folder, mapping)`, announces "Saved
+   ftcsim.json", shows the Simulator and restarts the code, which reads the file again. `saveDefaults` writes the Setup tab's
+   field, alliance and start position into the `run` block and announces it.
+
+A build and a running session coexist: nothing in the build touches the session. The two ways a waiting project can be
+resumed (the game chosen, the robot settled) start one session however they race.
+
+### Robot
+
+The **Robot** screen (`RobotScreen`) is the mapping page (`MappingScreen`, `MappingModel`, package `dev.ftcsim.ui.robot`) and
+nothing else. The same page maps the robot of a project that has no `ftcsim.json` and edits one that has. A project that is
+not open shows "No project open" and a button, and one that is building shows a spinner. The robot itself is fixed by the game
+(`robots/fixed-robots.md`); the page only says which motor of the team's code is which part of it.
+
+- The person picks an OpMode (none is preselected) and the app runs it up to Init to read the names it asks the hub for
+  (`HardwareScan`, below). The page has two columns, each scrolling on its own. On the left, **Detected**: every motor the code
+  asked for that is not mapped, a line each (only motors: servos, sensors and pins are not mapped, the simulator provides them).
+  On the right, the fixed parts of the project's game, one row each: **Wheels** (the four), then **Mechanisms**: Intake roller,
+  Conveyor, Shooter flywheel and, only when the project's field is `biobuzz`, Turret. Every mapped motor has its **model** (the
+  catalogue of `Catalogue.motors()`) and a **Mirrored** switch. The four wheels share the drive motor, so changing the model on
+  one changes it on all; another part shows the model it usually has (`RobotMapping.usualModel`) until another is chosen. A motor
+  is **dragged** or **clicked and assigned** from the left to a row (`DragState`), and taken off with the cross on its chip. A
+  wheel holds one motor, any other part holds any number, and a motor is on one part only. Hub and port are not asked: the
+  design gives each motor the next free port.
+- Below the rows: **Robot** (Name, Mass (kg), Wheel diameter (mm) and, for BIOBUZZ, Turret ratio: motor revolutions for one turn
+  of the turret), **Hub** (two dropdowns, Logo faces and USB faces, which must be at right angles) and **Limelight**, whose
+  **Settings** button opens a window with the six numbers of its mount (X, Y, Z in metres, Yaw, Pitch, Roll in degrees). The
+  button's text turns red while one of them is not a number. What is wrong with a field is said under it in the contract's own
+  words (`RobotMapping.problems`, kept as `MappingModel.problems()`), and `blockedReason` says in a few words why the button
+  cannot be pressed ("Map all four wheels or none", "At most 8 motors fit on two hubs").
+- With a file, `MappingModel.load` puts what the file says in the same rows and form (read off the UI thread after every
+  build), so everything is edited the way a new robot is mapped. `edited` compares the page with what was loaded, whatever order
+  the motors are in. A motor mapped to the turret in a game without one goes back to the list.
+- The button at the bottom reads **Create** for a project without a usable file (with **Skip**, remembered for the project;
+  enabled once a motor is mapped) and **Save** for one with a file (enabled when something differs from the file). Both call
+  `ProjectRunner.saveRobot`, which writes the whole mapping, announces "Saved ftcsim.json", shows the Simulator and restarts
+  the code.
+
+The names the program asked for and the mapping does not place come from `SessionStatus.unmapped` (wire v5,
+`architecture/link.md`); the window uses only the motors among them.
+
+### Restart code
+
+The robot code is the project's source on disk, and nothing watches it. A person edits, then presses **Restart code** in the
+Simulator's top bar (the button is off while a build is under way). `ProjectRunner.restart()` builds what is on disk now
+with the same preparer as Open project and, when the build ends, starts the session again with the new program and the
+project's current `ftcsim.json`, keeping the field, alliance, start pose, seed and speed that were in use. It does not ask
+and does not leave the Simulator screen. While it builds, `RestartStrip` is a thin strip under the top bar ("Step 2 of 6:
+...") with **Cancel**. A failure is a snackbar "Build failed" and an entry in the Problems tab (with the build log's path,
+which opens through `LogOpener`); the session that was running stays as it was. A source that did not change is not built
+again, so a restart with no edits takes a moment. A source that changes while the build runs is built once more.
+
+The runner keeps the last two programs of a project and deletes older ones (`docs/architecture/app.md`), so restarting
+all day does not fill the disk.
 
 File and folder choosers sit behind `FileChooser` (`AwtFileChooser` is the real one: the native dialog for files, Swing's
 folder chooser in the Windows look for folders, because the native one cannot choose a folder), and opening a build log
 sits behind `LogOpener` (`AwtLogOpener` hands the file to `java.awt.Desktop` on an IO thread). Tests use `FakeFileChooser`
 and `FakeLogOpener`: no dialog opens and no program starts; the two real ones are untested for that reason.
 
-Icon-only buttons (Back, pause, reset, remove a recent run, clear a key) have a plain tooltip (`Tip`) and a content
+Icon-only buttons (Back, the keyboard hint, remove a recent project, clear a key) have a plain tooltip (`Tip`) and a content
 description; custom controls carry descriptions that say what they are and what they hold ("Gamepad 1 listens to:
-Automatic", "Left stick up: W. Press to change.", "Robot profile: hornet-2026").
+Automatic", "Left stick up: W. Press to change.", "Open FTC-Hornet").
 
-## The Prepare screen
+## The Simulator screen
 
-Turns a team's project into a program the simulator can run. `PrepareModel` (state flows, no Compose) holds the chosen
-project, the preparation and its end; the screen only shows it, so nothing waits for the preparer on the UI thread and the
-preparation outlives the screen. Its states:
+- **Top bar**: an OpMode menu (the OpMode the person chose last, or the autonomous of the last match they armed, is kept
+  with the project in the user's settings as `project.N.opMode`, and every session that opens for the project picks it
+  again if the program still has it: `OpModeMemory`; the OpMode a session picks by itself is never kept) and one main button that goes **Init**, then **Start**, then **Stop** (enabled the way the
+  Driver Station enables them: Init from idle with an OpMode picked, Start after Init, Stop any time after Init; the
+  OpMode cannot change while one is initialised or running; `Controls.of` is the one place that says so; during a match
+  the button reads Start match and then Stop), a **start position** menu (`StartPositionMenu`: every pose of the field, the
+  chosen alliance's first, then the team's **named positions** for the field (`startPositions` in `ftcsim.json`, so shared
+  with teammates), and **Edit positions...**, a dialog with a row for each (name, X, Y, heading, **Start** and remove), **Add
+  position** (it begins where the robot starts now) and **Save**, which writes the whole list into the project; the entry is
+  off for a project with no usable file; choosing a position starts the session again from it, as Apply on the Setup tab
+  does; a field with no poses offers only the team's positions), a visible
+  **Reset world** button (stops the code and puts the robot and the field back at the start in the same session, at once and
+  with no question: `PracticeSession.reset`) with an arrow beside it (`RestartMenu`) that offers **Restart code** (above: build
+  the project again) and a **more** menu (`MoreMenu`) with Match, pause and speed (0.25x to 4x).
+- Over the viewport: the viewport's own notices
+  ("No project open", "Connecting", "Opening", "Session stopped") and the robot-file notices.
+- **Finding the hardware** (`HardwareScan`): driven by the Robot page, not by a question. `scan(opMode)` sends Init for
+  that OpMode through `PracticeSession.init(name)` (the top bar's choice is untouched), waits for the phase to be Init, sends
+  Stop and waits for Idle, then counts `SessionStatus.unmapped`; it follows `PracticeSession.openings`, a counter, because
+  two sessions with equal descriptions are equal `SessionState`s and a flow would not tell them apart. A scan that does not
+  reach Init within 10 simulated seconds says so with the program's first error; Cancel gives up one. The OpMode is
+  remembered in `project.N.scanOpMode` and scanned again by itself when a new session opens, so the Robot page is current.
+- **Setup tab** (`StartPanel`, handed to the screen by the application so that the screen knows nothing of projects): the
+  **Field**, the **Alliance** (Red or Blue) and the **start position**: the chosen field's poses for that alliance, or
+  "Custom position" with X, Y and a heading in degrees. `StartPoses` goes by the names the games use: a pose whose name
+  begins with RED or BLUE (any case) belongs to that alliance, any other name to both; a field whose poses name no
+  alliance offers them all. Switching alliance moves a pose of the other alliance to the first one of the new; switching
+  field takes the first pose of the new field in a form nobody has touched and keeps numbers the person typed. A mistake in
+  the numbers is a short phrase next to the field. `SetupRules` is the one place that says what a valid form is, and the
+  catalogue from the simulator is what it offers.
+  - **Apply** starts the session again with these, with the same program and (when the seed is random) the same seed, so
+    that the alliance or the pose is the only difference between two runs; it does not build. It restarts on a fresh
+    worker (`docs/architecture/app.md`), which takes a few seconds. A changed field draws a new seed, because it is another
+    run. The seed has no control: every run draws one when it starts.
+  - **Save as default** writes the field, alliance and start pose into the `run` block of the project's `ftcsim.json`, so
+    that teammates start the same way; it changes nothing else in the file, and is off for a project with no file.
 
-- **Idle**: nothing chosen; a button opens the folder chooser. **Ready**: the project's name, folder and the preparer's
-  one-sentence summary, with **Prepare**.
-- **Consent.** Preparing runs the project's own Gradle build and so its code on this computer, so before the first
-  `prepare` for a folder a Material 3 dialog says in plain words: "Preparing runs this project's own Gradle build and its
-  code on this computer. Only continue with projects you trust." (Cancel / Prepare). Agreeing is remembered for the folder in
-  the settings file (`trusted.N`, the folder's absolute path in lower case, the newest hundred), and `Request.trusted` is true
-  only after that agreement; the model never calls `prepare` with `trusted = false`. Cancel changes nothing and is not
-  remembered. A question left open when the screen is left is withdrawn.
-- **Running**: a step list with the preparer's labels (done: a check mark, active: a spinner, waiting: an open circle; the
-  label of a step is only known when it begins, so a waiting step reads "Step 4 of 6"), a **Cancel** button that is disabled
-  from the moment it is pressed until the preparer says the preparation ended, with "Cancelling" beside it, and the output.
-- **Output**: selectable monospace text in a list of its own (a lazy list, so thousands of lines cost nothing), the newest
-  2000 lines kept (`OutputLog`; the note "Showing the newest 2000 lines of output; the N before them are not shown" says
-  how many were dropped, and the build log file has all of it). It follows the newest line until the person scrolls up to
-  read and follows again once they scroll back to the end (wheel and touch are seen by a nested scroll connection, which
-  the screen's own scrolling to the end does not go through; Page Up, Page Down, Home and End work when the list has focus).
-- **Failed**: the preparer's message in words, the details lines that show why (selectable), **Open build log** when the
-  preparer gave a log (through `LogOpener`; if it cannot be opened the reason is shown there) and **Prepare again**. No
-  advice of the window's own is added: the message is already written for students. A **cancellation** (`CANCELLED`) is
-  shown neutrally as "Preparation cancelled", not as an error.
-- **Finished**: the program's name and SDK version, its OpModes and its warnings as expandable lists (the warnings say
-  that they point to code that may not work in the simulator and are not claims that it fails), the program folder, and
-  **Use this program**, which fills the Setup form's program in and goes there; the run is remembered in the recent runs
-  like any other when it is started.
-
-Preparing and a running practice session coexist: nothing in the preparation touches the session.
-
-## The Practice screen
-
-- **Top bar**: OpMode drop-down, Init, Start and Stop (enabled the way the Driver Station enables them: Init from idle
-  with an OpMode picked, Start after Init, Stop any time after Init, the OpMode cannot change while one is
-  initialised or running; `Controls.of` is the one place that says so), then **Match**, then pause, speed (0.25x to 4x) and
-  reset, which asks for confirmation.
 - **Match.** Offered when the robot is idle and no match is armed or played. Its dialog asks for an optional autonomous
   OpMode ("None: the match starts with the driver-controlled period" is a choice) and the driver-controlled one, from the
   program's own OpMode kinds, with the OpMode picked in the top bar, or else the first of each kind, chosen already
@@ -139,7 +246,7 @@ Preparing and a running practice session coexist: nothing in the preparation tou
   buttons for the match's own: the OpModes in a line, **Start match** (only while armed) and **Stop** (gives up an armed
   match, ends one under way); the free-practice buttons are not shown then rather than left dead. The Match button is off
   while it cannot work and says why in its tooltip and to screen readers ("Stop the OpMode first: a match starts from idle.",
-  "A match has been played. Reset the session to play another.", "This program has no teleop OpMode, which a match needs.").
+  "A match has been played. Reset the world to play another.", "This program has no teleop OpMode, which a match needs.").
   The window has no clock of its own: the countdown and the period come from `SessionStatus.match` alone (the simulator times
   the periods in simulated time, so pausing or changing the speed moves the countdown with it, and the lengths are not
   known to the UI). A scoreboard over the viewport shows the state (Armed, Autonomous, Transition, TeleOp, Ended), the whole
@@ -154,11 +261,13 @@ Preparing and a running practice session coexist: nothing in the preparation tou
   (DECODE's goal side), because behind it is the goal. Chase follows the robot from behind and does not look through
   anything taller than half a metre (a goal, a HIVE): it stops in front of it, and where that would leave it nearer than
   1.1 m (a robot standing against a goal) it goes round to the nearest side that is clear and comes back when behind is
-  clear again. Dragging leaves any preset for Free, and a wheel zooms. A focus ring shows when it has the keyboard, and a
-  hint says what the keys do. The session's field's human actions are chips in a corner.
-- **Side panel**: Telemetry (the Driver Station lines, with the SDK's global warning and error on top), Hardware,
-  Score and Problems. Problems are named in words ("Error - Robot program", "Warning - Simulator"), never by colour
-  alone; the tab carries a count badge, an error raises a snackbar that leads to the tab.
+  clear again. Dragging leaves any preset for Free, and a wheel zooms. A focus ring shows when it has the keyboard. The session's field's human actions are chips in a corner.
+- **Details panel**: hidden until the **Details** button at the viewport's bottom right is pressed; it then floats over the
+  viewport above the button (it takes no keys from the robot, and the button closes it). Four tabs. **Code** has the Driver Station telemetry lines (with the SDK's global warning and error on
+  top), the hardware readouts and the console. **Score** has the field's score. **Problems** is the one place that lists
+  what went wrong, in words ("Error - Robot program", "Warning - Simulator"), never by colour alone; the tab carries a
+  count badge and an error raises a snackbar with **Show**, which opens the panel on the tab, as the problem count in the
+  status strip does. **Setup** is above.
 - **Status strip**: where the session is (no session, opening, idle, initialised, running, failed, or the match), and once
   it is open the simulated time and the speed kept against speed asked for (red when the machine cannot keep up), then the
   problem count and the viewport's frame rate, or "Viewport at rest".
@@ -171,9 +280,8 @@ Preparing and a running practice session coexist: nothing in the preparation tou
   for the same session on a link that is opened anew, since a failed link cannot be asked again, and **Change the setup**).
   A link that cannot be had is said first ("The simulator could not be started", with the message and **Try again**).
 - While the session opens the controls are disabled and an overlay says so. Nothing waits on the link on the UI thread, and
-  the window closes at once while the link shuts down. A reset shows the session opening again, because the link answers a
-  reset with `opened` for a new session with the same request and the speed set last (the match is gone with the old
-  session); the OpMode the driver picked is kept if the new session still has it.
+  the window closes at once while the link shuts down. A reset does not show the session opening: the worker resets the world in place (below) and answers with
+  `opened`, so the window starts the world again (the match is gone); the OpMode the driver picked is kept if the session still has it.
 
 Every control is a standard M3 component, so Tab reaches it and Enter or Space operates it and it draws its own focus
 state (a test presses Enter on a focused Init button); the viewport takes focus with a click or with Tab and shows a ring.
@@ -183,7 +291,7 @@ state (a test presses Enter on a focused Init button); the viewport takes focus 
 `PracticeSession` exists before any link does: the application opens the link off the UI thread and hands it over with
 `attach` (a session asked for before then is opened on it at once; a link that is replaced is dropped with `detach` and
 nothing it says afterwards is heard). It registers as the link's `Listener` once per link, asks for the session with
-`open(request)` (a new request replaces the one that is open; the Home screen's reopen goes through the same call), and
+`open(request)` (a new request replaces the one that is open), and
 turns what comes back into separate `StateFlow`s: `link` (connecting, connected or unavailable with the application's
 message), `session` (none, opening, open or failed, the OpModes, the one picked), `run` (phase, paused, speed), `timing`
 (simulated time at most ten times per second of simulated time, speed kept), `match` (the state and the whole seconds left,
@@ -193,11 +301,17 @@ something that changed; the contracts are declared stable to the Compose compile
 values skip recomposition. The first snapshot, scene and status of a new session replace the old ones; an `opened` event
 for a session that was already open (a reset) is handled the same way, and the gamepads are sent again from inside it.
 
+**A session that replaces one that was opened goes to a fresh worker.** `AppServices.openSession` (used by Open project,
+Restart code and Apply and restart) drops the link, which closes its worker process, and opens another, with the session
+asked for. The first session of a link is opened on it as it is. The reason is a measurement: a worker keeps about 20 MB of
+every world it held (`docs/architecture/app.md`, "Why Restart code starts a new worker"), so a team restarting all day
+would end with a gigabyte worker. A new worker costs a few seconds, during which the viewport says it is connecting.
+
 `FakeSimulatorLink` is an in-process link for developing and testing without a worker: a 12 ft field with walls, two
 goals, a barrier, a turnstile and two kinds of piece, a kinematic chassis that gamepad 1 drives while an OpMode runs,
 four canned OpModes (a teleop, a self-driving square, a telemetry spammer, one that crashes after three seconds),
 telemetry, hardware readouts, score, problems and human actions. It tells its listeners its **catalogue** (three fields,
-`none`, `decode` and `biobuzz`, with the start poses and human actions of each, and two profiles) from the link thread right
+`none`, `decode` and `biobuzz`, with the start poses and human actions of each, and two motors) from the link thread right
 after a listener is added, as the real link does, and it plays a **timed match** with the same states as the simulator
 (armed, autonomous, transition with the teleop OpMode initialised, teleop, ended; Stop gives up an armed match or ends one
 under way; the periods are timed in simulated time, 30 s, 8 s and 120 s by default, and a test makes them short). A
@@ -244,7 +358,7 @@ readback; then it sleeps until woken. A world at rest therefore costs no render 
 high-resolution timer; the cap is a setting, and a changed cap puts a new pacer in place that the render thread takes
 before its next frame and closes the old one itself, because a pacer may only be used by one thread.
 
-The viewport is shown only while the Practice screen is composed. When it leaves, `ViewportEngine.setShown(false)` makes
+The viewport is shown only while the Simulator screen is composed. When it leaves, `ViewportEngine.setShown(false)` makes
 the render loop stop drawing (it rests, 10 wake-ups a second), releases the held keys and tells the controllers' gate;
 when it comes back the loop draws a frame at once, and `ShownFrame` (kept by the engine, not by the composition) already
 holds the last picture, so the screen is never blank in between. The render scale changes the size of the offscreen target
@@ -267,7 +381,7 @@ smaller than the area.
   controller, but only one is connected", "The keyboard can drive only one gamepad at a time"). A named controller that is
   not connected leaves its gamepad neutral and says so without calling it a problem. Both gamepads always exist and are
   neutral when nothing is assigned; a controller that disconnects frees its place and its gamepad is neutral at once.
-- **The robot is driven only while the Practice screen is shown**, the window is active and no modal is open
+- **The robot is driven only while the Simulator screen is shown**, the window is active and no modal is open
   (`ViewportInput` gates both keys and controllers; the controllers do not need the viewport's own focus). The Controls
   screen has its own live preview (`GamepadRouter.preview`), which ignores that gate, so a controller can be tried while the
   robot is not listening.
@@ -288,11 +402,12 @@ smaller than the area.
 
 ## Settings on disk
 
-`%LOCALAPPDATA%\FTC-Sim\config\ui.properties` (the launcher keeps its caches in `%LOCALAPPDATA%\FTC-Sim` too; there is no
+`%LOCALAPPDATA%\FTC-Sim\config\ui.properties` (the application keeps its natives, logs and programs in `%LOCALAPPDATA%\FTC-Sim` too; there is no
 Java helper for it there, so `UserDirectories` is a few lines in this module). A UTF-8 properties file with `format=1`:
-`display.*` (render scale, frame cap, overlay), `gamepad.N.*` (assignment kind, controller GUID and name, dead zones),
-`keyboard.<CONTROL>=<AWT key code>` (0 is unbound), `recent.N.*` (profile, program, field, alliance, seed, start pose) and
-`trusted.N` (the project folders the person agreed to have prepared, absolute, lower case, newest last, at most a hundred).
+`display.*` (render scale, frame cap, overlay, an old `lengthInches` is ignored), `gamepad.N.*` (assignment kind, controller GUID and name, dead zones),
+`keyboard.<CONTROL>=<AWT key code>` (0 is unbound), `project.N.*` (a recent project: its folder, name and, when it was run, the
+field, alliance, seed and start pose of that run, the OpMode that finds its hardware, and `robotSkipped`; an older `recent.N.*` run list
+and the `trusted.N` keys of earlier versions are ignored, not read).
 It is read once when the application starts and written after every change, on a thread of its own and coalesced
 (any number of changes before the writer runs is one write), through a temporary file that then replaces the real one. A
 missing file gives the defaults. A value that makes no sense is replaced by its default and the rest is kept; a file that
@@ -307,30 +422,42 @@ stick buttons, 1 2 3 Start Back Guide; diagonals stay on the unit circle.
 
 `PracticeSmokeTest` runs the real application stack headless: the services on a fake host, the real screens drawn into
 memory by Compose's `ImageComposeScene`, the real render thread on a hidden OpenGL context. One test walks the whole
-flow: Home, a project folder opened (Prepare, the consent question, the fake preparation running and finishing), "Use this
-program" into Setup, a run started, and on Practice a match armed, started and stopped; it writes a screenshot of every
-step. Others start a run from the Setup screen's form, click the viewport with a synthetic pointer event, hold W with a
-synthetic key event, check the robot drove and that opening a dialog released the key, that leaving Practice releases the
+flow: Projects, a project folder opened (the fake build running, the question for the game, the Robot page, the simulator starting by itself), and on the Simulator a match armed,
+started and stopped, and a restart; it writes a screenshot of every
+step. Others start a run from the Setup tab, click the viewport with a synthetic pointer event, hold W with a
+synthetic key event, check the robot drove and that opening a dialog released the key, that leaving the Simulator releases the
 keys, stops drawing and keeps the run going, that a half-size picture still shows the field, that the performance overlay
 measures the real render thread, and check pixels (the robot in its alliance's colour, green and purple pieces, many shades). They write
-`build\screens\*.png` (every screen, the Setup and Controls pages at full length). Without an OpenGL 3.3 context the
+`build\screens\*.png` (every screen, the Controls page at full length). Without an OpenGL 3.3 context the
 OpenGL-dependent tests are skipped, not failed.
 
-`AppFlowTest` drives the whole interface on the fake host with synthetic clicks (no OpenGL): Home to Setup to Practice,
-Init, away to Controls and back with the run intact, a recent run reopening with one click, "Open practice package" and
-"Open project" routing by what the folder is, a folder that is neither explained in place and dismissed, a project refused
-while another is being prepared, a preparation going on while another screen is shown and a practice session runs, and
-settings reaching the engine and the key map. `PrepareScreenTest` shows every state of the Prepare screen (idle, ready, the
-consent dialog, running, cancelling, cancelled, failed with and without a build log, finished with its expandable lists)
-on the fake preparer played by a `ManualScheduler`, or on a scripted one where exact events matter, and checks that the
-output follows the newest line and stops following when scrolled up. `AppServicesTest` covers the host: the link opening off
+`AppFlowTest` drives the whole interface on the fake host with synthetic clicks (no OpenGL): Open project to the game
+question, the Robot page (a mapping on a file, a mapping created by clicks) and the Simulator, with what was chosen being what starts; Init, away to
+Controls and back with the run intact; a recent project reopening with one click; **Restart code** with its strip; a build
+that fails; a folder that is neither a project nor a program refused in place and dismissed; a project refused while
+another is being built; the last project opened at start and a missing one said on Projects; the
+FAKE HOST banner; a link that cannot be had and Try again; and settings reaching the engine and the key map.
+`ProjectRunnerTest` (on a scripted preparer and stub links, with bounded waits on state) covers the runner's
+states: building, needing the game, failing, cancelling, a source that changes during the build, a restart
+keeping the run, the robot mapped, skipped, undescribed or in a file that is not read, the mapping that travels in the request, the
+messages and problems it emits and saving the run defaults. `BuildViewTest` shows the build view (running with its step line, cancelling, failed with and without a
+build log, the log following the newest line and stopping when scrolled up), `ProjectListTest` the recent projects,
+`RestartStripTest` the strip, and `MappingModelTest` and `MappingScreenTest` the Robot page (placing and removing by click
+and by the drag's own callbacks, what a place refuses, the model and Mirrored of a motor, what is wrong and where, what makes
+the page differ from its file, the Hub and Limelight forms), all on the fake preparer played by a `ManualScheduler` or on a scripted one where exact events
+matter. `AppServicesTest` covers the host: the link opening off
 the UI thread, a link that cannot be had and the retry, a session asked for early, a failed session on a fresh link, and the
 link being closed with the window, all with bounded waits on state and no sleeps. `PracticeScreenTest` covers the match
-controls in every state and refusals; `SetupScreenTest` the catalogue-driven form (before it arrives, filled, a field or
-alliance change changing the start poses). Each other screen has a Compose UI test with synthetic events (clicks, text,
-key presses, hover for the tooltip, semantic slider actions, mouse-wheel scrolling), including Tab order on Home and the
+controls in every state and refusals; `StartPanelTest` the Setup tab (the poses of an alliance, custom numbers, applying
+on a fresh worker with the seed kept, saving the defaults); `PracticeSessionTest` the console (lines in order, the newest kept, a new session starting it again). Each other screen has a Compose UI test with synthetic events (clicks, text,
+key presses, hover for the tooltip, semantic slider actions, mouse-wheel scrolling), including Tab order on Projects and the
 rebinding of a key; the pure parts (routing, mapping, settings codec and store, form validation and model, navigator,
 the prepare model and output log, match display, key rules) are unit tests with no Compose.
+
+The Robot page (`dev.ftcsim.ui.robot`) has unit tests for `MappingModel` (including loading a mapping, editing it and changing nothing) and
+`MappingScreenTest` with synthetic events; `HardwareScanTest` (on a stub link: Init and Stop, the names found, the
+choice remembered and rerun by itself, an OpMode that never initialises, Cancel). `OrbitCameraTest` also checks that `project`, `ray` and `pan` agree with the GL matrix. A real mouse drag is not
+tested; the gesture is tested with synthetic events.
 
 `FieldRendererTest` looks at the renderer's own pixels on a small offscreen target (skipped without OpenGL): the field's floor
 keeps its colour and shows seams and no glare, a shadow dims the floor by a third and two shadows on one spot are one
@@ -358,10 +485,10 @@ a build output and are not committed; `viewport-measurements.md` describes what 
   square to the walls and the audience's end (-X) otherwise; a field that says so would remove the guess.
 - The real file chooser (`AwtFileChooser`) and log opener (`AwtLogOpener`), and the real preparer and link, are only
   exercised by the application around the window; here they are behind interfaces and replaced by fakes.
-- The Prepare screen cannot show the labels of steps that have not begun, because `ProgramPreparer.Step` is only reported
-  when a step starts (a waiting step reads "Step 4 of 6").
+- The progress line says only what the build is doing in the preparer's words, and not how far along it is: the preparer
+  reports steps, not a fraction.
 - A timed match has no start countdown, no buzzer and no sound; the field's own scoring decides the final score.
-- Theming beyond the standard M3 schemes, a collapsible or resizable side panel, a Windows-style folder chooser (Swing's
+- Theming beyond the standard M3 schemes, a collapsible or resizable details panel, a Windows-style folder chooser (Swing's
   chooser in the Windows look is used; the native one cannot pick folders).
 - Rumble and LED feedback to controllers; controller hot-plug and GUID matching on hardware are untested (no controller
   was attached): the router and screens are tested with synthetic readings.

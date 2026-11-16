@@ -10,14 +10,13 @@ import dev.ftcsim.hardware.i2c.I2cPeripheral;
 import dev.ftcsim.hardware.i2c.RegisterFilePeripheral;
 
 /**
- * The Bosch BNO055 inertial sensor, as the SDK's drivers for it talk to it: a REV hub's own IMU, the REV 9-axis
- * IMU, the AndyMark IMU and the Adafruit breakout are this one chip, and {@code IMU}, {@code BNO055IMU} and the
- * concrete BNO055 drivers (new and legacy) run unchanged on top of this model.
+ * The Bosch BNO055 inertial sensor inside a REV Control Hub, as the SDK's drivers for it talk to it: {@code IMU},
+ * {@code BNO055IMU} and the hub's own two drivers run unchanged on top of this model.
  *
  * <p><b>What it reports comes from the world.</b> Its accelerometer, gyroscope and fusion outputs are computed from
  * the true chassis: its orientation and angular velocity, and its acceleration (the change of its velocity). Nothing
  * the robot code tells the SDK reaches the chip; code that tells the SDK a mounting that is not the real one gets
- * the wrong angles, as on a robot. The chip is mounted as the profile says ({@code mount.logo} and
+ * the wrong angles, as on a robot. The chip is mounted as the robot mapping says ({@code mount.logo} and
  * {@code mount.port}, see {@link Bno055Mount}), logo up and port forward by default, which is what the SDK assumes
  * when it is not told otherwise.
  *
@@ -47,20 +46,14 @@ import dev.ftcsim.hardware.i2c.RegisterFilePeripheral;
  * gyroscope, Euler, quaternion, linear acceleration, gravity and temperature outputs in the units the driver
  * selected, and the axis remap registers are modelled. The magnetometer, the interrupts, self-test, the power modes
  * and the clock selection are not: their registers read what was written, and do nothing. Gyroscope and
- * accelerometer ranges clip what they report. The only imperfection is the profile's {@code gyroBiasRadPerSec}
- * (default 0), a drift of the heading at a constant rate, counted from power-up or the last reset, which the gyroscope
- * outputs show as well.
+ * accelerometer ranges clip what they report. The chip is ideal: no drift, no noise.
  *
- * <p>Profile settings: {@code address} (40, the Control Hub's own IMU, the Adafruit breakout and the AndyMark
- * IMU, or 41, the REV 9-axis IMU; default 40), {@code mount.logo} and {@code mount.port}, {@code gyroBiasRadPerSec}.
+ * <p>Settings: {@code mount.logo} and {@code mount.port}, the only thing that is the robot's.
  */
 public final class Bno055Model extends RegisterFilePeripheral {
 
-    /** The address of the chip with its address pin low, which is the default of every SDK driver but the REV one. */
+    /** The address of the chip with its address pin low, which is where the Control Hub's own IMU is. */
     public static final int ADDRESS = 0x28;
-
-    /** The address with the pin high: the one the REV 9-axis IMU is built with. */
-    public static final int ALTERNATE_ADDRESS = 0x29;
 
     static final long BOOT_MILLIS = 650;
     static final long DATA_START_MILLIS = 50;
@@ -136,7 +129,6 @@ public final class Bno055Model extends RegisterFilePeripheral {
 
     private final BodyView body;
     private final Bno055Mount mount;
-    private final double gyroBias;
     private final byte[] configuration = new byte[256];
 
     private int page;
@@ -144,7 +136,6 @@ public final class Bno055Model extends RegisterFilePeripheral {
     private Bno055Mount.Frame frame;
     private boolean awake;
     private long bootDoneNanos;
-    private long referenceNanos;
     private double referenceYaw;
     private long modeEnteredNanos;
     private long nextOutputNanos;
@@ -156,11 +147,10 @@ public final class Bno055Model extends RegisterFilePeripheral {
     private long previousPoseNanos;
     private Vec3 lastAcceleration = Vec3.ZERO;
 
-    private Bno055Model(int address, DeviceContext context, Bno055Mount mount, double gyroBias) {
-        super(address);
+    private Bno055Model(DeviceContext context, Bno055Mount mount) {
+        super(ADDRESS);
         this.body = context.body();
         this.mount = mount;
-        this.gyroBias = gyroBias;
         this.seen = body.sample();
         // The chip has been powered for as long as the robot has, which is far longer than the program: it has booted.
         powerUp(context.nowNanos() - BOOT_MILLIS * NANOS_PER_MILLI);
@@ -168,14 +158,7 @@ public final class Bno055Model extends RegisterFilePeripheral {
 
     /** The registry's factory. */
     public static I2cPeripheral create(DeviceConfig config, DeviceContext context) {
-        int address = config.integer("address", ADDRESS);
-        if (address != ADDRESS && address != ALTERNATE_ADDRESS) {
-            throw config.rejected("address", "must be " + ADDRESS + " (0x28) or " + ALTERNATE_ADDRESS
-                    + " (0x29), the two addresses the chip can have, not " + address);
-        }
-        Bno055Mount mount = Bno055Mount.read(config);
-        double bias = config.number("gyroBiasRadPerSec", 0);
-        Bno055Model model = new Bno055Model(address, context, mount, bias);
+        Bno055Model model = new Bno055Model(context, Bno055Mount.read(config));
         context.onStep(model::afterStep);
         return model;
     }
@@ -211,7 +194,7 @@ public final class Bno055Model extends RegisterFilePeripheral {
     }
 
     private void latch(long atNanos) {
-        output(atNanos);
+        output();
         nextOutputNanos = (atNanos / OUTPUT_PERIOD_NANOS + 1) * OUTPUT_PERIOD_NANOS;
     }
 
@@ -327,7 +310,6 @@ public final class Bno055Model extends RegisterFilePeripheral {
     /** The chip has booted: heading zero is the way the chassis faces now. */
     private void wake() {
         awake = true;
-        referenceNanos = bootDoneNanos;
         referenceYaw = chipToField(seen).yaw();
     }
 
@@ -351,8 +333,8 @@ public final class Bno055Model extends RegisterFilePeripheral {
         return Mat3.fromQuaternion(pose.qw(), pose.qx(), pose.qy(), pose.qz()).times(frame.orientation());
     }
 
-    /** Writes the outputs of the sensors the mode runs, from the latest sample of the world, at the chip's time {@code atNanos}. */
-    private void output(long atNanos) {
+    /** Writes the outputs of the sensors the mode runs, from the latest sample of the world. */
+    private void output() {
         BodyPose pose = seen;
         Mat3 bodyToField = Mat3.fromQuaternion(pose.qw(), pose.qx(), pose.qy(), pose.qz());
         Mat3 fieldToChip = frame.sensor().transpose().times(bodyToField.transpose());
@@ -371,12 +353,11 @@ public final class Bno055Model extends RegisterFilePeripheral {
         if (mode.gyroscope) {
             int range = configuration[GYR_CONFIG_0] & 7;
             double limit = Math.toRadians(GYRO_RANGE_DPS[range < GYRO_RANGE_DPS.length ? range : 0]);
-            Vec3 rate = fieldToChip.times(new Vec3(pose.wx(), pose.wy(), pose.wz() + gyroBias));
+            Vec3 rate = fieldToChip.times(new Vec3(pose.wx(), pose.wy(), pose.wz()));
             putVector(GYR_DATA, clip(rate, limit), rateScale);
         }
         if (mode.fusion) {
-            double drift = gyroBias * (atNanos - referenceNanos) / NANOS_PER_SECOND;
-            Mat3 orientation = Mat3.rotZ(drift - referenceYaw).times(bodyToField.times(frame.orientation()));
+            Mat3 orientation = Mat3.rotZ(-referenceYaw).times(bodyToField.times(frame.orientation()));
             putOrientation(orientation, units, angleScale);
             putVector(LIA_DATA, linear, accelerationScale);
             putVector(GRV_DATA, gravity, accelerationScale);

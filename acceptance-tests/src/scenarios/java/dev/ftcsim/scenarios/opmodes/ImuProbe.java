@@ -1,7 +1,6 @@
 package dev.ftcsim.scenarios.opmodes;
 
 import com.qualcomm.hardware.lynx.LynxEmbeddedBNO055IMUNew;
-import com.qualcomm.hardware.rev.Rev9AxisImu;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.ImuOrientationOnRobot;
@@ -33,8 +32,6 @@ abstract class ImuProbe extends OpMode {
     public void init() {
         imu = find();
         Probe.record("embeddedDriver", imu instanceof LynxEmbeddedBNO055IMUNew ? 1 : 0);
-        Probe.record("revDriver", imu instanceof Rev9AxisImu ? 1 : 0);
-        Probe.record("askedForDriver", imu.getClass().getName().equals(ImuSettings.externalDriver) ? 1 : 0);
         if (ImuSettings.initialize) {
             Probe.record("initialized", imu.initialize(new IMU.Parameters(mounting())) ? 1 : 0);
         }

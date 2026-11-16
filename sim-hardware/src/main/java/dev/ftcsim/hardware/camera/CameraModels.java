@@ -8,7 +8,7 @@ import java.util.Map;
 import java.util.Objects;
 
 /**
- * The camera models there are, by the type id a robot profile names them with. Adding a camera is writing its model
+ * The camera models there are, by type id. Adding a camera is writing its model
  * and adding one line to {@link #standard()}; nothing else in the simulator knows what cameras exist.
  */
 public final class CameraModels {
@@ -40,7 +40,7 @@ public final class CameraModels {
     /**
      * Builds the camera a profile calls {@code cameraName}.
      *
-     * @param settings the profile's settings of the camera, numbers and text
+     * @param settings the camera's settings, numbers and text
      * @param seed     fixes the camera's noise
      * @throws IllegalArgumentException if the type is unknown, or a setting is missing, wrong or not understood
      */

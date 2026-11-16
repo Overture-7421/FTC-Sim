@@ -8,12 +8,14 @@ import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldRun;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
+import dev.ftcsim.mechanisms.Condition;
+import dev.ftcsim.mechanisms.LaunchSpec;
 import dev.ftcsim.mechanisms.Mechanisms;
 import dev.ftcsim.mechanisms.PlantView;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.Vector3;
-import dev.ftcsim.simulator.profile.MotorCatalog;
-import dev.ftcsim.simulator.profile.RobotProfile;
+import dev.ftcsim.simulator.robot.MotorCatalog;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -21,8 +23,8 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * ARTIFACTS let go the way the profile's launcher lets go of them, by a robot that stands still on the DECODE field.
- * The real {@link Mechanisms} do the launching, so the exit point, direction and efficiency come from the profile; only
+ * ARTIFACTS let go the way the robot's launcher lets go of them, by a robot that stands still on the DECODE field.
+ * The real {@link Mechanisms} do the launching, so the exit point, direction and efficiency come from the robot's design; only
  * the flywheel speed is given.
  */
 final class HornetShot {
@@ -70,7 +72,7 @@ final class HornetShot {
     /**
      * @param ticksPerSecond the velocity both flywheels turn at, in encoder ticks of their motor
      */
-    static Outcome fire(RobotProfile profile, Alliance alliance, Stance stance, double ticksPerSecond) {
+    static Outcome fire(RobotSpec profile, Alliance alliance, Stance stance, double ticksPerSecond) {
         try (Scene scene = Scene.open(profile, alliance, stance)) {
             if (scene == null) {
                 return Outcome.blocked();
@@ -84,7 +86,7 @@ final class HornetShot {
      * for the last to find its way.
      */
     static Volley volley(
-            RobotProfile profile, Alliance alliance, Stance stance, double ticksPerSecond, int balls, double intervalSeconds,
+            RobotSpec profile, Alliance alliance, Stance stance, double ticksPerSecond, int balls, double intervalSeconds,
             double settleSeconds) {
         try (Scene scene = Scene.open(profile, alliance, stance)) {
             if (scene == null) {
@@ -112,20 +114,20 @@ final class HornetShot {
         final FieldRun run;
         final Mechanisms mechanisms;
         final Plants plants;
-        final Map.Entry<String, RobotProfile.Launcher> launcher;
+        final LaunchSpec launcher;
         final int kind;
 
-        private Scene(PhysicsWorld world, FieldRun run, Mechanisms mechanisms, Plants plants, RobotProfile profile, int kind) {
+        private Scene(PhysicsWorld world, FieldRun run, Mechanisms mechanisms, Plants plants, RobotSpec robot, int kind) {
             this.world = world;
             this.run = run;
             this.mechanisms = mechanisms;
             this.plants = plants;
-            this.launcher = profile.mechanisms().launchers().entrySet().iterator().next();
+            this.launcher = robot.launches().get(0);
             this.kind = kind;
         }
 
         /** The scene once the robot has settled where it was put, or null if it stood in something. */
-        static Scene open(RobotProfile profile, Alliance alliance, Stance stance) {
+        static Scene open(RobotSpec profile, Alliance alliance, Stance stance) {
             DecodeField field = new DecodeField();
             PhysicsWorld world = PhysicsWorld.create(NATIVES);
             try {
@@ -136,10 +138,10 @@ final class HornetShot {
                     }
                 }
                 world.addMecanumChassis(
-                        EntityIds.CHASSIS, RobotRig.CHASSIS_KIND, profile.chassis().toConfig(), new Vector3(stance.x(), stance.y(), 0),
+                        EntityIds.CHASSIS, RobotRig.CHASSIS_KIND, profile.chassis(), new Vector3(stance.x(), stance.y(), 0),
                         stance.heading());
                 Plants plants = new Plants(profile);
-                Mechanisms mechanisms = MechanismFactory.create(profile, plants, field.pieceSpecs());
+                Mechanisms mechanisms = profile.mechanisms(plants, field.pieceSpecs());
                 Scene scene = new Scene(world, run, mechanisms, plants, profile, field.pieceSpecs().keySet().iterator().next());
                 scene.advance(SETTLE_STEPS);
                 BodyPose settled = world.bodyPose(EntityIds.CHASSIS);
@@ -168,13 +170,13 @@ final class HornetShot {
         /** Loads the next ball from the field's reserve into the magazine, spins the launcher up and returns the ball's id once it flies. */
         int release(double ticksPerSecond) {
             int id = run.takeFromReserve(kind).orElseThrow();
-            mechanisms.load(launcher.getValue().storage(), id, kind);
-            plants.spinUp(launcher.getValue(), ticksPerSecond);
+            mechanisms.load(launcher.storage(), id, kind);
+            plants.spinUp(launcher, ticksPerSecond);
             for (int i = 0; i < RELEASE_STEPS && !world.hasPiece(id); i++) {
                 advance(1);
             }
             if (!world.hasPiece(id)) {
-                throw new IllegalStateException("the launcher '" + launcher.getKey() + "' did not let the ball go");
+                throw new IllegalStateException("the launcher '" + launcher.name() + "' did not let the ball go");
             }
             return id;
         }
@@ -225,36 +227,42 @@ final class HornetShot {
 
     /** The shafts of the robot: still, until the launcher is spun up and its feed started. */
     private static final class Plants implements PlantView {
-        private final RobotProfile profile;
+        private final RobotSpec robot;
         private final Map<String, Double> speeds = new HashMap<>();
 
-        Plants(RobotProfile profile) {
-            this.profile = profile;
+        Plants(RobotSpec robot) {
+            this.robot = robot;
         }
 
         /** Both flywheels at the given tick rate and every motor a launch condition names at a speed that satisfies it. */
-        void spinUp(RobotProfile.Launcher launcher, double ticksPerSecond) {
-            for (RobotProfile.Flywheel wheel : launcher.wheels()) {
-                RobotProfile.Motor motor = profile.motors().get(wheel.motor());
-                String name = motor.motor() == null ? MotorCatalog.GOBILDA_435 : motor.motor();
+        void spinUp(LaunchSpec launcher, double ticksPerSecond) {
+            for (LaunchSpec.Wheel wheel : launcher.wheels()) {
+                RobotSpec.Motor motor = robot.motors().get(wheel.motor());
+                String name = motor.model() == null ? MotorCatalog.GOBILDA_435 : motor.model();
                 double radPerSec = ticksPerSecond * 2 * Math.PI / MotorCatalog.motor(name).encoderTicksPerRevolution();
                 speeds.put(wheel.motor(), wheel.sign() * radPerSec);
             }
-            for (RobotProfile.When condition : launcher.when()) {
-                boolean capped = condition.maxRadPerSec() != null;
-                speeds.put(condition.motor(), capped ? condition.maxRadPerSec() - 80 : condition.minRadPerSec() + 80);
+            for (Condition condition : launcher.active()) {
+                Condition.ShaftSpeed speed = (Condition.ShaftSpeed) condition;
+                boolean capped = speed.maxRadPerSec() != Double.POSITIVE_INFINITY;
+                speeds.put(speed.motor(), capped ? speed.maxRadPerSec() - 80 : speed.minRadPerSec() + 80);
             }
         }
 
         @Override
         public boolean hasShaft(String motor) {
-            RobotProfile.Motor found = profile.motors().get(motor);
+            RobotSpec.Motor found = robot.motors().get(motor);
             return found != null && found.shaft() != null;
         }
 
         @Override
         public double shaftSpeedRadPerSec(String motor) {
             return speeds.getOrDefault(motor, 0.0);
+        }
+
+        @Override
+        public double shaftAngleRad(String motor) {
+            return 0.0;
         }
 
         @Override

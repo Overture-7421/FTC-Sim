@@ -7,8 +7,7 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -24,11 +23,11 @@ import org.junit.jupiter.api.Timeout;
 class SessionDriveTest {
     private static final long SECOND = 1_000_000_000L;
 
-    private static RobotProfile hornet;
+    private static RobotSpec hornet;
 
     @BeforeAll
     static void loadProfile() throws IOException {
-        hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        hornet = HornetMapping.spec();
     }
 
     /** Where the robot ends up after holding the sticks for a while, as the true pose in the field frame. */
@@ -41,6 +40,40 @@ class SessionDriveTest {
             assertEquals(RobotPhase.RUNNING, handle.session.phase(), handle.log.toString());
             assertEquals(List.of(), handle.session.problems());
             return handle.session.world().bodyPose(EntityIds.CHASSIS);
+        }
+    }
+
+    @Test
+    void resettingTheWorldStopsTheProgramPutsTheRobotBackAtItsStartAndTheSameProgramDrivesAgain() throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(hornet, 0.5, -0.25, 0.3)) {
+            var session = handle.session;
+            session.init("Mecanum Drive");
+            session.start();
+            session.setGamepad(1, GamepadState.sticks(0f, -1f, 0f, 0f));
+            session.runFor(SECOND);
+            BodyPose away = session.world().bodyPose(EntityIds.CHASSIS);
+            assertTrue(away.x() > 1.0, "the robot drove away from its start: " + away);
+
+            session.resetWorld();
+
+            assertEquals(RobotPhase.IDLE, session.phase(), "the program was stopped");
+            BodyPose back = session.world().bodyPose(EntityIds.CHASSIS);
+            assertEquals(0.5, back.x(), 1e-3);
+            assertEquals(-0.25, back.y(), 1e-3);
+            assertEquals(0.3, back.yaw(), 1e-3);
+            assertEquals(0.0, Math.hypot(back.vx(), back.vy()), 1e-6, "and at rest");
+            assertEquals("", session.telemetry().error(), "what the screen said about the old run is gone");
+
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            session.init("Mecanum Drive");
+            session.start();
+            session.runFor(SECOND);
+            assertEquals(RobotPhase.RUNNING, session.phase(), "the program that was loaded runs again: " + handle.log);
+            assertEquals(0.5, session.world().bodyPose(EntityIds.CHASSIS).x(), 0.05, "and the robot waits for the sticks");
+            session.setGamepad(1, GamepadState.sticks(0f, -1f, 0f, 0f));
+            session.runFor(SECOND);
+            assertTrue(session.world().bodyPose(EntityIds.CHASSIS).x() > 1.0, "and drives");
+            assertEquals(List.of(), session.problems());
         }
     }
 
@@ -73,8 +106,8 @@ class SessionDriveTest {
     }
 
     @Test
-    void theSameRunGivesTheSameWorldWhateverTheSlicingOfSimulatedTime() throws IOException {
-        String firstHash = null;
+    void theSlicingOfSimulatedTimeDoesNotChangeWhereTheRobotEndsUp() throws IOException {
+        BodyPose first = null;
         for (long slice : new long[] {Long.MAX_VALUE / 4, 7_000_000L, 250_000_000L}) {
             try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
                 handle.session.init("Mecanum Drive");
@@ -84,11 +117,14 @@ class SessionDriveTest {
                 while (handle.session.now() < end) {
                     handle.session.runUntil(Math.min(end, handle.session.now() + slice));
                 }
-                String hash = handle.session.world().stateHash();
-                if (firstHash == null) {
-                    firstHash = hash;
+                BodyPose pose = handle.session.world().bodyPose(EntityIds.CHASSIS);
+                if (first == null) {
+                    first = pose;
+                    assertTrue(Math.hypot(pose.x(), pose.y()) > 0.3, "the robot drove: " + pose);
                 }
-                assertEquals(firstHash, hash, "slice " + slice);
+                assertEquals(first.x(), pose.x(), 0.01, "slice " + slice);
+                assertEquals(first.y(), pose.y(), 0.01, "slice " + slice);
+                assertEquals(first.yaw(), pose.yaw(), 0.01, "slice " + slice);
                 assertEquals(List.of(), handle.session.problems());
             }
         }

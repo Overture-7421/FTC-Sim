@@ -6,7 +6,7 @@ import dev.ftcsim.contracts.field.Alliance;
  * What a person asks for when they open a run. Names, not objects, so that the request can cross a process
  * boundary; the simulator resolves them.
  *
- * @param profile      the robot profile: the name of a bundled one, or the path of a profile file
+ * @param mapping      which motor of the robot's code is which part of the game's fixed robot, and the numbers of its body
  * @param program      the path of a prepared robot program (a practice package or an imported project)
  * @param field        {@code decode}, {@code biobuzz}, or {@code none} for a bare floor
  * @param alliance     the alliance the robot plays for
@@ -17,7 +17,7 @@ import dev.ftcsim.contracts.field.Alliance;
  * @param speed        simulated seconds per wall-clock second; 1 is real time
  */
 public record SessionRequest(
-        String profile,
+        RobotMapping mapping,
         String program,
         String field,
         Alliance alliance,

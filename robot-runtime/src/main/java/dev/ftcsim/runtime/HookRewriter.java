@@ -283,7 +283,7 @@ public final class HookRewriter implements BytecodeTransformer {
 
             /**
              * A constructor that takes one argument more than the program gave it, which the hook supplies as the last one:
-             * {@code super()} of a subclass of {@code Random} becomes {@code super(seed)}. The long is pushed above the
+             * {@code super()} of a subclass of {@code Date} becomes {@code super(millis)}. The long is pushed above the
              * arguments, and the constructor of the longer descriptor takes them all.
              */
             private void redirectSeeded(RewriteRules.SeededConstructor seeded) {
@@ -298,7 +298,7 @@ public final class HookRewriter implements BytecodeTransformer {
                 if (!unconstructed.isEmpty()) {
                     throw new IllegalStateException("a " + unconstructed.peek() + " is allocated but not constructed in the same method");
                 }
-                // The factory's result sits above the two abandoned references for an instant, and a seed takes two slots.
+                // The factory's result sits above the two abandoned references for an instant, and a long takes two slots.
                 super.visitMaxs(maxStack + (seededRedirected ? 2 : constructorRedirected ? 1 : 0), maxLocals);
             }
 

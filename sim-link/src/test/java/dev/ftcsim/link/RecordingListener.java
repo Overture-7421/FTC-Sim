@@ -61,6 +61,11 @@ final class RecordingListener implements SimulatorLink.Listener {
         enter(catalogue);
     }
 
+    @Override
+    public void log(java.util.List<String> lines) {
+        enter(lines);
+    }
+
     /** The next thing that arrives, within ten seconds, which must be of the given type. */
     <T> T next(Class<T> type) throws InterruptedException {
         Object next = received.poll(10, TimeUnit.SECONDS);

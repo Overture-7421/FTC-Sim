@@ -5,8 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -19,7 +18,7 @@ class ProgramExitSessionTest {
 
     @Test
     void aProgramThatCallsExitOrHaltIsAProblemOfTheSessionAndItsShutdownHooksNeverRun() throws IOException {
-        RobotProfile hornet = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec hornet = HornetMapping.spec();
         for (String how : List.of("System.exit", "Runtime.exit", "Runtime.halt", "method reference")) {
             System.setProperty("ftcsim.test.exitHow", how);
             try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {

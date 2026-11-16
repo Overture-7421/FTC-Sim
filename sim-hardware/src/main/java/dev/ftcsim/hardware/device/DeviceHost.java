@@ -1,7 +1,6 @@
 package dev.ftcsim.hardware.device;
 
 import dev.ftcsim.contracts.field.FieldTag;
-import dev.ftcsim.contracts.hardware.EncoderSource;
 import dev.ftcsim.contracts.world.BodyView;
 import dev.ftcsim.contracts.world.RayView;
 import java.util.ArrayList;
@@ -21,7 +20,6 @@ public final class DeviceHost implements DeviceContext {
     private final BodyView body;
     private final RayView rays;
     private final LongSupplier clock;
-    private final Map<String, EncoderSource> encoders = new LinkedHashMap<>();
     private final Map<String, List<FieldTag>> gameMaps = new LinkedHashMap<>();
     private final List<StepListener> listeners = new ArrayList<>();
     private IntFunction<BodyView> entities = id -> {
@@ -33,14 +31,6 @@ public final class DeviceHost implements DeviceContext {
         this.body = Objects.requireNonNull(body, "body");
         this.rays = Objects.requireNonNull(rays, "rays");
         this.clock = Objects.requireNonNull(clock, "clock");
-    }
-
-    /** Makes the encoder of a mechanism available to devices under the name the robot profile gives it. */
-    public DeviceHost provideEncoder(String name, EncoderSource source) {
-        if (encoders.putIfAbsent(name, Objects.requireNonNull(source, "source")) != null) {
-            throw new IllegalStateException("the robot already has an encoder called \"" + name + "\"");
-        }
-        return this;
     }
 
     /**
@@ -90,15 +80,6 @@ public final class DeviceHost implements DeviceContext {
     @Override
     public long nowNanos() {
         return clock.getAsLong();
-    }
-
-    @Override
-    public EncoderSource encoder(String name) {
-        EncoderSource source = encoders.get(name);
-        if (source == null) {
-            throw new IllegalArgumentException("the robot has no encoder called \"" + name + "\"; it has " + encoders.keySet());
-        }
-        return source;
     }
 
     @Override

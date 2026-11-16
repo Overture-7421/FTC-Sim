@@ -10,6 +10,7 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import dev.ftcsim.contracts.session.Readout;
+import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.link.wire.Command;
@@ -31,12 +32,12 @@ class WorkerServerTest {
 
     private static final String ROBOT = "robot.json";
 
-    private static SessionRequest request(String profile) {
-        return new SessionRequest(profile, "program", "none", Alliance.RED, 1L, 0, 0, 0, 1.0);
+    private static SessionRequest request(String robotName) {
+        return new SessionRequest(RobotMapping.empty(robotName), "program", "none", Alliance.RED, 1L, 0, 0, 0, 1.0);
     }
 
-    private static Command.Open open(String profile) {
-        return new Command.Open(request(profile));
+    private static Command.Open open(String robotName) {
+        return new Command.Open(request(robotName));
     }
 
     private static String openCall(double speed) {
@@ -218,11 +219,11 @@ class WorkerServerTest {
     @Test
     void aSessionThatCannotBeOpenedIsAFailureTheUiCanReadAndTheWorkerGoesOnServing() throws Exception {
         try (ServerFixture fixture = new ServerFixture()) {
-            fixture.sessions.failToOpen = new IOException("the robot profile file C:\\x.json does not exist");
-            fixture.send(open("C:\\x.json"));
+            fixture.sessions.failToOpen = new IOException("the robot mapping is wrong: Map all four wheels or none");
+            fixture.send(open("bad"));
 
             assertEquals(
-                    "Could not open the session: the robot profile file C:\\x.json does not exist",
+                    "Could not open the session: the robot mapping is wrong: Map all four wheels or none",
                     fixture.next(Event.Failed.class).message());
 
             fixture.sessions.failToOpen = null;
@@ -232,7 +233,7 @@ class WorkerServerTest {
     }
 
     @Test
-    void resetOpensTheSameRequestAgainAtTheSpeedThePersonHasSetSince() throws Exception {
+    void resetPutsTheWorldBackInTheSameSessionAndTellsTheWindowWithoutOpeningAnother() throws Exception {
         try (ServerFixture fixture = new ServerFixture()) {
             fixture.send(open(ROBOT));
             fixture.send(new Command.SetSpeed(3.0));
@@ -242,8 +243,7 @@ class WorkerServerTest {
             assertEquals(WorkerServer.EXIT_CLOSED, fixture.awaitExit());
             assertEquals(
                     List.of(
-                            openCall(1.0), "gamepad 1 0.0 on 1", "gamepad 2 0.0 on 1", "speed 3.0 on 1", "close 1", openCall(3.0),
-                            "gamepad 1 0.0 on 2", "gamepad 2 0.0 on 2", "close 2"),
+                            openCall(1.0), "gamepad 1 0.0 on 1", "gamepad 2 0.0 on 1", "speed 3.0 on 1", "reset on 1", "close 1"),
                     fixture.sessions.calls);
             fixture.next(Event.Opened.class);
             fixture.next(Event.Opened.class);
@@ -344,7 +344,7 @@ class WorkerServerTest {
             fixture.send(open(ROBOT));
             fixture.next(Event.Opened.class);
 
-            fixture.send(new Command.Reset());
+            fixture.send(open(ROBOT));
 
             String message = fixture.next(Event.Failed.class).message();
             assertTrue(message.contains("did not stop within 1 seconds") && message.contains("Start a new one"), message);

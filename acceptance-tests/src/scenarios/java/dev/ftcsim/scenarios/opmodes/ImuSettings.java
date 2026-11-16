@@ -15,10 +15,6 @@ public final class ImuSettings {
     public static volatile String name = "imu";
     /** A second name, for the scenario that asks for another IMU. */
     public static volatile String otherName = "gyro";
-    /** The name of the external IMU. */
-    public static volatile String externalName = "extImu";
-    /** The class of the driver the external IMU is asked for by, as {@link Class#forName} takes it. */
-    public static volatile String externalDriver = "com.qualcomm.hardware.rev.Rev9AxisImu";
     /** The direction the code tells the SDK that the logo faces, as a {@code LogoFacingDirection} constant. */
     public static volatile String logo = "UP";
     /** The direction the code tells the SDK that the USB or I2C port faces. */

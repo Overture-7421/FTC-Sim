@@ -30,12 +30,10 @@ class SettingsScreenTest {
     fun theRenderResolutionIsOneOfThreeChoicesAndIsSavedAtOnce() = runComposeUiTest {
         show()
 
-        onNodeWithText("The picture is drawn at the size of the viewport.").assertExists()
         onNodeWithText("75 %").performClick()
         waitForIdle()
 
         assertEquals(75, settings.state.value.display.renderScalePercent)
-        onNodeWithText("The picture is drawn at 75 % of the viewport's size and stretched to fit.").assertExists()
         onNodeWithText("50 %").performClick()
         assertEquals(50, settings.state.value.display.renderScalePercent)
     }
@@ -57,9 +55,9 @@ class SettingsScreenTest {
         show()
         assertFalse(settings.state.value.display.performanceOverlay)
 
-        onNodeWithText("Show the performance overlay").performClick()
+        onNodeWithText("Show overlay").performClick()
         assertTrue(settings.state.value.display.performanceOverlay)
-        onNodeWithText("Show the performance overlay").performClick()
+        onNodeWithText("Show overlay").performClick()
         assertFalse(settings.state.value.display.performanceOverlay)
     }
 
@@ -72,29 +70,15 @@ class SettingsScreenTest {
     @Test
     fun theScreenSaysNothingIsSavedWhenThereIsNoFile() = runComposeUiTest {
         show(path = null)
-        onNodeWithText("Nowhere: this run does not save settings.").assertExists()
+        onNodeWithText("Not saved").assertExists()
     }
 
     @Test
     fun theFrameRateTextFollowsTheDisplayAndTheCap() {
-        assertEquals(
-            "Your display refreshes at 60 Hz, so the viewport draws at most 60 frames per second.",
-            frameRateText(60.0, 144),
-        )
-        assertEquals(
-            "Your display refreshes at 144 Hz, so the viewport draws at most 144 frames per second.",
-            frameRateText(144.0, 144),
-        )
-        assertEquals(
-            "Your display refreshes at 280 Hz, so the viewport draws at most 140 frames per second: " +
-                "an even share of the display's rate, which looks smoother than 144.",
-            frameRateText(280.0, 144),
-        )
-        assertEquals(
-            "Your display refreshes at 144 Hz, so the viewport draws at most 72 frames per second: " +
-                "an even share of the display's rate, which looks smoother than 90.",
-            frameRateText(144.0, 90),
-        )
-        assertTrue(frameRateText(0.0, 144).contains("not known yet"))
+        assertEquals("Display 60 Hz, drawing at 60 fps", frameRateText(60.0, 144))
+        assertEquals("Display 144 Hz, drawing at 144 fps", frameRateText(144.0, 144))
+        assertEquals("Display 280 Hz, drawing at 140 fps", frameRateText(280.0, 144), "an even share of the display's rate")
+        assertEquals("Display 144 Hz, drawing at 72 fps", frameRateText(144.0, 90))
+        assertEquals("Display rate unknown", frameRateText(0.0, 144))
     }
 }

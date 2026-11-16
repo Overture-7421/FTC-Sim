@@ -74,7 +74,7 @@ class HardwareHostTest {
     }
 
     @Test
-    void theSameRunGivesTheSameReadingsWhateverTheSlicingOfSimulatedTime() throws Exception {
+    void theSlicingOfSimulatedTimeDoesNotChangeWhatTheProgramReads() throws Exception {
         MotorRun first = motorRun(Long.MAX_VALUE / 4);
 
         for (long slice : new long[] {1 * MS, 7 * MS, 33 * MS}) {

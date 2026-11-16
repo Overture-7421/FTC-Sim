@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
@@ -16,6 +17,7 @@ import java.util.Locale;
 import java.util.Set;
 import java.util.TreeSet;
 import java.util.jar.JarFile;
+import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -26,7 +28,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The distribution as {@code :app:dist} built it: the folder a driver unzips and the zip of that folder. Gradle names both
- * (and the launcher's scripts, which the folder has to match) in system properties.
+ * (and src/dist, which the folder has to match) in system properties.
  */
 class DistributionLayoutTest {
 
@@ -35,7 +37,7 @@ class DistributionLayoutTest {
     private Path dist;
     private Path lib;
     private Path zip;
-    private Path scripts;
+    private Path sources;
 
     @BeforeEach
     void locate() {
@@ -44,7 +46,7 @@ class DistributionLayoutTest {
         dist = Path.of(folder);
         lib = dist.resolve("lib");
         zip = Path.of(System.getProperty("ftcsim.distZip"));
-        scripts = Path.of(System.getProperty("ftcsim.launcherScripts"));
+        sources = Path.of(System.getProperty("ftcsim.distSources"));
     }
 
     private static List<String> names(Path folder) throws IOException {
@@ -60,14 +62,37 @@ class DistributionLayoutTest {
     }
 
     @Test
-    void theFolderHasTheLaunchersScriptsExactlyAsTheyAreTheNoticesAndLibAndNothingElse() throws IOException {
-        assertEquals(new TreeSet<>(List.of("FTC-Sim.cmd", "FTC-Sim.ps1", "ftcsim", "jdk-manifest.json", "lib", "THIRD-PARTY-NOTICES.txt", "licenses")), new TreeSet<>(names(dist)));
-        Set<String> expectedScripts = relativeFiles(scripts);
-        Set<String> actualScripts = relativeFiles(dist);
-        actualScripts.removeIf(file -> file.startsWith("lib/") || file.startsWith("licenses/") || file.equals("THIRD-PARTY-NOTICES.txt"));
-        assertEquals(expectedScripts, actualScripts, "the launcher's scripts, no more and no fewer");
-        for (String script : expectedScripts) {
-            assertEquals(-1, Files.mismatch(scripts.resolve(script), dist.resolve(script)), script + " differs from the launcher's");
+    void theFolderHasTheCmdFileItsOptionsTheRuntimeTheNoticesAndLibAndNothingElse() throws IOException {
+        assertEquals(new TreeSet<>(List.of("FTC-Sim.cmd", "runtime-options", "runtime", "lib", "THIRD-PARTY-NOTICES.txt", "licenses")), new TreeSet<>(names(dist)));
+        Set<String> expected = relativeFiles(sources);
+        Set<String> actual = relativeFiles(dist);
+        actual.removeIf(file -> file.startsWith("lib/") || file.startsWith("runtime/") || file.startsWith("licenses/") || file.equals("THIRD-PARTY-NOTICES.txt"));
+        assertEquals(expected, actual, "the files of src/dist, no more and no fewer");
+        for (String file : expected) {
+            String source = Files.readString(sources.resolve(file), StandardCharsets.UTF_8);
+            String shipped = Files.readString(dist.resolve(file), StandardCharsets.UTF_8);
+            assertEquals(source.replace("\r\n", "\n"), shipped.replace("\r\n", "\n"), file + " differs from src/dist");
+        }
+        String cmd = Files.readString(dist.resolve("FTC-Sim.cmd"), StandardCharsets.UTF_8);
+        assertFalse(cmd.replace("\r\n", "").contains("\n"), "FTC-Sim.cmd has Windows line endings only, whatever the checkout has");
+    }
+
+    @Test
+    void theRuntimeIsAJlinkImageThatHasTheLaunchersTheStandardModulesAndTheExtrasAndNoDevelopmentTools() throws IOException {
+        Path runtime = dist.resolve("runtime");
+        for (String file : List.of("bin/java.exe", "bin/javaw.exe", "bin/server/jvm.dll", "lib/modules", "release", "legal/java.base/LICENSE")) {
+            assertTrue(Files.isRegularFile(runtime.resolve(file)), "runtime/" + file);
+        }
+        Matcher modules = Pattern.compile("MODULES=\"([^\"]*)\"").matcher(Files.readString(runtime.resolve("release")));
+        assertTrue(modules.find(), "the runtime's release file lists its modules");
+        Set<String> inImage = Set.of(modules.group(1).split(" "));
+        for (String module : List.of("java.base", "java.desktop", "java.instrument", "java.management", "java.net.http", "java.sql", "java.xml", "java.logging",
+                "jdk.unsupported", "jdk.management", "jdk.crypto.ec", "jdk.zipfs", "jdk.net", "jdk.httpserver", "jdk.charsets")) {
+            assertTrue(inImage.contains(module), module + " is missing from the runtime: " + inImage);
+        }
+        assertFalse(inImage.contains("jdk.compiler") || inImage.contains("jdk.jfr"), "no development tools in the runtime: " + inImage);
+        for (String absent : List.of("include", "jmods", "man", "bin/javac.exe", "bin/jlink.exe", "lib/src.zip")) {
+            assertFalse(Files.exists(runtime.resolve(absent)), "runtime/" + absent + " is not part of the runtime");
         }
     }
 
@@ -84,7 +109,7 @@ class DistributionLayoutTest {
             assertFalse(name.endsWith("-sources.jar") || name.endsWith("-javadoc.jar") || name.contains("-tests") || name.equals("launcher.jar"), name);
         }
         try (Stream<Path> everything = Files.walk(dist)) {
-            List<String> strays = everything.map(path -> path.getFileName().toString())
+            List<String> strays = everything.filter(path -> !path.startsWith(dist.resolve("runtime"))).map(path -> path.getFileName().toString())
                     .filter(name -> name.matches("(?i).*\\.(java|kt|kts|class|log|lock|bin)|build|\\.gradle|src|test|tests")).toList();
             assertEquals(List.of(), strays, "no source, test, build output or cache");
         }
@@ -112,8 +137,8 @@ class DistributionLayoutTest {
         }
         List<String> worker = classpath.worker().stream().map(jar -> jar.getFileName().toString()).toList();
         List<String> robot = classpath.robot().stream().map(jar -> jar.getFileName().toString()).toList();
-        for (String needed : List.of("worker.jar", "simulator.jar", "sim-core.jar", "sim-physics.jar", "sim-hardware.jar", "sim-mechanisms.jar", "sim-field.jar",
-                "game-decode.jar", "game-biobuzz.jar", "robot-runtime.jar", "sim-link.jar", "sim-contracts.jar", "project-import.jar", "platform.jar")) {
+        for (String needed : List.of("worker.jar", "simulator.jar", "sim-core.jar", "sim-physics.jar", "sim-hardware.jar", "games.jar",
+                "robot-runtime.jar", "sim-link.jar", "sim-contracts.jar", "project-import.jar", "platform.jar")) {
             assertTrue(worker.contains(needed), needed + " is missing from the worker's jars: " + worker);
         }
         assertTrue(worker.stream().anyMatch(name -> name.startsWith("jolt-jni-Windows64-") && name.endsWith("-ReleaseSp.jar")), "the physics engine's native jar: " + worker);
@@ -144,8 +169,14 @@ class DistributionLayoutTest {
             for (String notTheWindows : List.of("worker.jar", "simulator.jar", "sim-core.jar", "sim-physics.jar", "sdk-common.jar", "android-shim.jar", "robot-runtime.jar")) {
                 assertFalse(classPath.contains(notTheWindows), notTheWindows + " belongs to the worker or the robot world, not to the window's class path");
             }
-            assertTrue(app.getEntry("dev/ftcsim/app/Main.class") != null && app.getEntry("dev/ftcsim/app/jdk-manifest.json") != null,
-                    "the application's classes and the launcher's manifest it carries");
+            assertTrue(app.getEntry("dev/ftcsim/app/Main.class") != null && app.getEntry("dev/ftcsim/app/runtime.properties") != null
+                            && app.getEntry("dev/ftcsim/app/jdk-patterns.txt") != null,
+                    "the application's classes and the descriptions of the runtime and of the JDK places it carries");
+            try (var carried = app.getInputStream(app.getEntry("dev/ftcsim/app/runtime-options"))) {
+                assertEquals(Files.readString(dist.resolve("runtime-options")).replace("\r\n", "\n"),
+                        new String(carried.readAllBytes(), StandardCharsets.UTF_8).replace("\r\n", "\n"),
+                        "the options the launcher passes are the ones the self test checks");
+            }
         }
     }
 

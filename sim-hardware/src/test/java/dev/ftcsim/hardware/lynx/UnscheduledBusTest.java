@@ -2,7 +2,6 @@ package dev.ftcsim.hardware.lynx;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.hardware.HubWire;
@@ -12,7 +11,6 @@ import java.nio.ByteOrder;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -38,91 +36,44 @@ class UnscheduledBusTest {
         return new RhspClient(bus, address).unscheduled();
     }
 
-    /** What the scripted run's battery wanders between, in millivolts. */
-    private static void assertScriptedBatteryReading(RhspClient.Reply reply) {
-        int millivolts = millivolts(reply);
-        assertTrue(millivolts >= 11_800 && millivolts <= 12_600, "battery " + millivolts + " mV");
-    }
-
-    // ---- the scheduled side does not notice them -----------------------------------------------------------------
+    // ---- the scheduled side keeps working beside them ------------------------------------------------------------
 
     @Test
     @Timeout(180)
-    void aScheduledRunIsTheSameByteForByteWhileEightThreadsReadTheBatteryOfBothHubs() throws Exception {
-        ScriptedRun.Transcript alone = new ScriptedRun().run();
-
-        ScriptedRun scripted = new ScriptedRun();
-        RhspClient[] clients = new RhspClient[THREADS];
-        for (int thread = 0; thread < THREADS; thread++) {
-            clients[thread] = unscheduled(scripted.bus, thread % 2 == 0 ? 173 : 2);
-        }
-        Hammer hammer = new Hammer(THREADS, 3_000, (thread, number) ->
-                assertScriptedBatteryReading(clients[thread].send(GET_ADC, batteryRead())));
-        ScriptedRun.Transcript together;
-        long calls;
-        try {
-            together = scripted.run(step -> {
-                if (step == 0) {
-                    hammer.start();
-                }
-                if (step == ScriptedRun.STEPS / 2) {
-                    hammer.awaitCalls(20_000);
-                }
-            });
-        } finally {
-            calls = hammer.finish();
-        }
-
-        assertEquals(alone.exchanges(), together.exchanges());
-        assertEquals(alone.plantCalls(), together.plantCalls());
-        assertEquals(alone.finalState(), together.finalState());
-        assertTrue(calls >= THREADS * 3_000L, "calls: " + calls);
-        assertEquals(calls, scripted.bus.unscheduledQueries());
-        assertEquals(List.of(), scripted.bus.unscheduledMutations());
-    }
-
-    @Test
-    @Timeout(180)
-    void aScheduledRunIsTheSameByteForByteWhileEightThreadsMakeEveryQueryThereIs() throws Exception {
-        ScriptedRun.Transcript alone = new ScriptedRun().run();
-
-        ScriptedRun scripted = new ScriptedRun();
+    void eightThreadsMakingEveryQueryThereIsLeaveTheScheduledSideItsOwnAnswers() throws Exception {
+        Rig rig = new Rig();
+        rig.plugGoBilda(0);
         List<QueryCatalog.Request> requests = QueryCatalog.requests();
         RhspClient[] clients = new RhspClient[THREADS];
         for (int thread = 0; thread < THREADS; thread++) {
-            clients[thread] = unscheduled(scripted.bus, thread % 2 == 0 ? 173 : 2);
+            clients[thread] = unscheduled(rig.bus, 173);
         }
-        Hammer hammer = new Hammer(THREADS, 1_000L * requests.size(), (thread, number) -> {
+        Hammer hammer = new Hammer(THREADS, 200L * requests.size(), (thread, number) -> {
             QueryCatalog.Request request = requests.get((int) ((number + thread) % requests.size()));
             if (QueryCatalog.isBroadcast(request)) {
-                HubWire.Exchange exchange = scripted.bus.transmitUnscheduled(
+                HubWire.Exchange exchange = rig.bus.transmitUnscheduled(
                         RhspClient.frame(Datagram.BROADCAST, 1, 0, request.packetId(), request.payload()));
-                assertEquals(2, exchange.replies().size(), "both hubs answer discovery");
+                assertEquals(1, exchange.replies().size(), "the one hub answers discovery");
                 assertEquals(0, exchange.latencyNanos());
             } else {
                 clients[thread].send(request.packetId(), request.payload());
             }
         });
-        ScriptedRun.Transcript together;
+
+        hammer.start();
         long calls;
         try {
-            together = scripted.run(step -> {
-                if (step == 0) {
-                    hammer.start();
-                }
-                if (step == ScriptedRun.STEPS / 2) {
-                    hammer.awaitCalls(20_000);
-                }
-            });
+            for (int step = 0; step < 300; step++) {
+                rig.runMillis(1);
+                assertEquals(12_000, millivolts(rig.client.send(GET_ADC, batteryRead())));
+            }
+            hammer.awaitCalls(5_000);
         } finally {
             calls = hammer.finish();
         }
 
-        assertEquals(alone.exchanges(), together.exchanges());
-        assertEquals(alone.plantCalls(), together.plantCalls());
-        assertEquals(alone.finalState(), together.finalState());
-        assertEquals(calls, scripted.bus.unscheduledQueries());
-        assertEquals(List.of(), scripted.bus.unscheduledMutations());
+        assertTrue(calls >= THREADS * 200L * requests.size(), "calls: " + calls);
+        assertEquals(300 * Rig.MS, rig.hub.nowNanos());
     }
 
     @Test
@@ -173,7 +124,6 @@ class UnscheduledBusTest {
         assertEquals(0, exchange.latencyNanos());
         assertEquals(12_340, millivolts(RhspClient.decode(exchange.replies().get(0), 0)));
         assertEquals(5_000_000, hub.nowNanos());
-        assertEquals(1, bus.unscheduledQueries());
     }
 
     @Test
@@ -205,8 +155,6 @@ class UnscheduledBusTest {
         assertEquals(List.of(), rig.hub.unboundAnalogPorts());
         assertEquals(List.of(), rig.hub.unboundDigitalPorts());
         assertEquals(List.of(), rig.hub.unsupported());
-        assertEquals(2, rig.bus.unscheduledQueries(), "a command nobody knows is neither a query nor a change");
-        assertEquals(List.of(), rig.bus.unscheduledMutations());
 
         rig.client.send(GET_ADC, Bytes.of().u8(0).u8(0).build());
         rig.client.send(0x1FFF, Bytes.none());
@@ -232,7 +180,6 @@ class UnscheduledBusTest {
 
         assertEquals(ModuleStatus.KEEP_ALIVE_TIMEOUT, status(silent) & ModuleStatus.KEEP_ALIVE_TIMEOUT, "failed safe");
         assertEquals(0, status(kept) & ModuleStatus.KEEP_ALIVE_TIMEOUT, "kept alive by a command that is not a query");
-        assertEquals(List.of(new LynxBus.UnscheduledUse("KEEP_ALIVE", 1)), kept.bus.unscheduledMutations());
     }
 
     private static int status(Rig rig) {
@@ -242,7 +189,7 @@ class UnscheduledBusTest {
     // ---- what they do ----------------------------------------------------------------------------------------------
 
     @Test
-    void aCommandThatChangesSomethingIsStillExecutedAtTheTimeTheHubIsAtAndTheBusSaysSo() {
+    void aCommandThatChangesSomethingIsStillExecutedAtTheTimeTheHubIsAt() {
         Rig rig = new Rig();
         StubPlant plant = new StubPlant();
         rig.hub.motorPort(0).connect(plant);
@@ -257,8 +204,6 @@ class UnscheduledBusTest {
 
         assertTrue(reply.isAck());
         assertEquals(16_384 / 32_767.0 * 12.0, plant.volts, 1e-9);
-        assertEquals(0, rig.bus.unscheduledQueries());
-        assertEquals(List.of(new LynxBus.UnscheduledUse("SET_MOTOR_CONSTANT_POWER", 1)), rig.bus.unscheduledMutations());
     }
 
     @Test
@@ -271,26 +216,6 @@ class UnscheduledBusTest {
         library.standard(StandardCommand.GET_MODULE_STATUS, Bytes.of().u8(1).build());
 
         assertEquals(0, status(rig) & ModuleStatus.DEVICE_RESET, "and now it is gone");
-        assertEquals(1, rig.bus.unscheduledQueries());
-        assertEquals(List.of(new LynxBus.UnscheduledUse("GET_MODULE_STATUS", 1)), rig.bus.unscheduledMutations());
-    }
-
-    @Test
-    void theMutationsAreReportedByNameAndAsASnapshotNobodyCanChange() {
-        Rig rig = new Rig();
-        RhspClient library = unscheduled(rig.bus, 173);
-        library.send(DekaCommand.SET_SERVO_ENABLE.number(), Bytes.of().u8(2).u8(1).build());
-        library.send(DekaCommand.SET_SERVO_ENABLE.number(), Bytes.of().u8(3).u8(1).build());
-        library.standard(StandardCommand.KEEP_ALIVE, Bytes.none());
-
-        List<LynxBus.UnscheduledUse> snapshot = rig.bus.unscheduledMutations();
-        library.standard(StandardCommand.KEEP_ALIVE, Bytes.none());
-
-        assertEquals(
-                List.of(new LynxBus.UnscheduledUse("KEEP_ALIVE", 1), new LynxBus.UnscheduledUse("SET_SERVO_ENABLE", 2)),
-                snapshot);
-        assertThrows(UnsupportedOperationException.class, () -> snapshot.add(new LynxBus.UnscheduledUse("X", 1)));
-        assertEquals(2, rig.bus.unscheduledMutations().get(0).count());
     }
 
     @Test
@@ -307,7 +232,6 @@ class UnscheduledBusTest {
         assertEquals(
                 Set.of(FrameFault.NO_SUCH_MODULE, FrameFault.BAD_CHECKSUM),
                 rig.bus.rejectedFrames().stream().map(RejectedFrame::fault).collect(Collectors.toSet()));
-        assertEquals(0, rig.bus.unscheduledQueries());
     }
 
     // ---- the bus can be looked at while they work ------------------------------------------------------------------
@@ -343,10 +267,6 @@ class UnscheduledBusTest {
         assertEquals(0, result.get(), "the transaction went well");
         assertEquals(1, result.get());
         assertEquals(42, result.get(), "and the thread that started it was handed its result");
-        assertEquals(
-                List.of(new LynxBus.UnscheduledUse("I2C_READ_SINGLE_BYTE", 1),
-                        new LynxBus.UnscheduledUse("I2C_READ_STATUS_QUERY", 1)),
-                rig.bus.unscheduledMutations());
     }
 
     private static void onAnotherThread(Runnable work) throws InterruptedException {
@@ -401,14 +321,12 @@ class UnscheduledBusTest {
     void everythingTheBusReportsCanBeReadWhileEightThreadsUseItAndTheScheduledSideAdvancesIt() throws Exception {
         Rig rig = new Rig();
         rig.plugGoBilda(0);
-        AtomicLong changesSent = new AtomicLong();
         RhspClient[] clients = new RhspClient[THREADS];
         for (int thread = 0; thread < THREADS; thread++) {
             clients[thread] = unscheduled(rig.bus, 173);
         }
         Hammer hammer = new Hammer(THREADS, 2_000, (thread, number) -> {
             if (thread == 0 && number % 100 == 0) {
-                changesSent.incrementAndGet();
                 RhspClient.Reply reply =
                         clients[thread].send(DekaCommand.SET_MOTOR_CONSTANT_POWER.number(), Bytes.of().u8(0).u16(0).build());
                 assertTrue(reply.isAck());
@@ -418,15 +336,8 @@ class UnscheduledBusTest {
         });
 
         hammer.start();
-        long queriesBefore = 0;
-        long changesBefore = 0;
         try {
             for (int look = 0; look < 3_000; look++) {
-                long queries = rig.bus.unscheduledQueries();
-                long changes = rig.bus.unscheduledMutations().stream().mapToLong(LynxBus.UnscheduledUse::count).sum();
-                assertTrue(queries >= queriesBefore && changes >= changesBefore, "counts only grow");
-                queriesBefore = queries;
-                changesBefore = changes;
                 assertEquals(1, rig.bus.hubs().size());
                 assertEquals(List.of(), rig.bus.rejectedFrames());
                 if (look % 50 == 0) {
@@ -436,8 +347,5 @@ class UnscheduledBusTest {
         } finally {
             hammer.finish();
         }
-
-        assertEquals(changesSent.get(), rig.bus.unscheduledMutations().get(0).count());
-        assertEquals(hammer.calls() - changesSent.get(), rig.bus.unscheduledQueries());
     }
 }

@@ -2,6 +2,7 @@ package dev.ftcsim.contracts.session;
 
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
+import java.util.List;
 
 /**
  * The port between whoever shows a simulation and the simulator that runs it. The simulator may be in this process
@@ -41,6 +42,13 @@ public interface SimulatorLink extends AutoCloseable {
          * whenever it could change. A listener added later is told the latest one at once.
          */
         void catalogue(Catalogue catalogue);
+
+        /**
+         * Lines the robot program and the SDK wrote to the log, in logcat style ({@code I/tag: message}), in the order
+         * they were written. The simulator never waits for a listener: a program that logs faster than the link carries
+         * loses lines, and a line then says how many. Ignored by a listener that does not show a console.
+         */
+        default void log(List<String> lines) {}
     }
 
     void addListener(Listener listener);
@@ -85,8 +93,9 @@ public interface SimulatorLink extends AutoCloseable {
     void setSpeed(double speed);
 
     /**
-     * Starts the same session again from its beginning: same program, profile, field and seed, at the speed set last.
-     * The listeners are told with {@code opened}, as for {@link #open}.
+     * Stops the robot program and puts the world back as it began, in the same session: the robot at its start, the field
+     * as at the first step, no match. The program stays loaded, so this takes a moment where {@link #open} takes seconds;
+     * the hubs and devices keep their state and simulated time goes on. The listeners are told with {@code opened}.
      */
     void reset();
 

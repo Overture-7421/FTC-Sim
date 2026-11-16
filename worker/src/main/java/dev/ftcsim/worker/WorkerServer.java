@@ -200,15 +200,16 @@ final class WorkerServer {
         }
     }
 
-    /** The same session again from its beginning, at the speed the person has set since. */
+    /**
+     * The world of the session as it began, with the robot program still loaded: nothing is opened or closed, so it is quick.
+     * The window is told with a new {@code Opened}, as it was when a reset opened a session again.
+     */
     private void reset() {
-        if (request == null) {
-            refuse("There is no session to reset: open one first.");
+        if (!hasSession("reset")) {
             return;
         }
-        open(new SessionRequest(
-                request.profile(), request.program(), request.field(), request.alliance(), request.seed(), request.startX(),
-                request.startY(), request.startHeading(), speed));
+        carryOut(() -> session.reset());
+        send(new Event.Opened(session.info()));
     }
 
     private void init(String opMode) {
@@ -294,6 +295,13 @@ final class WorkerServer {
             return false;
         }
         return true;
+    }
+
+    /** Tells the window what the robot program and the SDK logged; lines are dropped, not queued, once the connection is gone. */
+    void log(java.util.List<String> lines) {
+        if (!lines.isEmpty()) {
+            send(new Event.Log(lines));
+        }
     }
 
     private void fail(String message) {

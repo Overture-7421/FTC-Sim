@@ -9,10 +9,9 @@ import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Runs the FTC-Sim.cmd of an installation under cmd.exe the way a driver's PC does, apart from the Java it finds: no
- * JAVA_HOME unless the test names one, nothing but Windows on the PATH, and %LOCALAPPDATA% in a folder of the test, so that
- * nothing of the real user's is read or written. A helper batch sets that up, because Java cannot clear a variable for
- * cmd.exe's own lookups.
+ * Runs the FTC-Sim.cmd of an installation under cmd.exe the way a driver's PC does: no JAVA_HOME, nothing but Windows on
+ * the PATH (the installation brings its own Java), and %LOCALAPPDATA% in a folder of the test, so that nothing of the real
+ * user's is read or written. A helper batch sets that up, because Java cannot clear a variable for cmd.exe's own lookups.
  */
 final class FtcSimCmd {
 
@@ -23,19 +22,20 @@ final class FtcSimCmd {
 
     private FtcSimCmd() {}
 
-    /** @param javaHome the JAVA_HOME of the run; empty for a PC that has none */
-    static Result run(Path wrapper, Path work, Path localAppData, String javaHome, String... arguments) throws IOException, InterruptedException {
+    /** @param pause whether a failure may wait for a key, as it does for a double-click; a script sets FTCSIM_NO_PAUSE and does not */
+    static Result run(Path wrapper, Path work, Path localAppData, boolean pause, String... arguments) throws IOException, InterruptedException {
         Path windows = Path.of(System.getenv("SystemRoot"));
         // Folder names with accented letters are part of the test, and cmd.exe reads a batch file in the console's code page.
-        List<String> lines = List.of(
+        List<String> lines = new ArrayList<>(List.of(
                 "@echo off",
                 "chcp 65001 >nul",
-                "set \"JAVA_HOME=" + javaHome + "\"",
+                "set \"JAVA_HOME=\"",
                 "set \"PATH=" + windows.resolve("System32") + "\"",
-                "set \"LOCALAPPDATA=" + localAppData + "\"",
-                "set \"FTCSIM_NO_PAUSE=1\"",
-                "call \"" + wrapper + "\" %*",
-                "exit /b %ERRORLEVEL%");
+                "set \"LOCALAPPDATA=" + localAppData + "\""));
+        if (!pause) {
+            lines.add("set \"FTCSIM_NO_PAUSE=1\"");
+        }
+        lines.addAll(List.of("call \"" + wrapper + "\" %*", "exit /b %ERRORLEVEL%"));
         Files.writeString(work.resolve("run.cmd"), String.join("\r\n", lines) + "\r\n", StandardCharsets.UTF_8);
         List<String> command = new ArrayList<>(List.of("cmd.exe", "/d", "/c", ".\\run.cmd"));
         command.addAll(List.of(arguments));

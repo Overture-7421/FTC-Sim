@@ -30,8 +30,16 @@ public final class OrbitCamera {
     public static final double MAX_DISTANCE = 12.0;
     public static final double DEGREES_PER_PIXEL = 0.4;
 
+    /**
+     * How far the camera may be turned and zoomed, and the height of the point it looks at. The field's are the defaults;
+     * a camera that looks at a robot instead of a field (the robot editor's) gets closer limits.
+     */
+    public record Limits(double minDistance, double maxDistance, double minPitchDegrees, double maxPitchDegrees, double targetHeight) {
+        /** What the camera watching a run has. */
+        public static final Limits FIELD = new Limits(MIN_DISTANCE, MAX_DISTANCE, MIN_PITCH_DEGREES, MAX_PITCH_DEGREES, 0.12);
+    }
+
     private static final float FIELD_OF_VIEW_DEGREES = 45f;
-    private static final float TARGET_HEIGHT = 0.12f;
     private static final double ZOOM_FACTOR_PER_STEP = 0.9;
     private static final double TOP_DISTANCE = 6.2;
     private static final double DRIVER_PITCH_DEGREES = 30.0;
@@ -56,9 +64,11 @@ public final class OrbitCamera {
     private static final double CHASE_SETTLED = 0.01;
     private static final int BLOCKER_STRIDE = 10;
 
+    private final Limits limits;
     private final float[] projection = new float[16];
     private final float[] view = new float[16];
     private final double[] scratch = new double[6];
+    private double targetZ;
     private float[] blockers = new float[0];
     private int blockerCount;
     private double clearDistance = Double.MAX_VALUE;
@@ -73,6 +83,15 @@ public final class OrbitCamera {
     private long version;
     private volatile Runnable changed = () -> {};
 
+    /** A camera with the field's limits. */
+    public OrbitCamera() {
+        this(Limits.FIELD);
+    }
+
+    public OrbitCamera(Limits limits) {
+        this.limits = limits;
+        this.targetZ = limits.targetHeight();
+    }
     /**
      * Which way the driver looks across the field for a robot that starts facing {@code startHeadingRadians}. A robot
      * that starts square to the walls is looked at along its own heading, from behind it. A robot in a corner, facing
@@ -94,21 +113,21 @@ public final class OrbitCamera {
     public synchronized void orbit(double deltaXPixels, double deltaYPixels) {
         preset = Preset.FREE;
         yawDegrees = wrap(yawDegrees - deltaXPixels * DEGREES_PER_PIXEL);
-        pitchDegrees = clamp(pitchDegrees + deltaYPixels * DEGREES_PER_PIXEL, MIN_PITCH_DEGREES, MAX_PITCH_DEGREES);
+        pitchDegrees = clamp(pitchDegrees + deltaYPixels * DEGREES_PER_PIXEL, limits.minPitchDegrees(), limits.maxPitchDegrees());
         changedAndNotify();
     }
 
     /** Positive steps move closer. */
     public synchronized void zoom(double steps) {
-        distance = clamp(distance * Math.pow(ZOOM_FACTOR_PER_STEP, steps), MIN_DISTANCE, MAX_DISTANCE);
+        distance = clamp(distance * Math.pow(ZOOM_FACTOR_PER_STEP, steps), limits.minDistance(), limits.maxDistance());
         changedAndNotify();
     }
 
     public synchronized void set(double yawDegrees, double pitchDegrees, double distance) {
         preset = Preset.FREE;
         this.yawDegrees = wrap(yawDegrees);
-        this.pitchDegrees = clamp(pitchDegrees, MIN_PITCH_DEGREES, MAX_PITCH_DEGREES);
-        this.distance = clamp(distance, MIN_DISTANCE, MAX_DISTANCE);
+        this.pitchDegrees = clamp(pitchDegrees, limits.minPitchDegrees(), limits.maxPitchDegrees());
+        this.distance = clamp(distance, limits.minDistance(), limits.maxDistance());
         changedAndNotify();
     }
 
@@ -125,7 +144,7 @@ public final class OrbitCamera {
         clearDistance = Double.MAX_VALUE;
         chaseOffsetDegrees = 0.0;
         switch (newPreset) {
-            case TOP -> place(0.0, 0.0, driverHeadingDegrees + 180.0, MAX_PITCH_DEGREES, TOP_DISTANCE);
+            case TOP -> place(0.0, 0.0, driverHeadingDegrees + 180.0, limits.maxPitchDegrees(), TOP_DISTANCE);
             case DRIVER -> place(0.0, 0.0, driverHeadingDegrees + 180.0, DRIVER_PITCH_DEGREES, DRIVER_DISTANCE);
             case CHASE -> {
                 pitchDegrees = CHASE_PITCH_DEGREES;
@@ -196,6 +215,97 @@ public final class OrbitCamera {
         }
     }
 
+    /** Points the camera at the point {@code (x, y, z)}, without turning or moving it away. */
+    public synchronized void setTarget(double x, double y, double z) {
+        targetX = x;
+        targetY = y;
+        targetZ = z;
+        changedAndNotify();
+    }
+
+    /**
+     * Slides the camera sideways and up or down in the plane of the picture, so that what is under the pointer follows the
+     * pointer: dragging right moves the scene right.
+     *
+     * @param viewportHeightPixels the height of the picture, which tells how far a pixel is
+     */
+    public synchronized void pan(double deltaXPixels, double deltaYPixels, double viewportHeightPixels) {
+        preset = Preset.FREE;
+        double metresPerPixel = 2.0 * distance * Math.tan(Math.toRadians(FIELD_OF_VIEW_DEGREES) / 2.0) / Math.max(1.0, viewportHeightPixels);
+        double yaw = Math.toRadians(yawDegrees);
+        double pitch = Math.toRadians(pitchDegrees);
+        double rightX = -Math.sin(yaw);
+        double rightY = Math.cos(yaw);
+        double upX = -Math.sin(pitch) * Math.cos(yaw);
+        double upY = -Math.sin(pitch) * Math.sin(yaw);
+        double upZ = Math.cos(pitch);
+        targetX += (-rightX * deltaXPixels + upX * deltaYPixels) * metresPerPixel;
+        targetY += (-rightY * deltaXPixels + upY * deltaYPixels) * metresPerPixel;
+        targetZ += upZ * deltaYPixels * metresPerPixel;
+        changedAndNotify();
+    }
+
+    /** Where the camera is, and the unit vectors of the picture: forward, right and up, in that order after the eye. */
+    private double[] basis() {
+        double yaw = Math.toRadians(yawDegrees);
+        double pitch = Math.toRadians(pitchDegrees);
+        double reach = preset == Preset.CHASE ? Math.min(distance, Math.max(CHASE_MIN_DISTANCE, clearDistance)) : distance;
+        double cp = Math.cos(pitch);
+        double sp = Math.sin(pitch);
+        double cy = Math.cos(yaw);
+        double sy = Math.sin(yaw);
+        return new double[] {
+            targetX + reach * cp * cy, targetY + reach * cp * sy, targetZ + reach * sp,
+            -cp * cy, -cp * sy, -sp,
+            -sy, cy, 0.0,
+            -sp * cy, -sp * sy, cp,
+        };
+    }
+
+    /**
+     * Where the point {@code (x, y, z)} of the world appears in the picture, as normalised device coordinates (the picture
+     * runs from -1 to 1 across and up), written to {@code ndc}.
+     *
+     * @param aspect the picture's width over its height
+     * @return false when the point is behind the camera, where it does not appear
+     */
+    public synchronized boolean project(double x, double y, double z, double aspect, double[] ndc) {
+        double[] b = basis();
+        double vx = x - b[0];
+        double vy = y - b[1];
+        double vz = z - b[2];
+        double depth = vx * b[3] + vy * b[4] + vz * b[5];
+        if (depth <= 0.0) {
+            return false;
+        }
+        double scale = Math.tan(Math.toRadians(FIELD_OF_VIEW_DEGREES) / 2.0);
+        ndc[0] = (vx * b[6] + vy * b[7] + vz * b[8]) / (depth * scale * aspect);
+        ndc[1] = (vx * b[9] + vy * b[10] + vz * b[11]) / (depth * scale);
+        return true;
+    }
+
+    /**
+     * The line of sight through the point of the picture at {@code (ndcX, ndcY)}: its start, which is the camera, and its
+     * direction as a unit vector.
+     *
+     * @param origin three numbers, set to the camera's position
+     * @param direction three numbers, set to the direction
+     */
+    public synchronized void ray(double ndcX, double ndcY, double aspect, double[] origin, double[] direction) {
+        double[] b = basis();
+        double scale = Math.tan(Math.toRadians(FIELD_OF_VIEW_DEGREES) / 2.0);
+        double dx = b[3] + ndcX * scale * aspect * b[6] + ndcY * scale * b[9];
+        double dy = b[4] + ndcX * scale * aspect * b[7] + ndcY * scale * b[10];
+        double dz = b[5] + ndcX * scale * aspect * b[8] + ndcY * scale * b[11];
+        double length = Math.sqrt(dx * dx + dy * dy + dz * dz);
+        origin[0] = b[0];
+        origin[1] = b[1];
+        origin[2] = b[2];
+        direction[0] = dx / length;
+        direction[1] = dy / length;
+        direction[2] = dz / length;
+    }
+
     public synchronized double yawDegrees() {
         return yawDegrees;
     }
@@ -220,12 +330,12 @@ public final class OrbitCamera {
         double reach = preset == Preset.CHASE ? Math.min(distance, Math.max(CHASE_MIN_DISTANCE, clearDistance)) : distance;
         float eyeX = (float) (targetX + reach * Math.cos(pitch) * Math.cos(yaw));
         float eyeY = (float) (targetY + reach * Math.cos(pitch) * Math.sin(yaw));
-        float eyeZ = (float) (TARGET_HEIGHT + reach * Math.sin(pitch));
+        float eyeZ = (float) (targetZ + reach * Math.sin(pitch));
         eye[0] = eyeX;
         eye[1] = eyeY;
         eye[2] = eyeZ;
         Mat4.perspective((float) Math.toRadians(FIELD_OF_VIEW_DEGREES), aspect, 0.1f, 50f, projection);
-        Mat4.lookAt(eyeX, eyeY, eyeZ, (float) targetX, (float) targetY, TARGET_HEIGHT, view);
+        Mat4.lookAt(eyeX, eyeY, eyeZ, (float) targetX, (float) targetY, (float) targetZ, view);
         Mat4.multiply(projection, view, out);
     }
 
@@ -280,7 +390,7 @@ public final class OrbitCamera {
         double yaw = Math.toRadians(yawDeg);
         double pitch = Math.toRadians(pitchDegrees);
         return firstBlocker(
-                robotX, robotY, TARGET_HEIGHT, Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch),
+                robotX, robotY, targetZ, Math.cos(pitch) * Math.cos(yaw), Math.cos(pitch) * Math.sin(yaw), Math.sin(pitch),
                 distance);
     }
 

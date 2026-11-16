@@ -72,7 +72,8 @@ public record AppClasspath(List<Path> worker, List<Path> robot) {
         throw new IOException("the application does not run from a jar and " + FILE_PROPERTY + " is not set");
     }
 
-    private static Path applicationJar() {
+    /** The jar this class was loaded from, or null when it was not loaded from a jar file. */
+    static Path applicationJar() {
         try {
             CodeSource source = AppClasspath.class.getProtectionDomain().getCodeSource();
             return source == null ? null : Path.of(source.getLocation().toURI());

@@ -245,7 +245,7 @@ public final class RealtimeRunner implements AutoCloseable {
         problems.addAll(session.problems());
         return new SessionStatus(
                 session.now(), session.phase(), session.telemetry(), session.score(), problems, session.hardware(), speed,
-                achieved, paused, session.match());
+                achieved, paused, session.match(), session.unmapped());
     }
 
     private static WindowsWaitableTimer openTimer() {

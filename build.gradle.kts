@@ -8,17 +8,14 @@ moduleRules {
     module("sim-core", "sim-contracts")
     module("sim-physics", "sim-contracts")
     module("sim-hardware", "sim-contracts")
-    module("sim-mechanisms", "sim-contracts", "sim-physics")
-    module("sim-field", "sim-contracts", "sim-physics")
-    module("game-decode", "sim-contracts", "sim-physics", "sim-field")
-    module("game-biobuzz", "sim-contracts", "sim-physics", "sim-field")
+    // The field framework and the games: a game is its own package, and the packages do not refer to each other (GamePackagesTest).
+    module("games", "sim-contracts", "sim-physics")
     module(
         "simulator",
-        "sim-contracts", "sim-core", "sim-physics", "sim-hardware", "sim-mechanisms", "sim-field",
-        "game-decode", "game-biobuzz", "robot-runtime", "platform",
+        "sim-contracts", "sim-core", "sim-physics", "sim-hardware", "games", "robot-runtime", "platform",
     )
     module("sim-link", "sim-contracts")
-    module("worker", "sim-contracts", "sim-link", "simulator", "game-decode", "game-biobuzz", "project-import")
+    module("worker", "sim-contracts", "sim-link", "simulator", "games", "project-import")
     module("robot-runtime", "sim-contracts")
     module("android-shim")
     module("sdk-common", "sim-contracts", "android-shim")
@@ -32,6 +29,5 @@ moduleRules {
         "worker@workerRuntime", "sdk-common@robotWorld",
     )
     module("platform")
-    module("launcher")
     module("acceptance-tests", "*")
 }

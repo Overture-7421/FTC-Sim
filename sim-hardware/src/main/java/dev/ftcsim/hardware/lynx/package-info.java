@@ -22,10 +22,9 @@
  *
  * <p><b>Threads and the bus.</b> The simulation runs one thread at a time: the simulator thread moves the clock and
  * calls {@code advanceTo}, and the robot thread runs between its moves and calls {@code transmit}. That is the
- * scheduled side, and what it does is a function of simulated time and nothing else. Any other thread that reaches
- * the hubs (a library's own timer reading the battery voltage every few seconds of real time, say) is unscheduled,
- * and whatever it does happens whenever the operating system lets it, so it must not be able to change what the
- * scheduled side sees.
+ * scheduled side. Any other thread that reaches the hubs (a library's own timer reading the battery voltage every few
+ * seconds of real time, say) is unscheduled: it runs whenever the operating system lets it, and it must neither move
+ * simulated time nor disturb the scheduled side's own exchanges.
  *
  * <ul>
  *   <li><b>One lock.</b> Every method of {@link dev.ftcsim.hardware.lynx.LynxBus} takes the same fair lock, so a
@@ -41,12 +40,10 @@
  *   <li><b>Queries</b> (every command that only reads and starts nothing) are answered normally and leave no trace: they
  *       are not the host being heard from, so they do not postpone a keep-alive timeout; nothing they find is noted in
  *       the diagnostics; and their replies are numbered from a count of their own, so the replies the robot gets are
- *       numbered as if nobody else were asking. They are only counted, in {@code unscheduledQueries()}. A scheduled
- *       run is byte for byte the same with any number of threads making queries, which the tests check.
+ *       numbered as if nobody else were asking.
  *   <li><b>Anything else</b> (a command that writes, resets, starts an I2C transaction, takes a finished transaction's
  *       result, or asks for the module's events to be cleared) is still executed, as a real hub would, at the time the
- *       hubs are at, because the hub cannot tell who sent it. It is counted by name in
- *       {@code unscheduledMutations()}: a run in which that list is not empty is no longer reproducible.
+ *       hubs are at, because the hub cannot tell who sent it.
  *   <li><b>Which is which</b> is a property of the command, given where it is registered: the
  *       {@code CommandTable} takes a classification with every command and a test insists that every command has
  *       one.

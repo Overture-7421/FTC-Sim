@@ -66,7 +66,7 @@ class GradleFailuresTest {
 
         assertEquals(Failure.OFFLINE_CACHE_COLD, failure.failure());
         assertTrue(failure.getMessage().contains("com.android.tools.build:gradle:8.7.0"), failure.getMessage());
-        assertTrue(failure.getMessage().contains("network access"));
+        assertTrue(failure.getMessage().contains("network"));
         assertEquals(Failure.OFFLINE_CACHE_COLD, diagnose("captured/dependency-not-cached-offline.txt", true).failure());
     }
 
@@ -84,7 +84,8 @@ class GradleFailuresTest {
         ImportException failure = diagnose("representative/wrong-jdk.txt", false);
 
         assertEquals(Failure.WRONG_JDK, failure.failure());
-        assertTrue(failure.getMessage().contains(JDK.toString()) && failure.getMessage().contains("Android Gradle plugin requires Java 17"), failure.getMessage());
+        assertTrue(failure.getMessage().contains(JDK.toString()), failure.getMessage());
+        assertTrue(failure.diagnostics().stream().anyMatch(line -> line.contains("Android Gradle plugin requires Java 17")), "the reason is in the evidence");
     }
 
     @Test

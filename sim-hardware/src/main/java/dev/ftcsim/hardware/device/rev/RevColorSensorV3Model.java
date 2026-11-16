@@ -25,13 +25,14 @@ import dev.ftcsim.hardware.i2c.RegisterFilePeripheral;
  * too.
  *
  * <p>Light is the ambient light of the room, blended with the surface colour as the surface gets close, scaled by
- * the gain and resolution registers and the profile's {@code ambientLight}. Every measurement happens at the rate
+ * the gain and resolution registers and the {@code ambientLight} setting. Every measurement happens at the rate
  * the rate registers say, 100 ms with the SDK's settings, and the data registers hold the last result between
  * measurements. All of it is estimated, not measured.
  *
- * <p>Profile settings: {@code x}, {@code y}, {@code z} (metres, body frame) of the sensor's front face,
+ * <p>Settings: {@code x}, {@code y}, {@code z} (metres, body frame) of the sensor's front face,
  * {@code azimuthDegrees} (default 0: forward; 90: left) and {@code elevationDegrees} (default 0; -90: straight
- * down) of the direction it looks, and {@code ambientLight} (default 1, normal indoor lighting).
+ * down) of the direction it looks, and {@code ambientLight} (default 1, normal indoor lighting). The robot's design
+ * gives the place and the direction and leaves the light at its default.
  */
 public final class RevColorSensorV3Model extends RegisterFilePeripheral {
 

@@ -31,7 +31,7 @@ fun LinkNotice(link: LinkState, waitingForMore: Boolean, onReconnect: () -> Unit
             colors = CardDefaults.elevatedCardColors(containerColor = MaterialTheme.colorScheme.errorContainer),
         ) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text("The simulator could not be started", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
+                Text("Simulator did not start", style = MaterialTheme.typography.titleMedium, color = MaterialTheme.colorScheme.onErrorContainer)
                 Text(link.message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onErrorContainer)
                 Button(onClick = onReconnect) { Text("Try again") }
             }
@@ -42,7 +42,7 @@ fun LinkNotice(link: LinkState, waitingForMore: Boolean, onReconnect: () -> Unit
             verticalAlignment = Alignment.CenterVertically,
         ) {
             CircularProgressIndicator(Modifier.size(20.dp), strokeWidth = 2.dp)
-            Text("Connecting to the simulator...", style = MaterialTheme.typography.bodyMedium)
+            Text("Connecting", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

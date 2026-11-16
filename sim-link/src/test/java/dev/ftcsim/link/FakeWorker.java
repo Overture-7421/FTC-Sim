@@ -95,7 +95,7 @@ public final class FakeWorker {
                     System.exit(4);
                 }
                 switch (WireCodec.decodeCommand(payload)) {
-                    case Command.Open open -> reply(out, new Event.Opened(info(open.request().profile())));
+                    case Command.Open open -> reply(out, new Event.Opened(info(open.request().mapping().name())));
                     case Command.Init init -> reply(out, new Event.Failed("init " + init.opMode()));
                     case Command.Start _ -> {
                         if (mode.equals("explode")) {

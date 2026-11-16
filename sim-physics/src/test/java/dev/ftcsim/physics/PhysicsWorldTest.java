@@ -149,17 +149,16 @@ class PhysicsWorldTest {
     }
 
     @Test
-    void identicalRunsProduceIdenticalStateHashes() {
-        assertEquals(hashAfterSettling(), hashAfterSettling());
-    }
-
-    private static String hashAfterSettling() {
+    void aStackOfPiecesSettlesAboveTheFloorAndComesToRest() {
         try (PhysicsWorld world = worldWithFloor()) {
             for (int i = 0; i < 20; i++) {
                 world.spawnPiece(i, KIND_BALL, FOAM_BALL, new Vector3(0.05 * (i % 5), 0.03 * (i / 5), 0.2 + 0.1 * i), Vector3.ZERO);
             }
-            steps(world, 300);
-            return world.stateHash();
+            steps(world, 600);
+            for (int i = 0; i < 20; i++) {
+                assertTrue(body(world, i).z() >= FOAM_BALL.radiusM() - 0.003f, "piece " + i + " sank into the floor");
+                assertTrue(body(world, i).z() < 0.5f, "piece " + i + " was left floating");
+            }
         }
     }
 }

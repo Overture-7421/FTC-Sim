@@ -219,21 +219,18 @@ public final class LynxHub {
         return List.of(answer(request, execute(request, commands.find(request.packetId())), scheduledReplies));
     }
 
-    /** What a thread the simulation does not schedule got from the hub, and the command that it ran. */
-    record Unscheduled(List<Datagram> replies, CommandTable.Entry command, CommandTable.Effect effect) {}
-
     /**
      * Executes a datagram from a thread the simulation does not schedule, at the time the hub was last advanced to. A
      * query is answered as the hub stands and leaves no trace in it: it is not the host being heard from, so it does
      * not postpone a keep-alive timeout; nothing it finds is noted in the diagnostics, which are about robot code; and
-     * the reply takes its message number from a count of its own, so the replies robot code gets are numbered as
-     * they would be without it. Any other command is executed as a real hub would, since the hub cannot tell
-     * who sent it; the bus records that it happened.
+     * the reply takes its message number from a count of its own, so the SDK does not take it for the answer to a
+     * command robot code sent. Any other command is executed as a real hub would, since the hub cannot tell who
+     * sent it.
      */
-    Unscheduled handleUnscheduled(Datagram request) {
+    List<Datagram> handleUnscheduled(Datagram request) {
         boolean broadcast = request.destination() == Datagram.BROADCAST;
         if (!isForThisModule(request, broadcast)) {
-            return new Unscheduled(List.of(), null, null);
+            return List.of();
         }
         CommandTable.Entry command = commands.find(request.packetId());
         CommandTable.Effect effect = command == null ? null : command.effect().of(request.payload());
@@ -247,7 +244,7 @@ public final class LynxHub {
         } else {
             reply = diagnostics.quietly(() -> execute(request, command));
         }
-        return new Unscheduled(List.of(answer(request, reply, unscheduledReplies)), command, effect);
+        return List.of(answer(request, reply, unscheduledReplies));
     }
 
     private boolean isForThisModule(Datagram request, boolean broadcast) {

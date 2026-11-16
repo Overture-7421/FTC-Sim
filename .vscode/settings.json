@@ -1,6 +1,8 @@
 {
   "files.encoding": "utf8",
   "files.eol": "\r\n",
+  "kotlin.languageServer.enabled": false,
+  "kotlin.diagnostics.enabled": false,
   "files.exclude": {
     "build": true,
     "*/build": true,
@@ -44,8 +46,7 @@
         "-Duser.country=US",
         "-Duser.timezone=UTC",
         "-Dftcsim.nativeDirectory=${workspaceFolder}\\build\\vscode-natives",
-        "-Dftcsim.fixtureClasses=${workspaceFolder}\\robot-runtime\\build\\classes\\java\\test",
-        "-Dftcsim.stage0.scripts=${workspaceFolder}\\launcher\\scripts"
+        "-Dftcsim.fixtureClasses=${workspaceFolder}\\robot-runtime\\build\\classes\\java\\test"
       ]
     }
   ]

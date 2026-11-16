@@ -5,7 +5,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class RollingResistanceTest {
@@ -151,7 +153,7 @@ class RollingResistanceTest {
         }
     }
 
-    private static String hashOfAHeldPieceCarriedIntoAnotherBall(float coefficient) {
+    private static List<BodyState> bodiesAfterAHeldPieceIsCarriedIntoAnotherBall(float coefficient) {
         try (PhysicsWorld world = wideFloor()) {
             world.spawnPiece(1, 1, ball(0f, coefficient), new Vector3(0, 0, RADIUS), Vector3.ZERO);
             world.spawnPiece(2, 1, ball(0f, 0f), new Vector3(0.8, 0, RADIUS), Vector3.ZERO);
@@ -164,13 +166,14 @@ class RollingResistanceTest {
             }
             assertTrue(world.isPieceHeld(1));
             assertTrue(world.bodyPose(2).x() > 0.85, "the held piece pushed the other ball");
-            return world.stateHash();
+            return world.snapshot().bodies();
         }
     }
 
     @Test
     void aHeldPieceIsLeftAloneAsIfThereWasNoRollingResistance() {
-        assertEquals(hashOfAHeldPieceCarriedIntoAnotherBall(0f), hashOfAHeldPieceCarriedIntoAnotherBall(0.08f));
+        assertEquals(
+                bodiesAfterAHeldPieceIsCarriedIntoAnotherBall(0f), bodiesAfterAHeldPieceIsCarriedIntoAnotherBall(0.08f));
     }
 
     @Test

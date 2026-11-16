@@ -83,6 +83,22 @@ class ProjectSnapshotTest {
     }
 
     @Test
+    void theSimulatorsOwnProfileAtTheRootIsNotPartOfTheSourceButANestedOneIs(@TempDir Path temp) throws IOException {
+        Path project = project(temp);
+        write(project, "ftcsim.json", "{\"schema\":1}");
+        write(project, "TeamCode/ftcsim.json", "{}");
+        SourceManifest before = ProjectSnapshot.create(project, temp.resolve("snapshot"), ImportProgress.SILENT).manifest();
+
+        assertFalse(before.hashes().containsKey("ftcsim.json"));
+        assertTrue(before.hashes().containsKey("TeamCode/ftcsim.json"));
+        assertFalse(Files.exists(temp.resolve("snapshot/ftcsim.json")));
+
+        write(project, "ftcsim.json", "{\"schema\":1,\"name\":\"edited\"}");
+        assertTrue(before.compareWith(SourceManifest.scan(project, ImportProgress.SILENT)).isEmpty(), "editing the profile is not a change");
+        assertEquals(before.fingerprint(), SourceManifest.scan(project, ImportProgress.SILENT).fingerprint());
+    }
+
+    @Test
     void theManifestIsTheHashOfTheOriginalAndSeesAnyChangeToIt(@TempDir Path temp) throws IOException {
         Path project = project(temp);
         SourceManifest before = ProjectSnapshot.create(project, temp.resolve("snapshot"), ImportProgress.SILENT).manifest();

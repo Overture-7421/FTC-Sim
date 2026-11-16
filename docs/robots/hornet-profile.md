@@ -1,6 +1,8 @@
 # Hornet's simulated drivetrain
 
-`hornet-2026.json` describes Hornet's robot (the file format is in `robot-profile.md`). Its drivetrain is calibrated against the four constants that Hornet's
+The fixed DECODE robot (`RobotDesign` in `simulator`, `robots/fixed-robots.md`) holds Hornet's fitted numbers as constants, and
+`RobotDesignTest` spells every one of them out, so a change to a fitted number fails a test and is made on purpose. Its
+drivetrain is calibrated against the four constants that Hornet's
 team measured on the real robot with Pedro Pathing's own tuners (`pedroPathing/Constants.java`), because Pedro
 predicts its braking distance from them and a robot that coasts or tops out differently makes autos overshoot.
 
@@ -26,12 +28,13 @@ float about 25 ms after the speed has passed 30 in/s, and they read the Pinpoint
 
 ## The chassis numbers
 
-Only what the profile says is listed; everything else is `MecanumConfig.generic18Inch()`.
+Only what the design sets is listed; everything else is `MecanumConfig.generic18Inch()`. The design reads mass and wheel
+diameter from the student's mapping; Hornet's mapping gives 11.3 kg and 96 mm.
 
 | Number                        | Value   | Where it comes from                                                                         |
 |-------------------------------|--------:|---------------------------------------------------------------------------------------------|
 | `massKg`                      |    11.3 | Hornet's `Constants` (`mass`). The only drivetrain figure the repository states.            |
-| `batteryVolts`                |    12.6 | Estimate: a full 12 V battery. Unchanged; the shooter and intake motors run on it as well.  |
+| `battery` (`RobotRig`)        |    12.6 | Estimate: a full 12 V battery. Unchanged; the shooter and intake motors run on it as well.  |
 | `wheelFrictionNm`             |    0.12 | Fitted to the forward deceleration. 6.5 % of the stall torque of one wheel.                 |
 | `wheelDampingNmsPerRad`       |  0.0034 | Fitted to the forward top speed, together with the friction above and the battery.          |
 | `rollerViscousNsPerM`         |     2.2 | Fitted to the sideways top speed.                                                           |
@@ -91,7 +94,7 @@ and 2. With 8.0e-5 they settle within 0.5 % of it (1195 to 1200) and the far rou
 
 ### Shot sweep
 
-`ShotSweepTest` (module `simulator`) puts the robot of this profile on the DECODE field, at distances from 35 to 160 in
+`ShotSweepTest` (module `simulator`) puts the fixed DECODE robot mapped as Hornet on the DECODE field, at distances from 35 to 160 in
 from the aim point and up to five bearings spread over every stance where the robot fits in the field, has a part over
 a launch zone and does not stand in anything (99 per alliance; nothing is legal beyond 145 in). It loads one ARTIFACT
 and lets the real `Mechanisms.launch` fire it at the table's speed plus 12, with the flywheels exactly on that speed.
@@ -172,5 +175,4 @@ The shot sweep prints its tables as `SWEEP>` lines. The auto routines print thei
 `acceptance-tests/build/test-results/test/TEST-dev.ftcsim.acceptance.HornetAutoRunTest.xml`.
 
 The model behind it is `MecanumWheel`; the two losses are `MecanumConfig.wheelFrictionNm` and
-`rollerRollingResistance`, both zero unless a profile sets them, so every other robot and the golden determinism
-hashes are unchanged.
+`rollerRollingResistance`, both zero unless the design sets them, so every other robot is unchanged.

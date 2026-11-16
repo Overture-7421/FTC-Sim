@@ -6,7 +6,7 @@ import dev.ftcsim.contracts.hardware.HardwareDirectory;
 
 /**
  * The SDK's own {@link AnalogInput} on a channel of a simulated hub's analog input controller, built as the SDK builds
- * a configured "Analog Input". What a channel reads is up to what the robot profile connected to it; a channel that
+ * a configured "Analog Input". What a channel reads is up to what the robot has connected to it; a channel that
  * nothing is connected to reads 0 V.
  */
 final class AnalogInputProvider implements DeviceProvider {

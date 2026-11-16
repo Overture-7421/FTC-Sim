@@ -6,15 +6,18 @@ Module `project-import`, package `dev.ftcsim.importer`. Windows only, like the r
 
 An **import** turns an unmodified FTC team project (Gradle, Android Studio layout) into a **prepared program**: a
 folder, optionally zipped, that the simulator runs without Android Studio, the Android SDK, Gradle, Git or a
-compiler. Only the import needs those. A driver who only practises receives the package, opens it, and runs it
-offline.
+compiler. Only the import needs those. (The window calls an import a *build* and keeps the programs itself: the person
+opens a project and never handles a prepared program, `docs/architecture/app.md`.)
 
 `ProjectImporter.importProject(ImportRequest, ImportProgress)` runs these stages, which a UI can follow through
 `ImportProgress` (`stage`, `message` for each line of Gradle's output, and `isCancelled`, which is polled and stops
 the build and removes the unfinished package):
 
 1. **SNAPSHOT.** The project is copied into the caller's workspace. Build outputs (`build` next to a Gradle script),
-   `.git`, `.gradle`, IDE folders, `local.properties` and `*.iml` are not copied. The SHA-256 of every copied
+   `.git`, `.gradle`, IDE folders, `local.properties` and `*.iml` are not copied, and neither is the robot description
+   `ftcsim.json` at the project's root: it is not source of the robot program (the simulator reads it from the project
+   itself), so editing it, or the application writing it, is neither a change to the project nor a reason to build again.
+   The SHA-256 of every copied
    (source and build) file of the original is recorded; at the end the original is hashed again and the import
    **fails and produces nothing** if a single file differs. All Gradle runs happen in the copy.
 2. **GRADLE_EXPORT.** The copy's own Gradle wrapper runs with one init script added on the command line
@@ -31,15 +34,15 @@ the build and removes the unfinished package):
 5. **VERIFY.** The package is opened exactly as a driver's machine opens it, the original is hashed again, and the
    zip is written if one was asked for.
 
-The JDK home and the Android SDK folder are parameters. Finding them is the application's job (`app.md`), installing a
-JDK the launcher's.
+The JDK home and the Android SDK folder are parameters. Finding them is the application's job (`app.md`); the
+distribution brings its own Java for the simulator, so installing a JDK is nobody's.
 
 ## Trust: a child process is not a sandbox
 
 Importing from source **executes the project's build scripts**, and the plugins and wrapper they name, on this
 machine with the current user's rights. They run in a separate Gradle process, which is **not a sandbox**: it limits
 nothing that the scripts can read, write or send. Every `ImportRequest` therefore carries a `BuildTrust`, there is no
-default, and nothing starts unless the caller passes `TRUST_BUILD_SCRIPTS` after telling the user. Opening a prepared
+default, and nothing starts unless the caller passes `TRUST_BUILD_SCRIPTS` after telling the user (the application takes the person's choice of the project folder as that decision). Opening a prepared
 package runs no build script and needs no such decision.
 
 ## Running offline
@@ -235,8 +238,8 @@ booted on the package and listed its OpModes in about 2.5 s.
 ## Not done
 
 - Licence notices of the libraries are not collected; the manifest records their coordinates only.
-- Installing a JDK or an Android SDK. Finding them for an import is the application's (`app.md`), and installing a JDK
-  is the launcher's.
+- Installing a JDK or an Android SDK. Finding them for an import is the application's (`app.md`); the simulator's own
+  Java is the runtime that comes with the distribution.
 - OpModes registered by code cannot be listed before the program runs.
 - A project's own `packagingOptions` are not read: the Java resources are merged with AGP 8.7.0's rules for an
   application, so a project that excludes, picks first or merges other files would get a slightly different set.

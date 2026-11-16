@@ -3,7 +3,7 @@ package dev.ftcsim.hardware.camera;
 import dev.ftcsim.hardware.device.DeviceConfig;
 import dev.ftcsim.hardware.device.DeviceContext;
 
-/** Builds the model of one kind of camera from the settings a robot profile gives it. */
+/** Builds the model of one kind of camera from the settings the robot's design gives it. */
 public interface CameraFactory {
 
     /**
@@ -17,8 +17,7 @@ public interface CameraFactory {
     CameraModel create(DeviceConfig config, DeviceContext context, long seed);
 
     /**
-     * Checks the settings that can be checked without a world: names, ranges and spellings. A profile loader calls it
-     * so that a mistake is found when the profile is read, not when the robot is built.
+     * Checks the settings that can be checked without a world: names, ranges and spellings.
      *
      * @throws IllegalArgumentException as {@link #create} does
      */

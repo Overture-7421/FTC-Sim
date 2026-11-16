@@ -1,14 +1,13 @@
 package dev.ftcsim.hardware.device;
 
 import dev.ftcsim.contracts.field.FieldTag;
-import dev.ftcsim.contracts.hardware.EncoderSource;
 import dev.ftcsim.contracts.world.BodyView;
 import dev.ftcsim.contracts.world.RayView;
 import java.util.List;
 
 /**
  * Everything a device model may know about the simulated world, and nothing else: where the chassis it is mounted
- * on really is, what a ray meets, the time, the encoders the robot profile names, and the physics steps. Devices
+ * on really is, what a ray meets, the time, and the physics steps. Devices
  * that look at the field, such as cameras, may also ask where the field's tags are and where the bodies that carry
  * some of them are. The host implements it once per robot; {@link DeviceHost} is the implementation to use.
  */
@@ -22,14 +21,6 @@ public interface DeviceContext {
 
     /** The current simulated time, in nanoseconds. */
     long nowNanos();
-
-    /**
-     * The encoder of the mechanism the robot profile calls {@code name}, for devices that count an encoder
-     * which is not wired to a hub port.
-     *
-     * @throws IllegalArgumentException if the profile has no such encoder
-     */
-    EncoderSource encoder(String name);
 
     /** Asks for {@code listener} to run after every physics step. Listeners run in the order they were added. */
     void onStep(StepListener listener);

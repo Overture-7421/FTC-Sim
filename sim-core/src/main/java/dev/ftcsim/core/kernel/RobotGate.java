@@ -10,8 +10,8 @@ import java.util.function.Predicate;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Makes the robot thread and the simulator thread take turns, so that what the robot observes is a function of
- * simulated time and never of how the operating system happened to schedule two threads.
+ * Makes the robot thread and the simulator thread take turns, so that the robot observes simulated time and never the
+ * operating system's scheduling of two threads.
  *
  * <p>The robot thread runs only after the simulator hands it the baton, and gives the baton back at its next
  * synchronisation point: a clock read that reaches the {@linkplain #setHorizon horizon}, a sleep, or a yield.
@@ -86,8 +86,6 @@ final class RobotGate {
 
     // Touched only by the simulator thread.
     private final ThreadMXBean threadBean = ManagementFactory.getThreadMXBean();
-    private long startedThreadsSeen = -1;
-    private final WorldThreads worldThreads;
 
     // Touched only by the robot thread while it holds the baton.
     private long base;
@@ -100,21 +98,10 @@ final class RobotGate {
     }
 
     RobotGate(VirtualClock clock, KernelDiagnostics diagnostics, Predicate<Thread> robotThreadMatcher, long livenessMillis) {
-        this(clock, diagnostics, robotThreadMatcher, livenessMillis, KernelConfig.ROBOT_WORLD_FRAME, KernelConfig.DEFAULT_WORLD_QUIET_MILLIS);
-    }
-
-    RobotGate(
-            VirtualClock clock,
-            KernelDiagnostics diagnostics,
-            Predicate<Thread> robotThreadMatcher,
-            long livenessMillis,
-            Predicate<StackTraceElement> worldFrame,
-            long worldQuietMillis) {
         this.clock = clock;
         this.diagnostics = diagnostics;
         this.robotThreadMatcher = robotThreadMatcher;
         this.livenessNanos = livenessMillis * 1_000_000L;
-        this.worldThreads = new WorldThreads(diagnostics, worldFrame, worldQuietMillis);
     }
 
     // ---------------------------------------------------------------------------------------------
@@ -158,7 +145,7 @@ final class RobotGate {
 
     private String resumed(Thread thread) {
         return "the robot thread '" + thread.getName() + "' resumed from a wait the simulator does not control (it was blocked in "
-                + externalSite + "); timing from there on is not reproducible";
+                + externalSite + "); its timing from there on is not the simulator's";
     }
 
     /** The innermost frames of where a thread is, for messages, leaving out the JDK's own parking internals. */
@@ -194,7 +181,7 @@ final class RobotGate {
             boolean replaceable = current == null || !current.isAlive() || state == State.DONE || state == State.EXTERNAL;
             if (!replaceable) {
                 diagnostics.problem("thread '" + caller.getName() + "' also looks like a robot thread while '"
-                        + current.getName() + "' is still alive; the simulator cannot order the two, so timing is not reproducible");
+                        + current.getName() + "' is still alive; the simulator cannot order the two, so it schedules only the first");
                 return false;
             }
             robot = caller;
@@ -212,7 +199,7 @@ final class RobotGate {
      * horizon normally hands the baton back so the world can catch up, but not inside a critical section: the
      * simulator thread may be waiting for a monitor the robot holds, and a robot that gave up the baton while
      * holding it would never get the baton back. The robot's clock then runs on past the horizon until it
-     * leaves the section, which is deterministic and delays nothing but when it next sees the world change.
+     * leaves the section, which delays nothing but when it next sees the world change.
      */
     long observe(long cost) {
         throwIfUnwinding();
@@ -310,7 +297,7 @@ final class RobotGate {
             try {
                 monitor.wait();
             } catch (InterruptedException interrupted) {
-                // The simulator learns of the interrupt from this flag and delivers it at a deterministic moment.
+                // The simulator learns of the interrupt from this flag and delivers it at a simulated moment.
                 synchronized (lock) {
                     if (robot == self) {
                         interruptedWhileParked = true;
@@ -474,7 +461,7 @@ final class RobotGate {
         interruptedWhileParked = false;
         diagnostics.abandoned(target.getName());
         diagnostics.problem("the robot thread '" + target.getName() + "' did not end when asked to and was given up on; it may still"
-                + " be running outside the simulation, so timing from there on is not reproducible");
+                + " be running outside the simulation");
         return true;
     }
 
@@ -495,11 +482,6 @@ final class RobotGate {
 
     boolean isRobot(Thread thread) {
         return thread == robot;
-    }
-
-    /** Whether the thread is the robot thread or one that the matcher takes for it, even before it has reached the gate. */
-    boolean isRobotLike(Thread thread) {
-        return thread == robot || robotThreadMatcher.test(thread);
     }
 
     /** Hands the baton to the robot thread if it is due, and returns once it has given it back. */
@@ -566,21 +548,6 @@ final class RobotGate {
         return true;
     }
 
-    /**
-     * Call before simulated time moves. A robot thread that was just created has not yet reached its first hook, so the
-     * simulator does not know it; time that passed while it started would be time it never saw, and how much passed
-     * would depend on how quickly the machine starts a thread. The JVM's count of started threads says cheaply when
-     * one may have been created since the last time.
-     */
-    void awaitStartingThreads() {
-        long started = threadBean.getTotalStartedThreadCount();
-        if (started != startedThreadsSeen) {
-            worldThreads.prune();
-            settle(livenessNanos / 1_000_000L);
-            startedThreadsSeen = threadBean.getTotalStartedThreadCount();
-        }
-    }
-
     private boolean dueLocked(long now) {
         if (state != State.PARKED) {
             return false;
@@ -616,7 +583,7 @@ final class RobotGate {
             }
             if (System.nanoTime() >= deadline) {
                 diagnostics.problem("the robot thread '" + target.getName() + "' did not settle into its monitor wait ("
-                        + threadState + "); timing from there on is not reproducible");
+                        + threadState + ")");
                 return;
             }
             LockSupport.parkNanos(20_000L);
@@ -631,36 +598,19 @@ final class RobotGate {
      *                      its first synchronisation point
      */
     void settle(long maxRealMillis) {
-        long limit = maxRealMillis * 1_000_000L;
-        long deadline = System.nanoTime() + limit;
+        long deadline = System.nanoTime() + maxRealMillis * 1_000_000L;
         for (;;) {
             awaitQuiescent();
-            if (unboundCandidateExists()) {
-                if (System.nanoTime() >= deadline) {
-                    diagnostics.problem("a thread that looks like the robot thread was started but did not reach the simulator within "
-                            + maxRealMillis + " ms; it runs outside the simulation, so timing from there on is not reproducible");
-                    return;
-                }
-                LockSupport.parkNanos(200_000L);
-                continue;
-            }
-            // A thread of the robot world that was running can have woken the robot thread, so look at it again.
-            if (!awaitWorldQuiet()) {
+            if (!unboundCandidateExists()) {
                 return;
             }
-            deadline = System.nanoTime() + limit;
+            if (System.nanoTime() >= deadline) {
+                diagnostics.problem("a thread that looks like the robot thread was started but did not reach the simulator within "
+                        + maxRealMillis + " ms; it runs outside the simulation");
+                return;
+            }
+            LockSupport.parkNanos(200_000L);
         }
-    }
-
-    /**
-     * The robot thread is not the only thread that runs robot code; see {@link WorldThreads}. Waits, in real time, until
-     * the others have come to rest.
-     *
-     * @return whether it had to wait
-     */
-    boolean awaitWorldQuiet() {
-        return worldThreads.awaitQuiet(
-                thread -> thread == robot || robotThreadMatcher.test(thread) || (anyAbandoned && abandoned.contains(thread)));
     }
 
     State state() {

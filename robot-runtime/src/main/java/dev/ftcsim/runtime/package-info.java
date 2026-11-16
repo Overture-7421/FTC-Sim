@@ -1,6 +1,6 @@
 /**
- * The robot world's class loader and the load-time rewriting that keeps what a robot program can observe from
- * depending on the machine.
+ * The robot world's class loader and the load-time rewriting that gives a robot program the simulated clock, a network
+ * that is not the machine's, and a way to end.
  *
  * <p>{@link dev.ftcsim.runtime.RobotClassLoader} defines the robot program, the FTC SDK and every library in a world
  * of their own, child-first from the robot class path, and passes each class through a
@@ -11,9 +11,9 @@
  * is, because an uninstrumented class would escape the virtual clock.
  *
  * <p>The rule tables are code: {@code RewriteRules} (clock, sleep, yield, wait and notify, native libraries),
- * {@code TimeRules}, {@code RandomRules} and {@code NetworkRules}. To virtualise another JDK member, add a row to the
- * table, give the hooks class a method with the descriptor the row implies, and add a probe class and a test; the rule
- * tests scan the JDK, so a member that reads the clock, makes randomness or reaches the network and is missing from its
- * table fails the build. See {@code docs/architecture/decisions.md}, sections 2 and 10.
+ * {@code TimeRules} and {@code NetworkRules}. To virtualise another JDK member, add a row to the table, give the hooks
+ * class a method with the descriptor the row implies, and add a probe class and a test; the rule tests scan the JDK, so
+ * a member that reads the clock or reaches the network and is missing from its table fails the build. Randomness is not
+ * virtualised: the robot world gets the JVM's own. See {@code docs/architecture/decisions.md}, sections 2, 9 and 10.
  */
 package dev.ftcsim.runtime;

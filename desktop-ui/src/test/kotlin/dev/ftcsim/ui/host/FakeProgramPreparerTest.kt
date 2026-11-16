@@ -69,7 +69,6 @@ class FakeProgramPreparerTest {
 
         assertEquals(ProgramPreparer.Kind.NOT_RECOGNISED, found.kind())
         assertTrue(found.summary().contains("settings.gradle"), "the reason names what is missing")
-        assertTrue(found.summary().contains("manifest.json"))
     }
 
     @Test

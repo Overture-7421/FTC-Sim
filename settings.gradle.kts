@@ -28,10 +28,7 @@ include(
     "sim-core",
     "sim-physics",
     "sim-hardware",
-    "sim-mechanisms",
-    "sim-field",
-    "game-decode",
-    "game-biobuzz",
+    "games",
     "simulator",
     "sim-link",
     "worker",
@@ -41,6 +38,5 @@ include(
     "project-import",
     "desktop-ui",
     "app",
-    "launcher",
     "acceptance-tests",
 )

@@ -19,11 +19,13 @@ import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.io.UncheckedIOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.security.SecureRandom;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.HexFormat;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
@@ -56,10 +58,11 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
     static final String CHECKING = "Looking at the project and this computer";
     static final String UNCHANGED = "Already prepared, source unchanged";
 
-    private static final String NO_JDK = "Preparing a project needs a JDK, version " + JdkDiscovery.OLDEST + " to " + JdkDiscovery.NEWEST
-            + ", to run the project's own build, and none was found on this computer. Android Studio includes a suitable JDK, "
-            + "so installing it is enough; otherwise install Temurin 21 (the Windows x64 JDK from adoptium.net) and prepare again. "
-            + "This is not the Java that FTC-Sim itself runs on, which comes with FTC-Sim.";
+    /** How many programs of one project are kept: the one in use and the one before it, which a session may still have open. */
+    static final int KEPT_PROGRAMS = 2;
+
+    private static final String NO_JDK = "No JDK " + JdkDiscovery.OLDEST + " to " + JdkDiscovery.NEWEST
+            + " found. Install Android Studio or Temurin 21, then build again.";
 
     private final AppFolders folders;
     private final Machine machine;
@@ -97,7 +100,7 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
         run.thread = thread;
         if (!running.compareAndSet(null, run)) {
             delivery.failed(new Failure(
-                    "BUSY", "Another project is being prepared. Wait for it to finish, or cancel it, and try again.", List.of(), null));
+                    "BUSY", "Another project is building.", List.of(), null));
             return () -> {};
         }
         thread.start();
@@ -187,12 +190,11 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
                 failure = refused.failure;
             } catch (IOException | UncheckedIOException unreadable) {
                 failure = new Failure(
-                        "IO_ERROR", "A file could not be read or written while the project was prepared: " + unreadable, List.of(), null);
+                        "IO_ERROR", "A file could not be read or written: " + unreadable, List.of(), null);
             } catch (Throwable unexpected) {
                 failure = new Failure(
                         "INTERNAL",
-                        "FTC-Sim failed in a way it did not expect while it prepared the project: " + unexpected
-                                + ". The lines below say where.",
+                        "Unexpected error: " + unexpected,
                         stackTrace(unexpected),
                         null);
             }
@@ -218,6 +220,7 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
             Prepared earlier = earlier(folders.program(inspection.name(), fingerprint), fingerprint);
             if (earlier != null) {
                 delivery.step(new Step(STEPS, STEPS, UNCHANGED));
+                remember(project, earlier.folder());
                 return earlier;
             }
 
@@ -241,7 +244,9 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
                             request.trusted() ? BuildTrust.TRUST_BUILD_SCRIPTS : BuildTrust.DO_NOT_TRUST)
                     .withSimulatorClasspath(ownJars.robot());
             try {
-                return publish(importer.run(importing, progress), fresh);
+                Prepared made = publish(importer.run(importing, progress), fresh);
+                remember(project, made.folder());
+                return made;
             } finally {
                 try {
                     Trees.delete(fresh);
@@ -249,6 +254,53 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
                     delivery.output("The unfinished folder " + fresh + " could not be removed: " + stuck);
                 }
             }
+        }
+
+        /**
+         * Notes that {@code program} is the one in use for {@code project} now, and removes the programs of that project
+         * that are older than the two newest. One that Windows will not let go of, because a session still
+         * has its jars open, stays on the list for the next time. Only programs this list names are ever removed, so
+         * programs of earlier versions and of other projects are left alone. Best effort: a failure is reported, not raised.
+         */
+        private void remember(Path project, Path program) {
+            Path list = folders.programList(project);
+            try {
+                Files.createDirectories(list.getParent());
+                List<String> names = new ArrayList<>(Files.isRegularFile(list) ? Files.readAllLines(list, StandardCharsets.UTF_8) : List.of());
+                names.removeIf(name -> name.isBlank() || name.equals(program.getFileName().toString()));
+                names.add(program.getFileName().toString());
+                int dropped = Math.max(0, names.size() - KEPT_PROGRAMS);
+                List<String> stays = new ArrayList<>();
+                for (String name : names.subList(0, dropped)) {
+                    if (!discard(folders.programs().resolve(name))) {
+                        stays.add(name);
+                    }
+                }
+                stays.addAll(names.subList(dropped, names.size()));
+                Files.write(list, stays, StandardCharsets.UTF_8);
+            } catch (IOException | RuntimeException failure) {
+                delivery.output("Older programs of this project could not be tidied up: " + failure);
+            }
+        }
+
+        /** Removes a program and its build log; false when it is in use. Moved aside first, which Windows refuses while a file in it is open. */
+        private boolean discard(Path program) {
+            if (!Files.exists(program)) {
+                return true;
+            }
+            Path aside = folders.discarding(HexFormat.of().formatHex(randomBytes()));
+            try {
+                Files.move(program, aside, StandardCopyOption.ATOMIC_MOVE);
+            } catch (IOException inUse) {
+                return false;
+            }
+            try {
+                Trees.delete(aside);
+                Files.deleteIfExists(folders.buildLog(program));
+            } catch (IOException | RuntimeException leftover) {
+                delivery.output("The old program " + program.getFileName() + " could not be fully removed: " + leftover);
+            }
+            return true;
         }
 
         /** What was prepared from this source earlier, if it is still whole. */
@@ -298,10 +350,7 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
             try {
                 return classpath.get();
             } catch (IOException incomplete) {
-                throw new Refused(
-                        "INCOMPLETE_INSTALL",
-                        "FTC-Sim cannot find its own program files, which the check of the project's code needs: " + incomplete.getMessage()
-                                + ". Install FTC-Sim again.");
+                throw new Refused("INCOMPLETE_INSTALL", "FTC-Sim files are missing: " + incomplete.getMessage() + ". Install FTC-Sim again.");
             }
         }
 
@@ -314,8 +363,7 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
             } catch (IOException inUse) {
                 throw new Refused(
                         "IO_ERROR",
-                        "The program prepared earlier in " + folder + " could not be replaced, probably because a session still uses it. "
-                                + "Close the session and prepare again. (" + inUse + ")");
+                        "The earlier build in " + folder + " is in use. Close the simulator and build again. (" + inUse + ")");
             }
             Files.move(fresh, folder, StandardCopyOption.ATOMIC_MOVE);
             Path log = folders.buildLog(folder);

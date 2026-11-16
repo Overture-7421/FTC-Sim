@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * The SDK's own {@link DigitalChannelImpl} and {@link RevTouchSensor} on a pin of a simulated hub's digital channel
  * controller, built as the SDK builds a configured "Digital Device" and "REV Touch Sensor". What a pin reads is up to
- * what the robot profile connected to it; a pin that nothing is connected to reads high through the hub's pull-up.
+ * what the robot has connected to it (nothing, in the fixed robots); a pin that nothing is connected to reads high through the hub's pull-up.
  */
 final class DigitalInputProvider implements DeviceProvider {
     private static final Set<Class<?>> CHANNELS = Set.of(DigitalChannel.class, DigitalChannelImpl.class);

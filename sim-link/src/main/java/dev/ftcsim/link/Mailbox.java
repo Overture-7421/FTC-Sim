@@ -51,6 +51,7 @@ final class Mailbox {
                 case Event.Failed _ -> reliable.addLast(entry);
                 case Event.Catalogue _ -> reliable.addLast(entry);
                 case Event.Refused _ -> reliable.addLast(entry);
+                case Event.Log _ -> reliable.addLast(entry);
             }
             lock.notifyAll();
         }

@@ -1,6 +1,7 @@
 package dev.ftcsim.ui.practice
 
 import dev.ftcsim.contracts.field.Score
+import dev.ftcsim.contracts.hardware.UnmappedDevice
 import dev.ftcsim.contracts.robot.GamepadState
 import dev.ftcsim.contracts.robot.TelemetrySnapshot
 import dev.ftcsim.contracts.session.Catalogue
@@ -15,6 +16,7 @@ import dev.ftcsim.ui.scene.SceneModel
 import dev.ftcsim.ui.scene.ViewportFeed
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.flow.MutableSharedFlow
+import dev.ftcsim.ui.prepare.OutputLog
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -46,6 +48,11 @@ class PracticeSession(
     private val mutableTiming = MutableStateFlow(Timing())
     private val mutableTelemetry = MutableStateFlow(TelemetrySnapshot(emptyList(), "", ""))
     private val mutableHardware = MutableStateFlow<List<Readout>>(emptyList())
+    private val mutableUnmapped = MutableStateFlow<List<UnmappedDevice>>(emptyList())
+    private val mutableOpenings = MutableStateFlow(0)
+
+    /** What the robot program and the SDK logged during the session that is open; the newest lines only. */
+    val console = OutputLog()
     private val mutableScore = MutableStateFlow(Score(emptyList()))
     private val mutableProblems = MutableStateFlow<List<Problem>>(emptyList())
     private val mutableMatch = MutableStateFlow(MatchDisplay.NONE)
@@ -53,6 +60,7 @@ class PracticeSession(
     private val mutableCatalogue = MutableStateFlow<Catalogue?>(null)
     private val mutableLink = MutableStateFlow<LinkState>(LinkState.Connecting)
     private val mutableRefusals = MutableSharedFlow<String>(extraBufferCapacity = REFUSALS_BUFFER, onBufferOverflow = BufferOverflow.DROP_OLDEST)
+    private val mutablePicks = MutableSharedFlow<String>(extraBufferCapacity = REFUSALS_BUFFER, onBufferOverflow = BufferOverflow.DROP_OLDEST)
     private val lock = Any()
     private val gamepads = arrayOf(GamepadState.NEUTRAL, GamepadState.NEUTRAL)
     private var simulator: SimulatorLink? = null
@@ -67,6 +75,12 @@ class PracticeSession(
     val timing: StateFlow<Timing> = mutableTiming.asStateFlow()
     val telemetry: StateFlow<TelemetrySnapshot> = mutableTelemetry.asStateFlow()
     val hardware: StateFlow<List<Readout>> = mutableHardware.asStateFlow()
+
+    /** What the robot program asked the hardware map for that the robot mapping does not place; the Robot page offers the motors among them. */
+    val unmapped: StateFlow<List<UnmappedDevice>> = mutableUnmapped.asStateFlow()
+
+    /** How many times a session has opened, a reset or a restart included; two sessions with equal descriptions are still two. */
+    val openings: StateFlow<Int> = mutableOpenings.asStateFlow()
     val score: StateFlow<Score> = mutableScore.asStateFlow()
     val problems: StateFlow<List<Problem>> = mutableProblems.asStateFlow()
 
@@ -82,8 +96,17 @@ class PracticeSession(
     /** Whether there is a link to a simulator: being opened, there, or not to be had. */
     val link: StateFlow<LinkState> = mutableLink.asStateFlow()
 
+    /** The session asked for most recently, which is the one on screen unless it failed; null before the first. */
+    val requested: SessionRequest? get() = synchronized(lock) { request }
+
     /** Commands the link refused, in words for a person; the session is as it was. A slow collector loses the oldest. */
     val refusals: SharedFlow<String> = mutableRefusals.asSharedFlow()
+
+    /**
+     * The OpModes the person chose, one at a time: picked in the top bar (or for a scan), or the autonomous a match was
+     * armed with. The one a session starts with by itself is not among them.
+     */
+    val picks: SharedFlow<String> = mutablePicks.asSharedFlow()
 
     // The link ---------------------------------------------------------------------------------------------------
 
@@ -124,10 +147,12 @@ class PracticeSession(
     /**
      * Drops the link and, if a session was asked for, goes back to waiting for it, for a link that is made anew. A link
      * that failed cannot be asked again, and a fresh one is the cleanest start. Returns the old link for the caller to close.
+     *
+     * @param replacement the session to ask for on the new link instead of the one that was asked for before
      */
-    fun restart(): SimulatorLink? {
+    fun restart(replacement: SessionRequest? = null): SimulatorLink? {
         val old = detach()
-        request?.let(::open)
+        (replacement ?: request)?.let(::open)
         return old
     }
 
@@ -139,6 +164,7 @@ class PracticeSession(
             latestStatus = null
             mutableSession.value = SessionState(Connection.OPENING)
             mutableMatch.value = MatchDisplay.NONE
+            mutableUnmapped.value = emptyList()
             mutablePlan.value = null
             refreshProblems()
             simulator?.open(request)
@@ -175,10 +201,15 @@ class PracticeSession(
         override fun catalogue(catalogue: Catalogue) {
             if (current()) mutableCatalogue.value = catalogue
         }
+
+        override fun log(lines: List<String>) {
+            if (current()) lines.forEach(console::add)
+        }
     }
 
     /** Called for the first session and again after every [reset], which is a new session with the same request. */
     private fun onOpened(info: SessionInfo) {
+        console.clear()
         val alliance = synchronized(lock) { request?.alliance() }
         feed.show(SceneModel.of(info.field(), info.robot(), SceneModel.robotRgb(alliance)))
         synchronized(lock) {
@@ -188,8 +219,10 @@ class PracticeSession(
                 SessionState(Connection.OPEN, info, keep ?: info.opModes().firstOrNull()?.name())
             }
             mutableMatch.value = MatchDisplay.NONE
+            mutableUnmapped.value = emptyList()
             mutablePlan.value = null
             refreshProblems()
+            mutableOpenings.update { it + 1 }
             // A new session starts with both gamepads untouched; tell it what they are doing now.
             for (index in gamepads.indices) {
                 simulator?.setGamepad(index + 1, gamepads[index])
@@ -208,6 +241,7 @@ class PracticeSession(
         mutableMatch.value = MatchDisplay.of(status.match())
         mutableTelemetry.value = status.telemetry()
         mutableHardware.value = status.hardware()
+        mutableUnmapped.value = status.unmapped()
         mutableScore.value = status.score()
         synchronized(lock) {
             latestStatus = status
@@ -234,13 +268,21 @@ class PracticeSession(
         if (current != null) command(current)
     }
 
-    fun selectOpMode(name: String) {
-        mutableSession.update { if (it.opModes.any { mode -> mode.name() == name }) it.copy(selectedOpMode = name) else it }
+    fun selectOpMode(name: String, picked: Boolean = true) {
+        var valid = false
+        mutableSession.update {
+            valid = it.opModes.any { mode -> mode.name() == name }
+            if (valid) it.copy(selectedOpMode = name) else it
+        }
+        if (valid && picked) mutablePicks.tryEmit(name)
     }
 
     fun init() {
         mutableSession.value.selectedOpMode?.let { name -> send { it.init(name) } }
     }
+
+    /** Initialises [opMode] without making it the one picked in the top bar. */
+    fun init(opMode: String) = send { it.init(opMode) }
 
     fun start() = send { it.start() }
 
@@ -255,6 +297,7 @@ class PracticeSession(
      */
     fun armMatch(autonomous: String?, teleOp: String) {
         mutablePlan.value = MatchPlan(autonomous, teleOp)
+        autonomous?.let { mutablePicks.tryEmit(it) }
         send { it.armMatch(autonomous.orEmpty(), teleOp) }
     }
 
@@ -264,11 +307,8 @@ class PracticeSession(
 
     fun setSpeed(speed: Double) = send { it.setSpeed(speed) }
 
-    /** Starts the same session over; the link answers with `opened` again, so the screen shows it opening meanwhile. */
-    fun reset() {
-        mutableSession.update { if (it.connection == Connection.OPEN) it.copy(connection = Connection.OPENING) else it }
-        send { it.reset() }
-    }
+    /** Stops the code and puts the world back at the start; the link answers with `opened` again, almost at once. */
+    fun reset() = send { it.reset() }
 
     fun humanAction(id: String) = send { it.humanAction(id) }
 

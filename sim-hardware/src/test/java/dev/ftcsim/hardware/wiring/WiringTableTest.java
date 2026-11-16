@@ -7,6 +7,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
+import dev.ftcsim.contracts.hardware.HardwareDirectory.Sensor;
+import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -16,21 +18,15 @@ class WiringTableTest {
     }
 
     @Test
-    void aDevicePlacedByTheProfileIsFoundWhereTheProfileSaidItIs() {
-        WiringTable table = controlHubAndExpansionHub()
-                .motor("frontLeft", 173, 2, 537.7, 312)
-                .servo("claw", 2, 5)
-                .i2c("odometry", 173, 3)
-                .build();
+    void aMotorTheMappingPlacedIsFoundWhereTheMappingSaidItIs() {
+        WiringTable table = controlHubAndExpansionHub().motor("frontLeft", 173, 2, 537.7, 312).build();
 
         assertEquals(new HardwareDirectory.MotorWiring(173, 2, 537.7, 312, true), table.motor("frontLeft"));
-        assertEquals(new HardwareDirectory.ServoWiring(2, 5, true), table.servo("claw"));
-        assertEquals(new HardwareDirectory.I2cWiring(173, 3, true), table.i2c("odometry"));
         assertEquals(List.of(), table.unmappedNames());
     }
 
     @Test
-    void aNameTheProfileDoesNotMentionGetsTheNextFreePortOnceAndForAllAndIsReported() {
+    void aNameTheMappingDoesNotMentionGetsTheNextFreePortOnceAndForAllAndIsReported() {
         WiringTable table = controlHubAndExpansionHub()
                 .defaultMotor(28, 6000)
                 .motor("placed", 173, 0, 537.7, 312)
@@ -45,6 +41,26 @@ class WiringTableTest {
         assertEquals(List.of("shooter", "intake"), table.unmappedNames());
         assertTrue(table.motor("placed").mapped());
         assertFalse(table.motor("shooter").mapped());
+    }
+
+    @Test
+    void everyNameTheMappingDidNotPlaceIsReportedWithTheKindOfDeviceThatAskedForIt() {
+        WiringTable table = controlHubAndExpansionHub().motor("placed", 173, 0, 537.7, 312).build();
+
+        table.motor("shooter");
+        table.servo("claw");
+        table.digital("limit");
+        table.analog("pot");
+        table.motor("shooter");
+        table.motor("placed");
+
+        assertEquals(
+                List.of(
+                        new UnmappedDevice(UnmappedDevice.Kind.MOTOR, "shooter"),
+                        new UnmappedDevice(UnmappedDevice.Kind.SERVO, "claw"),
+                        new UnmappedDevice(UnmappedDevice.Kind.DIGITAL, "limit"),
+                        new UnmappedDevice(UnmappedDevice.Kind.ANALOG, "pot")),
+                table.unmapped());
     }
 
     @Test
@@ -71,29 +87,42 @@ class WiringTableTest {
     }
 
     @Test
-    void aProfileThatPutsTwoDevicesOnOnePortOrUsesAnUnknownHubIsRejected() {
+    void aMappingThatPutsTwoMotorsOnOnePortOrUsesAnUnknownHubOrPortIsRejected() {
         assertThrows(
                 IllegalArgumentException.class,
                 () -> controlHubAndExpansionHub().motor("a", 173, 0, 1, 1).motor("b", 173, 0, 1, 1).build());
-        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().servo("claw", 99, 0).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().motor("far", 99, 0, 1, 1).build());
         assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().motor("far", 173, 4, 1, 1).build());
     }
 
     @Test
-    void i2cDevicesTheProfileDoesNotPlaceShareTheFirstUserBus() {
+    void eachSensorIsOnItsOwnBusOfTheFirstHubWhateverNameAsksForItAndIsNotReportedAsUnbound() {
         WiringTable table = controlHubAndExpansionHub().build();
 
-        assertEquals(new HardwareDirectory.I2cWiring(173, 1, false), table.i2c("color"));
-        assertEquals(new HardwareDirectory.I2cWiring(173, 1, false), table.i2c("pinpoint"));
+        assertEquals(new HardwareDirectory.I2cWiring(173, 1, true), table.sensor("odopods", Sensor.PINPOINT));
+        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.sensor("upSensor", Sensor.COLOR_SENSOR));
+        assertEquals(table.sensor("odopods", Sensor.PINPOINT), table.sensor("odopods", Sensor.PINPOINT), "the same name finds it again");
+        assertEquals(List.of(), table.unmappedNames());
     }
 
     @Test
-    void anImuUnderAnyNameTheProfileDoesNotPlaceIsTheEmbeddedHubsOwnOnBus0AndIsNotReportedAsUnbound() {
+    void aSensorHasOneNameAndASecondNameForItIsRefused() {
+        WiringTable table = controlHubAndExpansionHub().build();
+        table.sensor("pinpoint", Sensor.PINPOINT);
+
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> table.sensor("other", Sensor.PINPOINT));
+
+        assertTrue(refused.getMessage().contains("\"other\"") && refused.getMessage().contains("\"pinpoint\" already is it"), refused.getMessage());
+        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.sensor("other", Sensor.COLOR_SENSOR), "another kind of sensor is free");
+    }
+
+    @Test
+    void anImuUnderAnyNameIsTheEmbeddedHubsOwnOnBus0() {
         WiringTable table = controlHubAndExpansionHub().build();
 
         HardwareDirectory.I2cWiring first = table.imu("gyro");
 
-        assertEquals(new HardwareDirectory.I2cWiring(173, 0, false), first);
+        assertEquals(new HardwareDirectory.I2cWiring(173, 0, true), first);
         assertEquals(first, table.imu("gyro"), "the same name finds it again");
         assertEquals(List.of(), table.unmappedNames());
     }
@@ -106,20 +135,7 @@ class WiringTableTest {
         IllegalStateException refused = assertThrows(IllegalStateException.class, () -> table.imu("IMU"));
 
         assertTrue(refused.getMessage().contains("\"IMU\"") && refused.getMessage().contains("\"imu\" already is it"), refused.getMessage());
-        assertEquals(new HardwareDirectory.I2cWiring(173, 0, false), table.imu("imu"), "the first name still has it");
-    }
-
-    @Test
-    void anImuTheProfileListedIsWhereTheProfileSaidAndTheNameItGaveIsTheOnlyNameOfTheEmbeddedOne() {
-        WiringTable table = controlHubAndExpansionHub()
-                .i2c("imu", 173, 0)
-                .embeddedImu("imu")
-                .i2c("external", 2, 1)
-                .build();
-
-        assertEquals(new HardwareDirectory.I2cWiring(173, 0, true), table.imu("imu"));
-        assertEquals(new HardwareDirectory.I2cWiring(2, 1, true), table.imu("external"), "a listed external IMU is wired as listed");
-        assertThrows(IllegalStateException.class, () -> table.imu("gyro"));
+        assertEquals(new HardwareDirectory.I2cWiring(173, 0, true), table.imu("imu"), "the first name still has it");
     }
 
     @Test
@@ -132,9 +148,16 @@ class WiringTableTest {
     }
 
     @Test
-    void aProfileThatNamesTwoEmbeddedImusIsRejected() {
-        assertThrows(
-                IllegalArgumentException.class,
-                () -> controlHubAndExpansionHub().i2c("a", 173, 0).embeddedImu("a").i2c("b", 173, 0).embeddedImu("b").build());
+    void whatTheSimulatorCannotProvideIsRecordedOnceWithTheNameAndKindRobotCodeUsed() {
+        WiringTable table = controlHubAndExpansionHub().build();
+
+        table.unsupported("octo", "OctoQuad");
+        table.unsupported("octo", "OctoQuad");
+        table.unsupported("webcam", "WebcamName");
+
+        assertEquals(2, table.unsupported().size());
+        assertTrue(table.unsupported().get(0).contains("'octo'") && table.unsupported().get(0).contains("OctoQuad"), table.unsupported().toString());
+        assertTrue(table.unsupported().get(1).contains("WebcamName"), table.unsupported().toString());
+        assertEquals(List.of(), table.unmappedNames(), "unsupported is not the same as unmapped");
     }
 }

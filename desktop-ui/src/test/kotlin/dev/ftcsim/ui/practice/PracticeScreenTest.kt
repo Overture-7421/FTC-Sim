@@ -70,7 +70,7 @@ class PracticeScreenTest {
         }
     }
 
-    private fun ComposeUiTest.show(rig: Rig, session: PracticeSession = rig.session) {
+    private fun ComposeUiTest.show(rig: Rig, session: PracticeSession = rig.session, editRobot: (() -> Unit)? = null) {
         setContent {
             FtcSimTheme(darkTheme = true) {
                 PracticeScreen(
@@ -78,6 +78,7 @@ class PracticeScreenTest {
                     onRetry = { rig.retries++ },
                     onReconnect = { rig.reconnects++ },
                     onSetup = { rig.setupRequests++ },
+                    onEditRobot = editRobot,
                     viewport = { _, modifier -> Box(modifier) },
                 )
             }
@@ -85,49 +86,121 @@ class PracticeScreenTest {
     }
 
     @Test
-    fun theControlsAreDisabledAndTheDriverIsToldWhileTheSessionOpens() = runComposeUiTest {
+    fun theDetailsPanelIsClosedUntilTheButtonOpensItAndClosesItAgain() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+        rig.openSession()
+        waitForIdle()
+
+        onNodeWithText("Telemetry").assertDoesNotExist()
+        onNodeWithText("Details").performClick()
+        onNodeWithText("Telemetry").assertExists()
+        onNodeWithText("Details").performClick()
+        onNodeWithText("Telemetry").assertDoesNotExist()
+    }
+
+    @Test
+    fun theProblemsTabLeadsToTheRobotScreenWhenThereIsOne() = runComposeUiTest {
+        var opened = 0
+        val rig = Rig()
+        show(rig, editRobot = { opened++ })
+        rig.openSession()
+        waitForIdle()
+
+        onNodeWithText("Details").performClick()
+        onNodeWithText("Problems", substring = true).performClick()
+        onNodeWithText("Set up robot").performClick()
+
+        assertEquals(1, opened)
+    }
+
+    @Test
+    fun withoutARobotScreenTheProblemsTabHasNoSetUpButton() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+        rig.openSession()
+        waitForIdle()
+
+        onNodeWithText("Details").performClick()
+        onNodeWithText("Problems", substring = true).performClick()
+
+        onNodeWithText("Set up robot").assertDoesNotExist()
+    }
+
+    @Test
+    fun theControlsAreDisabledWhileTheSessionOpens() = runComposeUiTest {
         val rig = Rig()
         show(rig)
 
         onNodeWithText("Init").assertIsNotEnabled()
-        onNodeWithText("Start").assertIsNotEnabled()
-        onNodeWithText("Stop").assertIsNotEnabled()
+        openMore()
         onNodeWithText("Match").assertIsNotEnabled()
-        onNodeWithContentDescription("Reset the session").assertIsNotEnabled()
-        onNodeWithContentDescription("Pause the simulation").assertIsNotEnabled()
+        onNodeWithText("Pause").assertIsNotEnabled()
+        onNodeWithText("Stop").assertIsNotEnabled()
+        onNodeWithText("Speed 2x").assertIsNotEnabled()
 
         rig.openSession()
         waitForIdle()
 
-        onNodeWithText("Init").assertIsEnabled()
         onNodeWithText("Match").assertIsEnabled()
-        onNodeWithContentDescription("Reset the session").assertIsEnabled()
     }
 
     @Test
-    fun initStartAndStopAreEnabledByThePhaseAndSendTheirCommands() = runComposeUiTest {
+    fun resetWorldIsTheButtonAndNeedsASessionAndRestartCodeIsInTheMenuBesideIt() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+
+        onNodeWithText("Reset world").assertIsNotEnabled()
+        openRestart()
+        onNodeWithText("Restart code").assertIsNotEnabled()
+        rig.ui.restartMenuOpen = false
+        waitForIdle()
+
+        rig.openSession()
+        waitForIdle()
+        onNodeWithText("Reset world").assertIsEnabled()
+        openRestart()
+        onNodeWithText("Restart code").assertIsEnabled()
+    }
+
+    @Test
+    fun theOneButtonIsInitThenStartThenStopAndSendsTheirCommands() = runComposeUiTest {
         val rig = Rig()
         show(rig)
         rig.openSession()
         waitForIdle()
 
-        onNodeWithText("Start").assertIsNotEnabled()
+        onNodeWithText("Start").assertDoesNotExist()
         onNodeWithText("Init").performClick()
         assertEquals("init Teleop A", rig.link.calls.last())
 
         rig.listener.status(Fixtures.status(RobotPhase.INIT))
         waitForIdle()
-        onNodeWithText("Init").assertIsNotEnabled()
+        onNodeWithText("Init").assertDoesNotExist()
         onNodeWithText("Start").assertIsEnabled()
-        onNodeWithText("Stop").assertIsEnabled()
         onNodeWithText("Start").performClick()
         assertEquals("start", rig.link.calls.last())
 
         rig.listener.status(Fixtures.status(RobotPhase.RUNNING))
         waitForIdle()
-        onNodeWithText("Start").assertIsNotEnabled()
+        onNodeWithText("Start").assertDoesNotExist()
         onNodeWithText("Teleop A").assertIsNotEnabled()
         onNodeWithText("Stop").performClick()
+        assertEquals("stop", rig.link.calls.last())
+    }
+
+    @Test
+    fun anInitialisedOpModeCanBeStoppedFromTheMenu() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+        rig.openSession()
+        rig.listener.status(Fixtures.status(RobotPhase.INIT))
+        waitForIdle()
+
+        openMore()
+        onNodeWithText("Stop").assertIsEnabled()
+        onNodeWithText("Stop").performClick()
+
         assertEquals("stop", rig.link.calls.last())
     }
 
@@ -153,58 +226,52 @@ class PracticeScreenTest {
     }
 
     @Test
-    fun theSpeedMenuOffersQuarterSpeedToFourTimesAndSendsTheChoice() = runComposeUiTest {
+    fun theMenuOffersQuarterSpeedToFourTimesAndSendsTheChoice() = runComposeUiTest {
         val rig = Rig()
         show(rig)
         rig.openSession()
         waitForIdle()
 
-        onNodeWithText("1x").performClick()
-        for (label in listOf("0.25x", "0.5x", "2x", "4x")) {
+        openMore()
+        for (label in listOf("Speed 0.25x", "Speed 0.5x", "Speed 1x", "Speed 4x")) {
             onNodeWithText(label).assertExists()
         }
-        onNodeWithText("2x").performClick()
+        onNodeWithText("Speed 2x").performClick()
 
         assertEquals("speed 2.0", rig.link.calls.last())
     }
 
     @Test
-    fun theLabelOfThePauseButtonFollowsTheStateTheLinkReports() = runComposeUiTest {
+    fun theLabelOfThePauseItemFollowsTheStateTheLinkReports() = runComposeUiTest {
         val rig = Rig()
         show(rig)
         rig.openSession()
         waitForIdle()
 
-        onNodeWithContentDescription("Pause the simulation").performClick()
+        openMore()
+        onNodeWithText("Pause").performClick()
         assertEquals("paused true", rig.link.calls.last())
         rig.listener.status(Fixtures.status(paused = true))
         waitForIdle()
 
-        onNodeWithContentDescription("Resume the simulation").assertExists()
+        openMore()
+        onNodeWithText("Resume").assertExists()
         onNodeWithText("Paused").assertExists()
     }
 
     @Test
-    fun resetNeedsConfirmationAndTheDialogIsAModal() = runComposeUiTest {
+    fun resetWorldAsksTheLinkAtOnceWithoutAQuestionAndTheSessionStaysOpen() = runComposeUiTest {
         val rig = Rig()
         show(rig)
         rig.openSession()
         waitForIdle()
 
-        onNodeWithContentDescription("Reset the session").performClick()
+        onNodeWithText("Reset world").performClick()
         waitForIdle()
-        onNodeWithText("Reset the session?").assertExists()
-        assertTrue(rig.input.modalOpen())
-        onNodeWithText("Cancel").performClick()
-        waitForIdle()
-        assertFalse(rig.link.calls.contains("reset"))
-        assertFalse(rig.input.modalOpen())
 
-        onNodeWithContentDescription("Reset the session").performClick()
-        waitForIdle()
-        onNodeWithText("Reset").performClick()
-        waitForIdle()
         assertEquals("reset", rig.link.calls.last())
+        assertFalse(rig.input.modalOpen(), "there is no dialog to answer")
+        assertEquals(Connection.OPEN, rig.session.session.value.connection, "the window does not go back to opening")
     }
 
     @Test
@@ -252,9 +319,9 @@ class PracticeScreenTest {
         rig.listener.failed("the worker did not start")
         waitForIdle()
 
-        onNodeWithText("The session could not go on").assertExists()
+        onNodeWithText("Session stopped").assertExists()
         onNodeWithText("the worker did not start").assertExists()
-        onNodeWithText("Change the setup").performClick()
+        onNodeWithText("Projects").performClick()
         assertEquals(1, rig.setupRequests)
         onNodeWithText("Try again").performClick()
 
@@ -268,10 +335,10 @@ class PracticeScreenTest {
         show(rig, fresh)
         waitForIdle()
 
-        onNodeWithText("No practice session yet").assertExists()
+        onNodeWithText("No project open").assertExists()
         onNodeWithText("No session").assertExists()
         onNodeWithText("Init").assertIsNotEnabled()
-        onNodeWithText("Set up a run").performClick()
+        onNodeWithText("Open project").performClick()
 
         assertEquals(1, rig.setupRequests)
     }
@@ -283,8 +350,9 @@ class PracticeScreenTest {
         show(rig, waiting)
         waitForIdle()
 
-        onNodeWithText("Connecting to the simulator...").assertExists()
+        onNodeWithText("Connecting").assertExists()
         onNodeWithText("Init").assertIsNotEnabled()
+        openMore()
         onNodeWithText("Match").assertIsNotEnabled()
     }
 
@@ -295,7 +363,7 @@ class PracticeScreenTest {
         show(rig, broken)
         waitForIdle()
 
-        onNodeWithText("The simulator could not be started").assertExists()
+        onNodeWithText("Simulator did not start").assertExists()
         onNodeWithText("The worker could not be started: no Java found.").assertExists()
         onNodeWithText("Try again").performClick()
 
@@ -308,13 +376,13 @@ class PracticeScreenTest {
         val early = PracticeSession(rig.feed, rig.camera).also { it.open(Fixtures.request()) }
         show(rig, early)
         waitForIdle()
-        onNodeWithText("Connecting to the simulator...").assertExists()
+        onNodeWithText("Connecting").assertExists()
 
         early.attach(StubLink())
         waitForIdle()
 
-        onNodeWithText("Connecting to the simulator...").assertDoesNotExist()
-        onAllNodesWithText("Opening the session").onFirst().assertExists()
+        onNodeWithText("Connecting").assertDoesNotExist()
+        onAllNodesWithText("Opening").onFirst().assertExists()
     }
 
     @Test
@@ -354,14 +422,13 @@ class PracticeScreenTest {
         }
         rig.openSession()
         waitForIdle()
-        onNodeWithContentDescription("Reset the session").performClick()
-        waitForIdle()
+        openRestart()
         assertTrue(rig.input.modalOpen())
 
         shown = false
         waitForIdle()
 
-        assertFalse(rig.ui.resetDialogOpen)
+        assertFalse(rig.ui.restartMenuOpen)
         assertFalse(rig.input.modalOpen())
     }
 
@@ -381,6 +448,16 @@ class PracticeScreenTest {
 
     // The timed match --------------------------------------------------------------------------------------------
 
+    private fun ComposeUiTest.openRestart() {
+        onNodeWithContentDescription("Restart options").performClick()
+        waitForIdle()
+    }
+
+    private fun ComposeUiTest.openMore() {
+        onNodeWithContentDescription("More").performClick()
+        waitForIdle()
+    }
+
     private fun radio(text: String) = isSelectable() and hasText(text)
 
     @Test
@@ -390,6 +467,7 @@ class PracticeScreenTest {
         rig.openSession()
         waitForIdle()
 
+        openMore()
         onNodeWithText("Match").performClick()
         waitForIdle()
         assertTrue(rig.input.modalOpen(), "the dialog takes the keys away from the robot")
@@ -411,9 +489,10 @@ class PracticeScreenTest {
         rig.openSession()
         waitForIdle()
 
+        openMore()
         onNodeWithText("Match").performClick()
         waitForIdle()
-        onNode(radio("None: the match starts with the driver-controlled period")).performClick()
+        onNode(radio("None")).performClick()
         onNode(radio("Auto B")).assertIsNotSelected()
         onNodeWithText("Arm").performClick()
         waitForIdle()
@@ -429,6 +508,7 @@ class PracticeScreenTest {
         waitForIdle()
         val before = rig.link.calls.size
 
+        openMore()
         onNodeWithText("Match").performClick()
         waitForIdle()
         onNodeWithText("Cancel").performClick()
@@ -446,10 +526,9 @@ class PracticeScreenTest {
         rig.listener.status(Fixtures.status(RobotPhase.RUNNING))
         waitForIdle()
 
+        openMore()
         onNodeWithText("Match").assertIsNotEnabled()
-        onNodeWithText("Match").assert(
-            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "Stop the OpMode first: a match starts from idle."),
-        )
+        onNodeWithText("Stop the OpMode first").assertExists()
     }
 
     @Test
@@ -510,12 +589,11 @@ class PracticeScreenTest {
 
         onNodeWithText("Ended").assertExists()
         onNodeWithText("Final score 12").assertExists()
-        onNodeWithText("Reset the session to play another match.").assertExists()
+        onNodeWithText("Reset the world to play another match.").assertExists()
         onNodeWithText("Init").assertIsEnabled()
+        openMore()
         onNodeWithText("Match").assertIsNotEnabled()
-        onNodeWithText("Match").assert(
-            SemanticsMatcher.expectValue(SemanticsProperties.StateDescription, "A match has been played. Reset the session to play another."),
-        )
+        onNodeWithText("Reset the world to play another match").assertExists()
     }
 
     @Test
@@ -529,7 +607,7 @@ class PracticeScreenTest {
         waitForIdle()
 
         onNodeWithText("An OpMode is running. Press Stop before arming a match.").assertExists()
-        onNodeWithText("The session could not go on").assertDoesNotExist()
+        onNodeWithText("Session stopped").assertDoesNotExist()
         onNodeWithText("Init").assertIsEnabled()
         assertEquals(Connection.OPEN, rig.session.session.value.connection)
     }

@@ -16,7 +16,6 @@ import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.RayHit;
 import dev.ftcsim.physics.Vector3;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -27,7 +26,7 @@ import org.junit.jupiter.api.Timeout;
 
 /**
  * The SDK's own {@code Limelight3A} driver, used the way Hornet's {@code Camera} subsystem uses it, against the camera
- * model, with the camera set up as the bundled Hornet profile sets it up and the real DECODE tags and geometry in
+ * model, with the camera set up as the fixed robot sets it up and the real DECODE tags and geometry in
  * front of it. The robot stands where the test puts it, so the truth that the camera estimates is known.
  */
 @Timeout(300)
@@ -71,9 +70,9 @@ class LimelightHostTest {
         return DECODE_TAGS.stream().filter(candidate -> candidate.id() == id).findFirst().orElseThrow();
     }
 
-    /** The camera Hornet's profile has: the same mount and pipeline, read from the profile the simulator ships. */
-    private static Map<String, Object> hornetCamera() throws IOException {
-        return RobotProfileLoader.loadBundled("hornet-2026.json").cameras().get("limelight").settings();
+    /** The camera of the fixed DECODE robot mapped as Hornet: the same mount and pipeline the simulator gives a robot. */
+    private static Map<String, Object> hornetCamera() {
+        return HornetMapping.spec().limelight().settings();
     }
 
     private static TestRobot.Builder robot(ScriptedBody chassis, FieldRays field) throws IOException {
@@ -88,7 +87,7 @@ class LimelightHostTest {
                 .entities(field::entity)
                 .fieldTags(DECODE_TAGS)
                 .gameMap("decode", DECODE_TAGS)
-                .camera("limelight", "limelight-3a", hornetCamera());
+                .limelight(hornetCamera());
     }
 
     /** The direction out of the face of a tag: its local +Z. */
@@ -367,7 +366,7 @@ class LimelightHostTest {
                     .rays(field)
                     .entities(field::entity)
                     .fieldTags(DECODE_TAGS)
-                    .camera("limelight", "limelight-3a", noMap);
+                    .limelight(noMap);
 
             Run run = run(robot, "Limelight Tags", 500 * MS, 1500 * MS, Long.MAX_VALUE / 4);
 
@@ -431,7 +430,7 @@ class LimelightHostTest {
     // ---- the driver and the camera the robot does not have ------------------------------------------------------
 
     @Test
-    void aCameraTheProfileDoesNotListIsUnpluggedAndTheProblemListSaysSo() throws Exception {
+    void aRobotWithoutACameraHasAnUnpluggedOneAndTheProblemListSaysSo() throws Exception {
         ScriptedBody chassis = standingBefore(tag(20), 1.5, 30);
         TestRobot.Builder noCamera = TestRobot.builder().chassis(chassis).fieldTags(DECODE_TAGS);
 
@@ -443,7 +442,7 @@ class LimelightHostTest {
         for (double connected : column(run, "connected", 0.0, false)) {
             assertEquals(0.0, connected);
         }
-        assertTrue(run.problems().stream().anyMatch(p -> p.contains("\"limelight\"") && p.contains("no camera by that name")), run.problems().toString());
+        assertTrue(run.problems().stream().anyMatch(p -> p.contains("\"limelight\"") && p.contains("the robot has no camera")), run.problems().toString());
     }
 
     @Test
@@ -522,7 +521,7 @@ class LimelightHostTest {
         }
     }
 
-    // ---- determinism -------------------------------------------------------------------------------------------
+    // ---- slicing of simulated time -----------------------------------------------------------------------------
 
     @Test
     void theCamerasResultsDoNotDependOnHowSimulatedTimeIsSliced() throws Exception {

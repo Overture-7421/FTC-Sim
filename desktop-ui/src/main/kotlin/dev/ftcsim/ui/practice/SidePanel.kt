@@ -22,9 +22,12 @@ import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.contentDescription
@@ -33,18 +36,34 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import dev.ftcsim.contracts.field.Score
-import dev.ftcsim.contracts.robot.TelemetrySnapshot
-import dev.ftcsim.contracts.session.Readout
 import dev.ftcsim.ui.common.AppIcons
+import dev.ftcsim.ui.common.LogOpener
+import dev.ftcsim.ui.prepare.OutputView
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 
 private val PANEL_PADDING = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
 
-/** The tabs beside the viewport: what the OpMode shows on the Driver Station, the hardware, the score and the problems. */
+/**
+ * The tabs of the details panel, which floats over the viewport: what the code shows (the Driver Station lines and the hardware it uses), the score, the
+ * problems, and the setup of a run ([setup], which the application provides, so that this screen knows nothing of projects).
+ *
+ * @param extraProblems what the build and the robot file say, listed with the problems of the run
+ */
 @Composable
-fun SidePanel(session: PracticeSession, ui: PracticeUi, modifier: Modifier = Modifier) {
-    val problems by session.problems.collectAsState()
-    Surface(modifier, color = MaterialTheme.colorScheme.surfaceContainer) {
+fun SidePanel(
+    session: PracticeSession,
+    ui: PracticeUi,
+    extraProblems: StateFlow<List<Problem>>,
+    modifier: Modifier = Modifier,
+    editRobot: (() -> Unit)? = null,
+    logOpener: LogOpener? = null,
+    setup: @Composable () -> Unit = {},
+) {
+    val own by session.problems.collectAsState()
+    val extra by extraProblems.collectAsState()
+    val problems = own + extra
+    Surface(modifier, color = MaterialTheme.colorScheme.surfaceContainer, shape = MaterialTheme.shapes.medium, shadowElevation = 8.dp) {
         Column(Modifier.fillMaxSize()) {
             PrimaryTabRow(selectedTabIndex = ui.panel.ordinal, containerColor = Color.Transparent) {
                 Panel.entries.forEach { panel ->
@@ -56,10 +75,10 @@ fun SidePanel(session: PracticeSession, ui: PracticeUi, modifier: Modifier = Mod
                 }
             }
             when (ui.panel) {
-                Panel.TELEMETRY -> TelemetryPanel(session.telemetry)
-                Panel.HARDWARE -> HardwarePanel(session.hardware)
+                Panel.CODE -> CodePanel(session)
                 Panel.SCORE -> ScorePanel(session.score)
-                Panel.PROBLEMS -> ProblemsPanel(problems)
+                Panel.PROBLEMS -> ProblemsPanel(problems, editRobot, logOpener)
+                Panel.SETUP -> setup()
             }
         }
     }
@@ -67,7 +86,7 @@ fun SidePanel(session: PracticeSession, ui: PracticeUi, modifier: Modifier = Mod
 
 @Composable
 private fun TabLabel(panel: Panel, problems: List<Problem>) {
-    val style = MaterialTheme.typography.labelMedium
+    val style = MaterialTheme.typography.labelLarge
     if (panel != Panel.PROBLEMS || problems.isEmpty()) {
         Text(panel.label, style = style, maxLines = 1)
         return
@@ -85,40 +104,45 @@ private fun TabLabel(panel: Panel, problems: List<Problem>) {
     }
 }
 
+/** The Driver Station lines and the hardware the code uses, above the code's own console. */
 @Composable
-private fun TelemetryPanel(source: StateFlow<TelemetrySnapshot>) {
-    val telemetry by source.collectAsState()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PANEL_PADDING, verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        if (telemetry.error().isNotEmpty()) {
-            item { ProblemRow(Problem(Severity.ERROR, "Robot program", telemetry.error())) }
+private fun CodePanel(session: PracticeSession) {
+    val telemetry by session.telemetry.collectAsState()
+    val readouts by session.hardware.collectAsState()
+    Column(Modifier.fillMaxSize()) {
+        LazyColumn(Modifier.weight(1f), contentPadding = PANEL_PADDING, verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            if (telemetry.error().isNotEmpty()) {
+                item { ProblemRow(Problem(Severity.ERROR, "Robot program", telemetry.error())) }
+            }
+            if (telemetry.warnings().isNotEmpty()) {
+                item { ProblemRow(Problem(Severity.WARNING, "Driver Station", telemetry.warnings())) }
+            }
+            item { SectionLabel("Telemetry") }
+            if (telemetry.lines().isEmpty()) item { EmptyHint("None") }
+            items(telemetry.lines()) { line ->
+                Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+            }
+            item { SectionLabel("Hardware") }
+            if (readouts.isEmpty()) item { EmptyHint("None used yet") }
+            items(readouts) { readout ->
+                Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
+                    Text(readout.name(), style = MaterialTheme.typography.bodyMedium)
+                    Text(readout.value(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
+                }
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+            }
         }
-        if (telemetry.warnings().isNotEmpty()) {
-            item { ProblemRow(Problem(Severity.WARNING, "Driver Station", telemetry.warnings())) }
+        Row(Modifier.fillMaxWidth().padding(start = 12.dp, end = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+            Text("Console", style = MaterialTheme.typography.titleSmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = session.console::clear) { Text("Clear") }
         }
-        if (telemetry.lines().isEmpty()) {
-            item { EmptyHint("The OpMode has not shown any telemetry.") }
-        }
-        itemsIndexed(telemetry.lines()) { _, line ->
-            Text(line, style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-        }
+        OutputView(session.console, Modifier.weight(1f).fillMaxWidth().padding(start = 12.dp, end = 12.dp, bottom = 12.dp), "Console")
     }
 }
 
 @Composable
-private fun HardwarePanel(source: StateFlow<List<Readout>>) {
-    val readouts by source.collectAsState()
-    LazyColumn(Modifier.fillMaxSize(), contentPadding = PANEL_PADDING) {
-        if (readouts.isEmpty()) {
-            item { EmptyHint("No hardware has been used yet.") }
-        }
-        items(readouts) { readout ->
-            Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(readout.name(), style = MaterialTheme.typography.bodyMedium)
-                Text(readout.value(), style = MaterialTheme.typography.bodySmall, fontFamily = FontFamily.Monospace)
-            }
-            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
-        }
-    }
+private fun SectionLabel(text: String) {
+    Text(text, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 10.dp, bottom = 4.dp))
 }
 
 @Composable
@@ -145,19 +169,21 @@ private fun ScorePanel(source: StateFlow<Score>) {
 }
 
 @Composable
-private fun ProblemsPanel(problems: List<Problem>) {
+private fun ProblemsPanel(problems: List<Problem>, editRobot: (() -> Unit)?, logOpener: LogOpener?) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PANEL_PADDING, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (problems.isEmpty()) {
-            item { EmptyHint("Nothing weakens this run.") }
+            item { EmptyHint("None") }
         }
-        items(problems.sortedBy { it.severity }) { problem -> ProblemRow(problem) }
+        items(problems.sortedBy { it.severity }) { problem -> ProblemRow(problem, logOpener) }
+        if (editRobot != null) item { TextButton(onClick = editRobot) { Text("Set up robot") } }
     }
 }
 
 /** One problem: an icon, the severity and source spelled out, and the text; the colour only repeats the severity. */
 @Composable
-private fun ProblemRow(problem: Problem) {
+private fun ProblemRow(problem: Problem, logOpener: LogOpener? = null) {
     val colors = severityColors(problem.severity)
+    val scope = rememberCoroutineScope()
     Surface(color = colors.container, contentColor = colors.content, shape = MaterialTheme.shapes.small) {
         Row(Modifier.fillMaxWidth().padding(10.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
             Icon(
@@ -168,6 +194,10 @@ private fun ProblemRow(problem: Problem) {
             Column {
                 Text("${problem.severity.label} - ${problem.source}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Medium)
                 Text(problem.text, style = MaterialTheme.typography.bodySmall)
+                val log = problem.log
+                if (log != null && logOpener != null) {
+                    TextButton(onClick = { scope.launch { logOpener.open(log) } }) { Text("Open build log") }
+                }
             }
         }
     }

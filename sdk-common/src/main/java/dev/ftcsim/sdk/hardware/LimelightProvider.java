@@ -10,8 +10,8 @@ import org.firstinspires.ftc.robotcore.internal.usb.EthernetOverUsbSerialNumber;
 /**
  * The SDK's own {@link Limelight3A}, as the SDK creates it for a camera on the Control Hub's USB port, but talking to a
  * camera model over the simulated link instead of HTTP. The driver does not know where the camera is wired, so any
- * name works; a name that the robot profile has no camera for gets a camera that is not plugged in, and the host
- * records that as a problem.
+ * name works; the robot has one Limelight and the first name that asks for it is its name. A second name gets a camera
+ * that is not plugged in, and the host records that as a problem.
  */
 final class LimelightProvider implements DeviceProvider {
 
@@ -21,7 +21,7 @@ final class LimelightProvider implements DeviceProvider {
 
     @Override
     public String family() {
-        return "Limelight 3A smart camera (Limelight3A, any name the robot profile lists under cameras)";
+        return "Limelight 3A smart camera (Limelight3A, under any name)";
     }
 
     @Override

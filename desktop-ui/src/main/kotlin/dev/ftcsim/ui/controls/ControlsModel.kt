@@ -27,14 +27,14 @@ sealed interface RebindResult {
 object KeyRebinding {
     fun capture(map: KeyboardMap, control: PadControl, keyCode: Int): RebindResult {
         if (keyCode == KeyEvent.VK_ESCAPE) return RebindResult.Cancelled
-        if (keyCode == KeyEvent.VK_UNDEFINED) return RebindResult.Refused("That key cannot be told apart. Try another one.")
+        if (keyCode == KeyEvent.VK_UNDEFINED) return RebindResult.Refused("Cannot use that key")
         val reserved = KeyboardMap.reservedReason(keyCode)
         if (reserved.isPresent) {
             return RebindResult.Refused("${KeyboardMap.keyName(keyCode)} cannot be used: ${reserved.get()}.")
         }
         val owner = map.controlsOf(keyCode).firstOrNull { it != control }
         if (owner != null) {
-            return RebindResult.Refused("${KeyboardMap.keyName(keyCode)} already stands for ${owner.label()}. Clear that first, or press another key.")
+            return RebindResult.Refused("${KeyboardMap.keyName(keyCode)} is already on ${owner.label()}")
         }
         return RebindResult.Bound(map.with(control, keyCode))
     }

@@ -2,7 +2,7 @@ package dev.ftcsim.simulator;
 
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.physics.MecanumConfig;
-import dev.ftcsim.simulator.profile.RobotProfile;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.TreeMap;
@@ -14,7 +14,7 @@ import java.util.concurrent.Future;
 
 /**
  * Shots at Hornet's own flywheel speeds from stances all over the launch zones, each in a world of its own, so that the
- * calibration of a robot profile and the DECODE field can be judged without the robot's program.
+ * calibration of a robot and the DECODE field can be judged without the robot's program.
  */
 final class ShotSweep {
 
@@ -95,8 +95,8 @@ final class ShotSweep {
      * For every distance from 35 to 160 in, up to five stances spread over the bearings at which the robot fits in the field
      * and has some part of it over a launch zone.
      */
-    static List<Spot> spots(RobotProfile profile, Alliance alliance) {
-        MecanumConfig chassis = profile.chassis().toConfig();
+    static List<Spot> spots(RobotSpec profile, Alliance alliance) {
+        MecanumConfig chassis = profile.chassis();
         List<Spot> spots = new ArrayList<>();
         for (int inches = 35; inches <= 160; inches += 5) {
             List<Spot> legal = new ArrayList<>();
@@ -167,7 +167,7 @@ final class ShotSweep {
     }
 
     /** One shot from a spot, with the flywheels off the table by a percentage and the robot turned by some degrees. */
-    static HornetShot.Outcome shoot(RobotProfile profile, Spot spot, double speedPercent, double aimDegrees) {
+    static HornetShot.Outcome shoot(RobotSpec profile, Spot spot, double speedPercent, double aimDegrees) {
         HornetShot.Stance stance = spot.stance();
         double turn = Math.toRadians(aimDegrees) * (spot.alliance() == Alliance.RED ? -1 : 1);
         return HornetShot.fire(
@@ -184,7 +184,7 @@ final class ShotSweep {
      * @param speedPercents offsets of the flywheel speed to try besides zero, in whole percent
      * @param aimDegrees    offsets of the heading to try besides zero, in whole degrees
      */
-    static List<Result> run(RobotProfile profile, List<Spot> spots, int[] speedPercents, int[] aimDegrees) {
+    static List<Result> run(RobotSpec profile, List<Spot> spots, int[] speedPercents, int[] aimDegrees) {
         List<Callable<Result>> tasks = new ArrayList<>();
         for (Spot spot : spots) {
             tasks.add(() -> {
@@ -206,7 +206,7 @@ final class ShotSweep {
     }
 
     /** Three balls from every spot, {@code intervalSeconds} apart, each at the table speed of its spot. */
-    static List<HornetShot.Volley> volleys(RobotProfile profile, List<Spot> spots, int balls, double intervalSeconds) {
+    static List<HornetShot.Volley> volleys(RobotSpec profile, List<Spot> spots, int balls, double intervalSeconds) {
         List<Callable<HornetShot.Volley>> tasks = new ArrayList<>();
         for (Spot spot : spots) {
             tasks.add(() -> HornetShot.volley(
@@ -215,7 +215,7 @@ final class ShotSweep {
         return inParallel(profile, tasks);
     }
 
-    private static <T> List<T> inParallel(RobotProfile profile, List<Callable<T>> tasks) {
+    private static <T> List<T> inParallel(RobotSpec profile, List<Callable<T>> tasks) {
         // The first world loads the engine; do that before the threads race for it.
         HornetShot.fire(profile, Alliance.BLUE, spot(Alliance.BLUE, 75, 20).stance(), ticksPerSecond(75));
         // Each world holds a 32 MiB temp allocator of the engine's, so the number of threads is bounded.

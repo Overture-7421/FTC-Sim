@@ -5,7 +5,7 @@ been measured on a student laptop yet, and each section says what is still open.
 
 "Gate" in a heading means one of five feasibility gates, each a prototype with a pass criterion that was run before the
 choice it checks was built on: (1) the real SDK and an unmodified team program run on a desktop JVM, (2) clock and
-scheduling are repeatable, (3) physics and determinism, (4) Material 3 together with a 3D viewport, (5) start-up without
+scheduling in virtual time, (3) physics, (4) Material 3 together with a 3D viewport, (5) start-up without
 Java and the laptop budget. A "conditional pass" is a pass whose last condition needs hardware this project did not have;
 the condition is named under **Open**.
 
@@ -27,7 +27,7 @@ shared. The robot world's clock, sleeps, waits, monitors and loop back-edges are
 simulation kernel, which moves simulated time only on the simulator thread and runs the robot thread between moves.
 
 **Evidence.** The real SDK's `OpModeManagerImpl` runs iterative and linear OpModes, busy waits and a stop that
-interrupts a sleep, with identical results under different run slicings (acceptance tests, repeated runs).
+interrupts a sleep, and an OpMode sees the same times and readings under different run slicings (acceptance tests).
 
 **What time costs.** Robot code moves simulated time only through hooks: a clock read costs 200 ns, a yield 1 µs, hub
 traffic what its wire takes, and every backward jump of the code `SimulationSession.LOOP_NANOS` = 100 ns, about one
@@ -39,8 +39,9 @@ runs at about 8 times, as fast as the rest of the world allows, and the Hornet a
 charged too (a thousand loop iterations cost 100 µs), which is closer to a Control Hub than free computation was.
 `SessionSpeedTest` fails if the cost is made too small again.
 
-**Open.** Section 10 says what has since been virtualised (the SDK's stuck-code timeouts, a runaway OpMode, `Date`,
-`Instant` and `Random`) and what has not: the timed waits that library code makes through the JDK.
+**Open.** Section 10 says what has since been virtualised (the SDK's stuck-code timeouts, a runaway OpMode, `Date` and
+`Instant`) and what has not: the timed waits that library code makes through the JDK, which run in real time beside the
+simulation. Section 9 says why the lockstep stays although repeatable runs are no longer promised.
 
 ## 3. Hardware is emulated at the wire
 
@@ -52,20 +53,21 @@ is a model of that device attached to a hub bus; the real SDK driver for it then
 **Evidence.** 220 hub tests at first, now more than 370 with the device models; a real SDK OpMode drives motors,
 servos and bulk-cached reads end to end.
 
-**Threads.** The bus is deterministic for the scheduled threads (the simulator and the robot thread). A thread the
-kernel does not schedule, such as a library's own timer (Panels reads the battery voltage from one), talks to the hubs
-through a separate entry that never moves simulated time: queries are answered as the hubs stand, anything that would
-change a hub is applied and flagged, and the host reports a flagged run as not reproducible.
+**Threads.** The bus has one lock. The scheduled threads (the simulator and the robot thread) take turns at it. A
+thread the kernel does not schedule, such as a library's own timer (Panels reads the battery voltage from one), talks to
+the hubs through a separate entry, under the same lock, that never moves simulated time: queries are answered as the
+hubs stand and leave no trace in them, and anything that would change a hub is applied. Nothing is flagged: such a
+thread runs when the operating system lets it, and what it changes is then up to the machine (section 9).
 
 ## 4. Physics: Jolt (Gate 3, conditional pass)
 
-**Decision.** Jolt through jolt-jni 7.0.0, single precision, deterministic natives, one thread, 240 Hz fixed step.
+**Decision.** Jolt through jolt-jni 7.0.0, single precision, one thread, 240 Hz fixed step. The pinned natives are
+Jolt's cross-platform-deterministic build, and the code still refuses any other, but nothing promises a repeatable run
+(section 9).
 
-**Evidence.** The golden hash trace is bit-identical across the default JIT, `-Xint`, C1-only, the debug natives and
-a fresh in-process world. A step costs about 0.15 ms against a 4.17 ms budget. The DLL imports only `KERNEL32`.
+**Evidence.** A step costs about 0.15 ms against a 4.17 ms budget. The DLL imports only `KERNEL32`.
 
-**Open.** The golden test has not run on an Intel laptop or a second AMD machine. There is no static drivetrain
-friction, and the chassis parameters are estimates, not fitted to a robot.
+**Open.** There is no static drivetrain friction, and the chassis parameters are estimates, not fitted to a robot.
 
 ## 5. UI: Compose Material 3 over an offscreen 3D viewport (Gate 4, conditional pass)
 
@@ -98,60 +100,72 @@ rules, the catalogue and the timed match are in `link.md`; where the application
 launch, it is not authentication against another program running as the same user. A session that does not stop within
 20 s ends the worker.
 
-## 7. Provisioning and runtimes (Gate 5, conditional pass)
+## 7. The runtime comes with the program (Gate 5, conditional pass; reversed in phase 6)
 
-**Decision.** Download-first JDK provisioning, as the product owner asked: a pinned Temurin download, checksum
-verified, unpacked into a per-user cache (Temurin 25: 134.7 MiB download, 6.2 s cold and 1.6 s warm on a fast link).
-Two JDK pins: the simulator runs on JDK 25 (Foreign Function API final); importing a source project runs the project's
-own Gradle build on a JDK that project supports.
+**Decision.** A bundled runtime. `:app:dist` links a Java 25 runtime with `jlink` from the JDK the project is compiled
+for (the Gradle toolchain's) into the `runtime` folder of the distribution, and `FTC-Sim.cmd` starts `runtime\bin\java.exe`
+with the options of `runtime-options`. The first version of this decision was the product owner's "download-first": a
+pinned Temurin 25.0.5+8, checksum verified, fetched on the first start by PowerShell scripts that also looked for
+installed JDKs, with an exact-build pin. It was replaced by the bundled runtime because of what it cost: a first start
+that needs the network (and a proxy, a firewall or a policy that allows PowerShell), about 1.5 thousand lines of
+PowerShell and 88 tests that exist to make provisioning safe, a pin that had to be moved by hand with every Temurin
+release and refused a PC's own newer build, and a Java on the PC that the simulator did not choose. The cost of the
+bundled runtime is size: the zip is 35.6 MiB larger (44.4 to 80.0 MiB, measured; `distribution.md`). The user's installed
+JDKs are irrelevant to the simulator. Two Javas are still involved: the simulator (window and worker) runs on the
+bundled runtime, Java 25 (Foreign Function API final); importing a source project runs the project's own Gradle build
+on a JDK 17 to 21 of the user's, found by `JdkDiscovery` (section "the importer's JDK" below).
 
-**The launcher enforces the simulator's pin, to the exact build.** `launcher\scripts\jdk-manifest.json` names major 25
-and the release `jdk-25.0.5+8` with its SHA-256 (`runtime.exactRelease`, `runtime.exactSha256`), so that the same inputs
-give the same outputs on the same Java (section 9). Stage 0 starts the application only on a runtime for x64 Windows
-whose `java.runtime.version` is exactly that build, a JDK or a JRE of any vendor (the simulator needs `java.exe`, not a
-compiler). A JDK 17, 21, 24 or 26, or another build of 25 (Oracle 25.0.1 on the development PC), found through
-`JAVA_HOME`, `PATH`, the registry, Program Files or Android Studio is never used silently: `JAVA_HOME` is reported and
-ignored, the others are named with the reason before the download ("... is not used: build 25.0.1+8-LTS-27 is not the
-pinned build 25.0.5+8"), `-ListJdks` shows every candidate, and when none qualifies that exact Temurin release is
-downloaded by name and refused unless its SHA-256 is the pinned one (a service that answers with another release or
-hash is refused before any download, exit 86). `-RuntimePolicy Any` (25 or newer, any build) is a developer diagnostic
-that nothing passes. The pin moves only on purpose, with `launcher\tools\Update-JdkPin.ps1` and three steps
-(`distribution.md`); the values were checked against the Adoptium API (`latest` and by release name), the
-`.sha256.txt` and the asset digest on GitHub, and a download of the real zip.
+**What is in the runtime.** `java.se` (every standard module, so a team library that needs one still runs) and
+`jdk.unsupported` (`sun.misc.Unsafe`: LWJGL, the SDK), `jdk.management`, `jdk.crypto.ec`, `jdk.zipfs`, `jdk.net`,
+`jdk.httpserver` (a robot program's own web server, such as Panels'), `jdk.charsets`: 51.3 MB unpacked in 200 files,
+35.8 MB zipped, against 362 MB for the whole JDK. Linked with `--strip-debug --no-header-files --no-man-pages --compress
+zip-6`. Left out: `jdk.localedata` (+10 MB; the worker runs with the en-US locale), the compiler, `jdk.jfr`, the
+debugging and monitoring tools. The floor that `jdeps` finds over the window's, the worker's and Hornet's jars
+(`java.base java.desktop java.instrument java.management java.net.http java.sql jdk.management jdk.unsupported`) is
+47.6 MB / 32.4 MB zipped, so `java.se` and the extras cost 3.7 MB for safety; the whole JDK as a runtime
+(`ALL-MODULE-PATH`, the fallback) would be 92.2 MB / 70.6 MB. The self test and the window start on the image, and the
+real-host Hornet tests run on it (see `distribution.md`).
 
-**The hand-off to the application.** There is no Java launcher between the script and the application: stage 0 has
-already proven the runtime by running it (version, x64), so it starts `javaw.exe -jar lib\app.jar` itself, with the
-options of the manifest's `application.jvmArguments` (native access, Unsafe), which the self test checks against the
-running JVM. `app.jar` carries the class path of the window in its manifest; a `lib\*` wildcard would also put the
-worker's and the robot world's jars (which have an `android` package of their own) on the window's class path, in no
-defined order. A hidden `cmd /c` gives the program one shared handle for output and errors, so everything it writes,
-and the Java runtime's own crash report (`-XX:+ErrorFileToStdout`), lands in `%LOCALAPPDATA%\FTC-Sim\logs\app-<time>.log`
-in order, and is shown on the console meanwhile. The application's exit code is the exit code of `FTC-Sim.cmd`; started
-by double-click, the console closes once the window has run for a few seconds, and a failure keeps it open. `Main
---self-test` checks the installation without a window. See `distribution.md`.
+**The JDK it is made from.** The build's own toolchain, so that the runtime is the Java the code was compiled and tested
+on; `-Pftcsim.runtimeJdk=<JDK home>` names another JDK of the same major version, for example an Eclipse Temurin 25 for a
+release. The toolchain JDK of a development PC may be another vendor's (the measured PC has Oracle's 25.0.1, whose
+licence is not the GPL with the Classpath Exception): the notices read the vendor and build from the JDK's `release`
+file, and a release should be built from a Temurin JDK. The runtime's own licence texts are in `runtime\legal`.
 
-**Evidence.** 88 launcher tests: hostile archives, truncated and stalled downloads, concurrent launches, offline,
-proxy and execution-policy cases each give a distinct message; JDK 17, 21, 24 and 26 and another build of 25 are all
-refused, and a machine with only JDK 21 gets the pinned Temurin download; `Stage0PinTest` (9) holds the pin itself
-(its shape, the messages for ignored runtimes, a release or hash that the service does not confirm, a release it no
-longer has, the update tool); the hand-off (options, log, exit code, double-click) is tested against a stand-in
-`javaw.exe`. In `app`, 16 of 63 tests check the distribution as built and start the real one through `FTC-Sim.cmd` on a
-PC with no Java on the PATH (self test, exit code, an exception and a real JVM crash report all in the log; with the
-unmodified manifest, the pinned build from the user's cache passes the self test and Oracle's 25.0.1 is refused with
-its reason). The real Temurin 25.0.5+8 zip was downloaded, verified against the pin, unpacked and run by the real
-`FTC-Sim.cmd --self-test` on the development PC: 7 s from `FTC-Sim.cmd` to "self-test passed" with the download, 1.4 s
-with the JDK in the cache. No test downloads the real JDK.
+**The hand-off to the application.** `FTC-Sim.cmd` is a small batch file with no PowerShell: it checks that `runtime`,
+`lib\app.jar` and `runtime-options` are beside it (else exit 79, "extract the zip"), then runs `runtime\bin\java.exe`
+with the Java argument file `runtime-options` (native access, Unsafe: the file is also a resource of `app.jar`, which the
+self test checks against the running JVM), `-XX:ErrorFile` into `%LOCALAPPDATA%\FTC-Sim\logs`, and `-jar lib\app.jar`,
+waits, and returns the application's exit code. `app.jar` carries the class path of the window in its manifest; a
+`lib\*` wildcard would also put the worker's and the robot world's jars (which have an `android` package of their own)
+on the window's class path, in no defined order. The application writes what it prints to standard output and error to
+`logs\app-<time>.log` itself (`AppLog`, and the console shows it too), so no batch timestamp is needed. Behaviour that
+changed with the PowerShell: the console of a double-click now stays open while FTC-Sim runs (a batch file cannot both
+wait for the program, to show a failure, and close its own console), and a failure of the program still keeps it open;
+the Java crash report is its own file, `logs\hs_err_pid<pid>.log`, not part of the application's log.
+
+**The importer's JDK.** Importing a source project runs the project's own Gradle build, which a 2024 project cannot run on
+Java 25. `JdkDiscovery` finds a JDK 17 to 21 at the places listed in `jdk-patterns.txt` (a resource of `app`: Program
+Files, Adoptium, Android Studio's `jbr`, `.gradle\jdks` and so on) and `JAVA_HOME`; the discovery, the pin-free
+choice and its messages are unchanged by the bundled runtime and are not the simulator's concern.
+
+**Evidence.** `DistributionLayoutTest` (what the folder and the zip hold, the runtime's modules and what it leaves out),
+`ThirdPartyNoticesTest`, `AppLogTest`, `SelfTestTest` and `DistributionEndToEndTest`, which starts the real distribution
+through `FTC-Sim.cmd` from a folder with spaces and umlauts, with no Java on the PATH: the self test on the bundled
+runtime, the hand-off (options, arguments, exit code, an exception, a real JVM crash whose report lands in the logs
+folder), and a folder without its runtime. The real window was started on the image with `--no-focus --exit-after`.
 
 **Licence notices.** The distribution carries `THIRD-PARTY-NOTICES.txt` and the full licence texts, generated by
 `:app:thirdPartyNotices` from the POMs of the jars that fill `lib`; a jar whose licence the build cannot determine
-fails the build with its name. The downloaded Temurin has its own section (GPL 2 with the Classpath Exception). The
-product owner still has to choose a licence for FTC-Sim's own code: the repository has none, and none was invented.
+fails the build with its name. The runtime has its own section, written from the JDK's release file, that points at
+`runtime\legal`. The product owner still has to choose a licence for FTC-Sim's own code: the repository has none, and none
+was invented.
 
-**Open.** Not run on a clean machine or under a real application-control policy. A jlinked driver-only runtime
-(33.7 MiB zipped, measured on Temurin 25) is a release-time option for machines where PowerShell or the network is
-blocked, and the Temurin 25 JRE (55.9 MiB download against 134.7 MiB for the JDK) is a manifest change away, since
-discovery already accepts a JRE. A cache left by an earlier launcher with Temurin 21, or by an earlier pin, is ignored,
-not removed.
+**Open.** Not run on a clean machine or under a real application-control policy; whether Windows SmartScreen or an
+antivirus scanner treats an unpacked `java.exe` from a downloaded zip differently from the earlier extraction into the
+user's cache is not known (it was not testable). A folder name with characters outside the Windows ANSI code page makes
+the Java launcher fail to open `app.jar`, as it did before. A release is built from a Temurin JDK by choice of the
+owner, not by the build.
 
 ## 8. Game pieces: zones on plants, owned exactly once
 
@@ -159,8 +173,8 @@ not removed.
 launchers are zones whose activation is a condition on named motors' shaft speeds, never on the robot program. A piece is
 a free body in the physics world, carried by a storage (drawn from it, found by sensor rays analytically), or in
 the field's reserve, and never two of these. An intake takes only the piece sizes it is built for (an optional
-diameter range in the robot profile), which is how a robot built for one game's pieces meets another game's pieces
-without picking them up by accident; the range is physical, so no game or piece name appears in a profile.
+diameter range of the robot's design), which is how a robot built for one game's pieces meets another game's pieces
+without picking them up by accident; the range is physical, so no game or piece name appears in a spec.
 
 **Rolling resistance.** Jolt alone never stops a ball that rolls on the floor: it reuses contact points until bodies
 have moved 1 mm, so a ball slower than 1 mm per step keeps a stale contact that drives the roll, and damping settles at
@@ -168,19 +182,71 @@ about 0.24 m/s for ever. Pieces whose spec sets a rolling resistance get fresh c
 rate a rolling resistance coefficient implies, so they stop in finite time and fall asleep. It is one mechanism in
 `sim-physics` on `PieceSpec`, used by both fields; the coefficient (0.06) is an estimate, not a measurement.
 
-## 9. Determinism boundary
+## 9. Repeatability is not promised
 
-Same program, profile, field, seed and inputs, on the same pinned Windows, JDK and native physics build, give the
-same run: the tests compare the physics world's state hash across different slicings of simulated time. Equality
-across different CPUs is tested, not promised. Recording and replaying a session is not a feature (it was built and
-removed as not needed).
+**Decision (product owner).** Two runs of the same program, profile, field, seed and inputs are not promised to give
+the same world, bit for bit or at all. Accuracy and repeatability were never the goal; the goal is to test a team's code
+and to practise driving. Repeatability was promised before, and it cost more than it was worth: the simulator waited in
+real time for every library thread before time could move, rewrote every source of randomness in the robot's JDK, kept a
+hash of the physics state pinned across JVM flags, and flagged any run it could not vouch for. Each of those was
+machinery, and some of it (Panels' start-up thread against the OpMode thread) was a source of waits and failures of its
+own.
+
+**What stays: lockstep virtual time.** The robot thread runs only when the simulator hands it the baton and gives it back
+at its next hook (`SimulationKernel`, `RobotGate`, `VirtualClock`, `FixedRateWorld`; the rewrites of `TimeRules` and
+`RewriteRules`). It stays because it is what makes the product work, not because it makes runs repeat: the run can be
+paused, slowed and fast-forwarded without the robot code noticing (a sleep or a loop is simulated time, never real time);
+a loop iteration costs simulated time rather than however long the machine took, so loop timing is steady; and the world,
+the hubs and the devices have one writer at a time and need no locks. An OpMode therefore sees the same sleep durations
+and the same readings however the caller slices time, and tests still assert that, on outcomes (a time, a pose within a
+tolerance), not on hashes.
+
+**What a run to run difference looks like.** A robot program that waits on a library thread (Hornet's Panels start-up
+is one) spins its loop a different number of times each run, and each spin costs simulated time, so two runs start a few
+microseconds apart. Most runs are identical; now and then a run differs, and an autonomous, which makes many discrete
+decisions, can end on a different score (Hornet's far autonomous classified 9 artifacts on most runs and 6 on some).
+Tests that play a whole autonomous therefore ask that it can reach its bar within three runs (`HornetAutoRunTest`)
+instead of on every run; a broken robot reaches it in none.
+
+**What was removed.**
+
+- Waiting for foreign threads (`WorldThreads`; the quiet and settle waits before time moves, before a callback and before
+  the baton is handed over; `KernelDiagnostics.worldWaits()`; the matching `KernelConfig` settings). A library's own
+  thread now runs in real time beside the simulation, between the robot thread's turns or during one. What it does to the
+  hubs it does safely (section 3), and it moves no simulated time.
+- The reproducibility flags: the problems that said a run was "not reproducible", and the counting of changes made by
+  threads the kernel does not schedule (`LynxBus.unscheduledMutations()`).
+- Randomness virtualisation: the `Random`, `UUID`, `SecureRandom`, `ThreadLocalRandom` and `Collections.shuffle` rewrites
+  (`RandomRules`, `RandomHooks`, `ThreadLocalSeeder`, `SimulatedSecureRandom`) and the kernel's seed. The robot world gets
+  the JVM's own randomness. The field's own seed (`FieldSetup.seed`: reserve order, layout noise) stays, since a field
+  is laid out from it.
+- `StateDigest`, `PhysicsWorld.stateHash()`, the golden hashes and everything that compared hashes across slicings, JVMs
+  and JIT settings, and the identity-hash order test.
+- The rules that existed for repeatability in the simulation's own code: `StrictMath` is no longer required (existing
+  uses stay), hash-ordered collections and unseeded randomness are allowed where they are harmless.
+
+**What was kept, because the OpMode needs it to run, stop and unwind, not to repeat.** The monitor settle (a robot thread
+entering or leaving a wait is briefly in a state the simulator cannot read); detection of a robot thread blocked in
+something the simulator does not control (`RobotGate.State.EXTERNAL`) and the wait for it when the SDK interrupts it;
+unwinding and abandoning a robot thread, and `System.exit` handling (section 10); the notification of a robot waiter by
+another thread being held until the baton is granted, since the real monitor is the robot's park; `settle` after the host
+starts or wakes the robot thread, so that a thread that was just created reaches the simulator; and the bus's lock. The
+problems the kernel still reports are about the robot thread (it would not end, it came back from an uncontrolled wait,
+a second thread looks like it) and say so, without claiming anything about repeatability.
+
+**What can now differ between two runs.** The interleaving of a library's own threads (Panels' start-up thread and its
+ticker, a `Timer`) with the OpMode, which can move an OpMode's hub transmission across a hub tick; the start-up latency
+of a thread; random numbers; the iteration order of identity-hashed sets. The Hornet tests assert outcomes (scores, poses
+within a tolerance), not worlds. Recording and replaying a session is not a feature (it was built and removed as not
+needed).
 
 ## 10. The robot world's contact with the machine
 
-What a robot program can reach outside its class loader, and what the simulator answers. The rule behind it all:
-nothing the robot sees may depend on the machine, the network or real time. Where that cannot be had, the run says so,
-as a problem (`KernelDiagnostics.problems()`, `SimulationSession.problems()`), rather than claiming a repeatable run.
-This section replaces the open items of section 2.
+What a robot program can reach outside its class loader, and what the simulator answers. The rule behind it all: the
+robot's clock is the simulated clock, and nothing it reaches touches the machine's network. Where the simulator cannot
+answer for the robot thread (it would not end, it came back from a wait the simulator does not control), the run says so,
+as a problem (`KernelDiagnostics.problems()`, `SimulationSession.problems()`). Randomness and the timed waits of library
+code are the machine's own (section 9). This section replaces the open items of section 2.
 
 **Network policy.** The robot world never listens or connects on the real network: a listening socket makes Windows
 ask a student about its firewall, and traffic makes a run depend on the outside. Every JDK way to bind, listen, connect
@@ -223,48 +289,32 @@ run another OpMode. `System.exit`, `Runtime.exit` and `Runtime.halt` from robot 
 `RobotExit` (a `RobotUnwind`), the request is recorded with its status and thread, the controller shows an error and
 stops the OpMode, and the program's shutdown hooks are remembered and never run. Both are problems of the session.
 
-**Time and randomness.** Every robot-visible source of the wall clock and of randomness comes from the simulated
-clock and a seed (`KernelConfig.epochMillis`, 2026-01-01T00:00:00Z by default, and `seed`). The rewrites are
-table-driven (`TimeRules`, `RandomRules`, whose tests scan the JDK so that a new `now()` is noticed): `new Date()`,
-`Calendar.getInstance`, `new GregorianCalendar`, `Clock.system*` and `tick*`, `Instant.now()` and the `now()` and
-`now(ZoneId)` of every class of `java.time`; `new Random()`, `new SplittableRandom()`, `Math.random`,
-`StrictMath.random`, `UUID.randomUUID`, `Collections.shuffle(list)`, every way to a `SecureRandom` (a deterministic
-`SimulatedSecureRandom`) and `ThreadLocalRandom.current()`. Direct calls, method references, lambdas and the `super()`
-of a subclass of `Random` or `Date` are covered. A generator the program seeds itself is its own business. Only the
-instant is virtualised: the time zone and the locale stay the machine's. The robot thread draws its seeds from a stream
-that nothing else touches, so what a library's thread asks for never changes what the robot gets.
-`ThreadLocalRandom` keeps its state in the thread, adds twice the thread's id to it at each draw and can be set only
-through `sun.misc.Unsafe` (JDK 25 warns once, and `--sun-misc-unsafe-memory-access=allow` silences it). The seed is set
-at each `current()`, so `ThreadLocalRandom.current().nextInt()` follows the seed whatever the thread's id, while a
-generator that is kept and drawn from again drifts with it; a JVM that forbids the write makes it a problem.
-*Not* virtualised: the timed waits that library code makes through the JDK (`Timer`, `Semaphore.tryAcquire`,
-`BlockingQueue.poll`, `Condition.await`, `LockSupport.parkNanos`, `Thread.join`), `Runtime.availableProcessors`, the
-machine's zone and locale, file timestamps.
-
-**Identity hashes.** Objects that do not override `hashCode` are hashed by a generator each thread owns, whose start
-depends on how many threads the JVM made before, and a `HashSet` or `HashMap` of them iterates in that order (SolversLib's
-command scheduler is one). The order is the same in two processes of one JVM build with the same flags and differs
-between flags (`-Xint` against the default; `IdentityHashOrderTest`). It is not fixed, only recorded: the claim of
-repeatable runs is for one JVM build and one set of flags. A program that depends on the order can differ across
-machines that JIT-compile differently, so far not seen: Hornet's Far Auto gives the same world with and without the JIT
-(`HornetCrossJvmTest`).
+**Time.** Every robot-visible source of the wall clock comes from the simulated clock (`KernelConfig.epochMillis`,
+2026-01-01T00:00:00Z by default). The rewrites are table-driven (`TimeRules`, whose tests scan the JDK so that a new
+`now()` is noticed): `new Date()`, `Calendar.getInstance`, `new GregorianCalendar`, `Clock.system*` and `tick*`,
+`Instant.now()` and the `now()` and `now(ZoneId)` of every class of `java.time`. Direct calls, method references,
+lambdas and the `super()` of a subclass of `Date` are covered. Only the instant is virtualised: the time zone and the
+locale stay the machine's. *Not* virtualised: randomness (`Random`, `Math.random`, `UUID.randomUUID`, `SecureRandom`,
+`ThreadLocalRandom` are the JVM's own), the timed waits that library code makes through the JDK (`Timer`,
+`Semaphore.tryAcquire`, `BlockingQueue.poll`, `Condition.await`, `LockSupport.parkNanos`, `Thread.join`),
+`Runtime.availableProcessors`, the machine's zone and locale, file timestamps.
 
 **Foreign threads.** A thread of the robot world other than the robot thread, such as Panels' starter and ticker or a
-library's timer, runs in real time and the kernel does not schedule it. It must never change what the robot sees.
-First, its hub traffic goes through `transmitUnscheduled`: it never moves simulated time, queries are answered as the
-hubs stand, and a command that would change a hub is applied and flagged as a problem. Second, the kernel never lets
-such a thread run beside simulated time or beside the robot thread's turn: before time moves, before a callback and
-before it hands the robot thread the baton, the simulator waits in real time until every thread that runs robot code
-(a frame of the class loader named `robot` on its stack; a thread started a moment ago is given 100 ms to show its
-first frame) is at rest, at most 20 s, then a problem (`WorldThreads`). What such a thread did is finished and the
-same however fast the machine ran. The failure this cures: Panels' start-up thread filled its configurables list
-while the OpMode thread walked the same list; each loop iteration costs a hundred nanoseconds of simulated time
-(`SimulationSession.LOOP_NANOS`; it was one nanosecond when this was found), so the OpMode's hub transmissions moved
-with the number of iterations it made, now and then across a 1 ms hub tick, and one run in two gave another world.
-The robot thread is likewise waited for when it is starting, and when it waits for a lock that a running thread holds;
-one that is blocked on something the simulator does not control is a problem. A foreign thread that wakes while the
-robot thread runs, such as a `Timer` firing, is not held back: that is the residual risk, shown by
-`KernelDiagnostics.worldWaits()`, and it goes only when library timers run on the simulated clock.
+library's timer, runs in real time and the kernel does not schedule it or wait for it. Its hub traffic goes through
+`transmitUnscheduled` (section 3): under the bus's lock, never moving simulated time, queries as the hubs stand. Its
+`notify` of a monitor the robot thread waits on is held until the simulator grants the baton, because the robot's wait
+is a real one. What the kernel still does about the robot thread itself is about running, stopping and unwinding it, and
+not about repeatability: it waits for the robot thread to park, end or block when the simulator acts on it (`settle`, after
+a host call that starts or wakes it); it gives a robot thread that is entering or leaving a monitor wait the time to be
+seen in it; it follows a lock chain, so that a robot thread that waits for a lock a *running* thread holds is waited for
+and one blocked on something the simulator does not control (`EXTERNAL`) is left, time going on without it, and reported
+as a problem when it comes back, while a thread the SDK interrupts is waited for when it reacts. A robot thread that the SDK
+starts inside a Stop (the next OpMode's) is not waited for before time moves: its start-up in real time counts as simulated
+time, a fraction of a millisecond on a quiet machine and tens on a loaded one, which is why the runaway tests allow 250 ms
+of slack. Panels' start-up thread
+filling its configurables list while the OpMode thread walks the same list was the failure that the hold-off once
+cured; it is a race in Panels' own code that the simulator no longer hides. If a Hornet run ever shows it again, the
+cure is to run that thread on the simulated clock, not to bring the waiting back.
 
 **Host shutdown.** Closing a session closes the world's listeners, interrupts every thread whose context class loader
 is the robot world's (every call into the controller runs with it set, so every thread the program starts inherits it)
@@ -280,10 +330,13 @@ tracked `Timer` that the host cancels); the zone and locale of the simulated mac
 
 Each of these was considered and decided against; adding one back is the product owner's call.
 
-- **Replay and recording of runs.** Built, then removed: nothing in the product needed it. A new run is a new session,
-  and the state hash plus the tests that compare it across slicings of time are what remain (section 9).
-- **TOML and YAML robot profiles.** One format, JSON, parsed strictly (`RobotProfileLoader`): no second parser to keep in
-  step. A `ftcsim.toml` that an earlier tool left in the Hornet checkout was replaced by a copy of the JSON profile.
+- **Replay and recording of runs.** Built, then removed: nothing in the product needed it. A new run is a new session.
+- **Bit-exact repeatability and golden hashes.** Built (a state hash of the physics world pinned across JVM flags and
+  slicings of time, a hold-off for every library thread, virtualised randomness), then removed by the owner: accuracy
+  and repeatability were never the goal, and the machinery cost waits, flaky corners and tests of its own. Lockstep virtual
+  time stayed (section 9).
+- **TOML and YAML robot files.** One format, JSON (`ftcsim.json`, read and written whole by `ProjectMappingsImpl`): no second
+  parser to keep in step. A `ftcsim.toml` that an earlier tool left in the Hornet checkout was replaced by a copy of the JSON file.
 - **Air drag.** The owner judged it excessive for what the shot tests need. The launcher is fitted by its angle and
   efficiency to the shooter table of the robot (`robots/hornet-profile.md`), and a far shot scores by banking off the back
   of the goal, as real ones do (`fields/decode.md`, "Friction, bounce and bank shots").

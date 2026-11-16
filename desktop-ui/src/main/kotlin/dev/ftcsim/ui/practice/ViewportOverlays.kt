@@ -14,6 +14,7 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.SegmentedButton
@@ -60,6 +61,14 @@ fun CameraPresetBar(selected: OrbitCamera.Preset, onSelect: (OrbitCamera.Preset)
     }
 }
 
+/** The button at the viewport's bottom right that shows and hides the details panel. */
+@Composable
+fun DetailsButton(open: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    FilledTonalButton(onClick, modifier.semantics { contentDescription = if (open) "Hide details" else "Show details" }) {
+        Text("Details")
+    }
+}
+
 /** What a person at the field can do, one chip each. */
 @Composable
 fun HumanActionChips(actions: List<HumanAction>, enabled: Boolean, onAction: (String) -> Unit, modifier: Modifier = Modifier) {
@@ -67,22 +76,6 @@ fun HumanActionChips(actions: List<HumanAction>, enabled: Boolean, onAction: (St
         actions.forEach { action ->
             AssistChip(onClick = { onAction(action.id()) }, enabled = enabled, label = { Text(action.label()) })
         }
-    }
-}
-
-/** Says where the keyboard goes: to the robot while the viewport is focused, nowhere otherwise. */
-@Composable
-fun KeyboardHint(focused: Boolean, modifier: Modifier = Modifier) {
-    Surface(
-        modifier,
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.88f),
-        shape = MaterialTheme.shapes.small,
-    ) {
-        Text(
-            if (focused) "Keyboard input is on; the keys are set under Controls" else "Click the viewport to drive with the keyboard",
-            style = MaterialTheme.typography.labelMedium,
-            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
-        )
     }
 }
 
@@ -112,22 +105,21 @@ fun SessionOverlay(
         state.connection == Connection.NONE && !connecting -> Scrim(modifier, 0.45f) {
             ElevatedCard(Modifier.padding(24.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("No practice session yet", style = MaterialTheme.typography.titleMedium)
-                    Text("Choose a field, a robot and a program, then start a run.", style = MaterialTheme.typography.bodyMedium)
-                    Button(onClick = onSetup) { Text("Set up a run") }
+                    Text("No project open", style = MaterialTheme.typography.titleMedium)
+                    Button(onClick = onSetup) { Text("Open project") }
                 }
             }
         }
         state.connection == Connection.NONE || state.connection == Connection.OPENING ->
-            Scrim(modifier, 0.35f) { Busy(if (connecting) "Connecting to the simulator..." else "Opening the session") }
+            Scrim(modifier, 0.35f) { Busy(if (connecting) "Connecting" else "Opening") }
         else -> Scrim(modifier, 0.45f) {
             ElevatedCard(Modifier.padding(24.dp)) {
                 Column(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("The session could not go on", style = MaterialTheme.typography.titleMedium)
-                    Text(failure ?: "No reason was given.", style = MaterialTheme.typography.bodyMedium)
+                    Text("Session stopped", style = MaterialTheme.typography.titleMedium)
+                    Text(failure ?: "No reason given", style = MaterialTheme.typography.bodyMedium)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         Button(onClick = onRetry) { Text("Try again") }
-                        OutlinedButton(onClick = onSetup) { Text("Change the setup") }
+                        OutlinedButton(onClick = onSetup) { Text("Projects") }
                     }
                 }
             }

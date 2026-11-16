@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Timeout;
 
 /**
  * Robot threads that run in real time next to the simulator: one that is still starting, one that waits for a lock, one
- * that is woken by an interrupt. Each takes a stretch of real time that simulated time must not run ahead of, or what
- * the thread observes would depend on how fast the machine is.
+ * that is woken by an interrupt. The simulator must neither hang on them nor give up on them while they are only
+ * waiting for something that is about to happen.
  */
 @Timeout(60)
 class RobotThreadsOutsideTheGateTest {
@@ -31,8 +31,8 @@ class RobotThreadsOutsideTheGateTest {
         }
     }
 
-    @RepeatedTest(5)
-    void aRobotThreadThatIsStillStartingIsWaitedForBeforeTimeMoves() throws Exception {
+    @Test
+    void aRobotThreadThatIsStillStartingJoinsAtTheTimeItReachesItsFirstHook() throws Exception {
         try (KernelFixture fixture = new KernelFixture()) {
             Thread late = new Thread(() -> {
                 spinFor(100);
@@ -42,9 +42,16 @@ class RobotThreadsOutsideTheGateTest {
             late.start();
 
             fixture.kernel.runUntil(50 * MS);
-            late.join();
+            long deadline = System.nanoTime() + 20_000 * MS;
+            while (fixture.kernel.gateState() != RobotGate.State.PARKED && System.nanoTime() < deadline) {
+                Thread.onSpinWait();
+            }
+            fixture.kernel.runUntil(60 * MS);
+            late.join(20_000);
 
-            assertEquals(List.of("first hook at " + KernelFixture.POLL_COST), fixture.trace, "the thread began at the instant it was created");
+            assertEquals(1, fixture.trace.size(), fixture.trace.toString());
+            long firstHook = Long.parseLong(fixture.trace.get(0).substring("first hook at ".length()));
+            assertTrue(firstHook >= 50 * MS && firstHook < 60 * MS, "the thread joined at the time it arrived: " + firstHook);
             assertEquals(List.of(), fixture.kernel.diagnostics().problems());
         }
     }

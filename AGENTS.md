@@ -22,20 +22,30 @@ Made by the product owner; the reasons are in `docs/architecture/decisions.md`. 
 
 - The simulator emulates **hardware and the Android environment and nothing else**; the team's code does everything
   else. Never special-case a team's classes, Hornet included. A device model reproduces the device with its limits.
-- **Determinism is a requirement** (same inputs, same run); **accuracy is not**: it is enough to test code and practise.
-- Only DECODE and BIOBUZZ. Mechanisms never push on the chassis. Windows only; JDK 25 forced.
-- Not wanted unless asked: replay or recording, TOML or YAML profiles (profiles are JSON), air drag, a Rust sidecar,
+- **Repeatability is not a requirement**, and neither is accuracy: it is enough to test code and practise. **Lockstep
+  virtual time is kept**: the robot and simulator threads take turns on simulated time (pause, speed control, steady loop
+  timing, one writer).
+- Only DECODE and BIOBUZZ. Mechanisms never push on the chassis. Windows only; Java 25, bundled in the distribution (a
+  jlink runtime in `runtime\`: no download, no PowerShell, no search for the user's Java).
+- **The robots are fixed designs** (`RobotDesign`: DECODE's, and BIOBUZZ's with a turret) and sensors are fixed and ideal,
+  bound by the driver class the code asks for. A team supplies only a **mapping** (`ftcsim.json`: which motor of its code
+  is which part, model, Mirrored, a few body numbers, the hub and Limelight mounting). No editable zones or mechanisms,
+  no sensor settings, no other mechanisms (`docs/robots/fixed-robots.md`).
+- Not wanted unless asked: replay or recording, TOML or YAML files (the mapping is JSON), air drag, a Rust sidecar,
   foul and ranking rules, an opposing robot, features for other seasons.
 
 ## Commands
 
 ```text
-.\gradlew.bat check                       all tests, the module rules, the launcher (about 4 minutes)
+.\gradlew.bat check                       all tests, the module rules, the distribution (about 4 minutes)
 .\gradlew.bat :<module>:check             one module
 .\gradlew.bat :acceptance-tests:test -PftcSdk=12.0.0                  another SDK (11.0.0 11.1.0 11.2.0 11.2.1 12.0.0)
 .\gradlew.bat :acceptance-tests:test -Pftcsim.hornetPackage=<folder> [-Pftcsim.hornet=<Hornet checkout>]
-.\gradlew.bat :app:dist                   app\build\dist\FTC-Sim and FTC-Sim.zip
+.\gradlew.bat :app:dist                   app\build\dist\FTC-Sim (with its runtime\) and FTC-Sim.zip   [-Pftcsim.runtimeJdk=<a JDK 25 home>]
+.\gradlew.bat :desktop-ui:runFake         the window alone on a fake host (interface work; no robot code runs)
 app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test       checks an installation without opening a window
+.\gradlew.bat :acceptance-tests:test -Pftcsim.runtime=app\build\dist\FTC-Sim\runtime --tests "*RealHost*Hornet*" -Pftcsim.hornetPackage=<folder>
+                                          the real-host Hornet tests with the bundled runtime as the JVM
 ```
 
 ## Hard rules
@@ -49,9 +59,8 @@ app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test       checks an installation with
   folders or temporary files, and nothing written by a test into the real `%LOCALAPPDATA%\FTC-Sim`.
 - **Git**: the repository is `Overture-7421/FTC-Sim` on GitHub, default branch `main`. Do not commit, push, branch or
   change git state unless asked.
-- **Determinism in simulation code**: no wall clock (`nanoTime`, `currentTimeMillis`, `Instant.now`), no unseeded
-  randomness, no threads of your own, no iteration over hash-ordered collections where order can matter, `StrictMath` for
-  `sin`/`cos`/`atan2`/`exp`/`pow`. Time arrives as an argument in simulated nanoseconds.
+- **Time in simulation code**: no wall clock (`nanoTime`, `currentTimeMillis`, `Instant.now`); time arrives as an
+  argument in simulated nanoseconds.
 - **No duplicated logic**: search before you write; extend or reuse what exists.
 - **Modules have one job and the rules are enforced** (`moduleRules` in the root `build.gradle.kts`). Do not widen them to
   get something done. Only `dev.ftcsim.contracts.*` is shared between the host and the robot world.
@@ -67,7 +76,7 @@ app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test       checks an installation with
 1. `.\gradlew.bat check` is green.
 2. For changes the SDK or a team program can see (robot world, SDK host, hardware, mechanisms, physics, fields, importer, link):
    the acceptance suite with Hornet, and the fixture suite on the other SDK releases. `docs/development.md` lists which.
-3. For `app`, `launcher` or the window: `:app:dist` and `--self-test`.
+3. For `app`, the launcher or the window: `:app:dist` and `--self-test`.
 4. Report in at most about 500 words: what you changed (by package), the commands you ran with their counts, what you could
    **not** verify, decisions the owner should know, open problems. Do not claim anything you did not run.
 
@@ -75,6 +84,6 @@ app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test       checks an installation with
 
 `docs/architecture/overview.md` has the module table with the classes to start from. In short: `sim-contracts` (shared
 vocabulary), `sim-core` (virtual-time kernel), `robot-runtime` (class loader and bytecode rewriting), `sdk-common` and
-`android-shim` (the SDK host), `sim-hardware` (hubs and devices), `sim-physics`, `sim-mechanisms`, `sim-field`, `game-*`
-(the world), `simulator` (a session), `worker` and `sim-link` (the process boundary), `project-import`, `desktop-ui`, `app`,
-`launcher`, and `acceptance-tests`. `docs/roadmap.md` lists what is missing.
+`android-shim` (the SDK host), `sim-hardware` (hubs and devices), `sim-physics`, `games` (the field framework and the two
+games), `simulator` (a session, with the mechanisms), `worker` and `sim-link` (the process boundary), `project-import`,
+`desktop-ui` (its test fixtures hold the fake host), `app` (with `FTC-Sim.cmd` and the runtime of the distribution), and `acceptance-tests`. `docs/roadmap.md` lists what is missing.

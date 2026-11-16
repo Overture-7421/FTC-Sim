@@ -2,60 +2,66 @@ package dev.ftcsim.ui.setup
 
 import dev.ftcsim.contracts.field.Alliance
 import dev.ftcsim.contracts.field.StartPose
+import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.ui.practice.Fixtures
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
-import org.junit.jupiter.api.Assertions.assertNotNull
 import org.junit.jupiter.api.Assertions.assertNull
 import org.junit.jupiter.api.Assertions.assertTrue
 import org.junit.jupiter.api.Test
 
 class SetupModelTest {
-    private class Disk : PathChecks {
-        override fun isFile(path: String) = false
+    private val rules = SetupRules.of(Fixtures.catalogue())
 
-        override fun isDirectory(path: String) = false
-    }
-
-    private val rules = SetupRules.of(Fixtures.catalogue(), programRequired = false)
-
-    private fun model(initial: SetupInput = SetupInput()) = SetupModel(Disk(), { 7L }, initial)
+    private fun model(initial: SetupInput = SetupInput()) = SetupModel({ 7L }, initial)
 
     @Test
-    fun aBlankFormTakesTheDefaultFieldTheFirstBundledProfileAndTheFirstPoseWhenTheCatalogueArrives() {
+    fun aBlankFormTakesTheDefaultFieldAndTheFirstPoseWhenTheCatalogueArrives() {
         val model = model()
 
         model.adopt(rules)
 
         assertEquals("decode", model.input.field)
-        assertEquals("hornet-2026", model.input.profile)
         assertEquals("RED goal side", model.input.startPose)
     }
 
     @Test
     fun whatThePersonChoseSurvivesTheCatalogueArriving() {
-        val model = model(SetupInput(field = "none", alliance = Alliance.BLUE, profile = "C:\\robots\\mine.json", startX = "0.5"))
+        val model = model(SetupInput(field = "none", alliance = Alliance.BLUE, startX = "0.5"))
 
         model.adopt(rules)
 
         assertEquals("none", model.input.field)
-        assertEquals("C:\\robots\\mine.json", model.input.profile)
         assertNull(model.input.startPose)
         assertEquals("0.5", model.input.startX)
     }
 
     @Test
-    fun aRunReopenedFromTheRecentsSelectsTheStartPoseItsNumbersStandFor() {
+    fun aRunLoadedFromWhatTheProjectRememberedSelectsTheStartPoseItsNumbersStandFor() {
         val model = model()
-        val atPose = SessionRequest("hornet-2026", "", "decode", Alliance.BLUE, 5L, -1.2, -1.4, Math.PI / 2, 1.0)
-        val elsewhere = atPose.let { SessionRequest(it.profile(), "", "decode", Alliance.BLUE, 5L, 0.25, 0.5, 0.0, 1.0) }
+        val atPose = SessionRequest(RobotMapping.empty("Robot"), "", "decode", Alliance.BLUE, 5L, -1.2, -1.4, Math.PI / 2, 1.0)
+        val elsewhere = SessionRequest(RobotMapping.empty("Robot"), "", "decode", Alliance.BLUE, 5L, 0.25, 0.5, 0.0, 1.0)
 
-        model.use(atPose, rules)
+        model.load(SetupInput.from(atPose), rules)
         assertEquals("BLUE goal side", model.input.startPose)
-        model.use(elsewhere, rules)
+        assertFalse(model.input.randomSeed, "a run that is remembered repeats")
+        assertEquals("5", model.input.seedText)
+        model.load(SetupInput.from(elsewhere), rules)
         assertNull(model.input.startPose, "numbers that are no pose of the field stay the person's own")
         assertEquals("0.25", model.input.startX)
+    }
+
+    @Test
+    fun loadingAFormWithoutAFieldGivesItTheDefaultFieldAndLoadingWithoutRulesKeepsItAsItIs() {
+        val model = model()
+
+        model.load(SetupInput(alliance = Alliance.BLUE), null)
+        assertEquals("", model.input.field)
+
+        model.load(SetupInput(alliance = Alliance.BLUE), rules)
+        assertEquals("decode", model.input.field)
+        assertEquals("BLUE goal side", model.input.startPose)
     }
 
     @Test
@@ -108,7 +114,7 @@ class SetupModelTest {
     }
 
     @Test
-    fun chosingCustomStartsFromTheNumbersOfThePoseThatWasChosen() {
+    fun choosingCustomStartsFromTheNumbersOfThePoseThatWasChosen() {
         val model = model()
         model.adopt(rules)
 
@@ -121,33 +127,21 @@ class SetupModelTest {
     }
 
     @Test
-    fun aRunCanBeStartedOnlyForTheExactFormAndRulesThatWereChecked() {
-        val model = model(SetupInput(field = "decode", profile = "hornet-2026"))
-        assertNull(model.request(rules), "nothing was checked yet")
+    fun aRunCanBeRequestedOnlyForAFormThatHasNothingWrongAndCarriesTheProjectsProgramAndMapping() {
+        val model = model(SetupInput(field = "decode"))
+        val robot = RobotMapping.empty("Team robot")
+        assertNull(model.request(null, "C:\\prog", robot), "the simulator has not said what it has")
+
+        val request = model.request(rules, "C:\\prog", robot)!!
+        assertEquals("C:\\prog", request.program())
+        assertEquals(robot, request.mapping())
+        assertEquals(7L, request.seed(), "the random seed is drawn when the run starts")
+
+        model.edit { it.copy(randomSeed = false, seedText = "x") }
         assertFalse(model.ready(rules))
-
-        model.publish(model.check(model.input, rules))
-        assertTrue(model.ready(rules))
-        assertEquals(7L, model.request(rules)!!.seed())
-
-        model.edit { it.copy(profile = "falcon") }
-        assertFalse(model.ready(rules), "the edit has not been checked yet")
-        assertNull(model.request(rules))
-
-        model.publish(model.check(model.input, rules))
-        assertFalse(model.ready(rules), "it was checked and is wrong")
-        assertNotNull(model.problems(rules).profile)
-    }
-
-    @Test
-    fun aCheckAgainstOtherRulesNeitherCountsNorShows() {
-        val model = model(SetupInput(field = "decode", profile = "hornet-2026"))
-        model.publish(model.check(model.input, rules))
-        val newer = rules.copy(bundledProfiles = listOf("other"))
-
-        assertFalse(model.ready(newer))
-        assertTrue(model.problems(newer).none)
-        assertFalse(model.ready(null))
+        assertNull(model.request(rules, "C:\\prog", robot))
+        assertEquals("The seed is a whole number, such as 12345.", model.problems(rules).seed)
+        assertTrue(model.problems(null).none, "before the simulator has spoken nothing is wrong yet")
     }
 
     @Test

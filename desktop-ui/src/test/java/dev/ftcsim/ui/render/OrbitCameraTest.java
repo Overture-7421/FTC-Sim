@@ -1,6 +1,7 @@
 package dev.ftcsim.ui.render;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.FieldDescription;
@@ -54,6 +55,83 @@ class OrbitCameraTest {
         assertEquals(OrbitCamera.MAX_DISTANCE, camera.distance(), 1e-9);
 
         assertEquals(start + 4, camera.version());
+    }
+
+    @Test
+    void projectingAPointAgreesWithTheProjectionMatrixTheRendererUses() {
+        OrbitCamera camera = new OrbitCamera();
+        camera.set(75, 33, 4.0);
+        float aspect = 16f / 9f;
+        float[] matrix = new float[16];
+        camera.viewProjection(aspect, matrix, new float[3]);
+        double[] ndc = new double[2];
+
+        for (double[] point : new double[][] {{0.3, -0.2, 0.5}, {-1.0, 0.7, 0.0}, {0.0, 0.0, 0.12}}) {
+            float x = matrix[0] * (float) point[0] + matrix[4] * (float) point[1] + matrix[8] * (float) point[2] + matrix[12];
+            float y = matrix[1] * (float) point[0] + matrix[5] * (float) point[1] + matrix[9] * (float) point[2] + matrix[13];
+            float w = matrix[3] * (float) point[0] + matrix[7] * (float) point[1] + matrix[11] * (float) point[2] + matrix[15];
+
+            assertTrue(camera.project(point[0], point[1], point[2], aspect, ndc));
+
+            assertEquals(x / w, ndc[0], 1e-4);
+            assertEquals(y / w, ndc[1], 1e-4);
+        }
+    }
+
+    @Test
+    void aPointBehindTheCameraDoesNotProjectAndTheRayThroughAProjectedPointHitsIt() {
+        OrbitCamera camera = new OrbitCamera();
+        camera.set(-30, 50, 3.0);
+        double[] ndc = new double[2];
+        double[] origin = new double[3];
+        double[] direction = new double[3];
+
+        assertFalse(camera.project(100, 100, 100, 1.5, ndc));
+        double[] point = {0.4, 0.25, 0.2};
+        assertTrue(camera.project(point[0], point[1], point[2], 1.5, ndc));
+        camera.ray(ndc[0], ndc[1], 1.5, origin, direction);
+
+        double along = (point[0] - origin[0]) * direction[0] + (point[1] - origin[1]) * direction[1] + (point[2] - origin[2]) * direction[2];
+        for (int axis = 0; axis < 3; axis++) {
+            assertEquals(point[axis], origin[axis] + along * direction[axis], 1e-9);
+        }
+    }
+
+    @Test
+    void panningMovesTheSceneWithThePointerByTheDistanceThePointerMoved() {
+        OrbitCamera camera = new OrbitCamera(new OrbitCamera.Limits(0.3, 3.0, 0.0, 89.0, 0.15));
+        camera.set(40, 30, 1.5);
+        double aspect = 16.0 / 9.0;
+        double[] ndc = new double[2];
+        camera.project(0, 0, 0.15, aspect, ndc);
+        assertEquals(0.0, ndc[0], 1e-9);
+        assertEquals(0.0, ndc[1], 1e-9);
+
+        camera.pan(128, -72, 720);
+        camera.project(0, 0, 0.15, aspect, ndc);
+
+        assertEquals(2.0 * 128 / (720 * aspect), ndc[0], 1e-9);
+        assertEquals(2.0 * 72 / 720, ndc[1], 1e-9);
+    }
+
+    @Test
+    void aCameraWithOwnLimitsStopsWhereTheyAreAndLooksAtItsTarget() {
+        OrbitCamera camera = new OrbitCamera(new OrbitCamera.Limits(0.4, 2.0, 0.0, 89.0, 0.15));
+
+        camera.zoom(1000);
+        camera.orbit(0, -10_000);
+        assertEquals(0.4, camera.distance(), 1e-9);
+        assertEquals(0.0, camera.pitchDegrees(), 1e-9);
+        camera.zoom(-1000);
+        camera.orbit(0, 100_000);
+        assertEquals(2.0, camera.distance(), 1e-9);
+        assertEquals(89.0, camera.pitchDegrees(), 1e-9);
+
+        camera.setTarget(1, 2, 0.5);
+        double[] ndc = new double[2];
+        camera.project(1, 2, 0.5, 1.0, ndc);
+        assertEquals(0.0, ndc[0], 1e-9);
+        assertEquals(0.0, ndc[1], 1e-9);
     }
 
     @Test

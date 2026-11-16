@@ -45,7 +45,6 @@ class ThirdPartyNoticesTest {
             Map.entry("BSD-3-Clause-ASM.txt", List.of("INRIA, France Telecom", "Redistribution and use in source and binary forms")),
             Map.entry("BSD-3-Clause-LWJGL.txt", List.of("Lightweight Java Game Library", "Redistribution and use in source and binary forms")),
             Map.entry("BSD-3-Clause-Skia.txt", List.of("Google Inc.", "Redistribution and use in source and binary forms")),
-            Map.entry("GPL-2.0-with-classpath-exception.txt", List.of("The GNU General Public License (GPL)", "Version 2, June 1991", "\"CLASSPATH\" EXCEPTION TO THE GPL")),
             Map.entry("MIT-jolt-jni.txt", List.of("Stephen Gold", "Permission is hereby granted, free of charge")),
             Map.entry("MIT-Jolt-Physics.txt", List.of("Jorrit Rouwe", "Permission is hereby granted, free of charge")),
             Map.entry("Unicode-ICU-data.txt", List.of("UNICODE LICENSE V3", "Unicode, Inc.")),
@@ -65,7 +64,6 @@ class ThirdPartyNoticesTest {
 
     private Path dist;
     private Path zip;
-    private Path manifest;
     private List<String> lines;
     private List<Entry> entries;
 
@@ -75,7 +73,6 @@ class ThirdPartyNoticesTest {
         assumeTrue(folder != null, "run through Gradle, which builds the distribution and names it in ftcsim.dist");
         dist = Path.of(folder);
         zip = Path.of(System.getProperty("ftcsim.distZip"));
-        manifest = Path.of(System.getProperty("ftcsim.launcherScripts")).resolve("jdk-manifest.json");
         lines = Files.readAllLines(dist.resolve(NOTICES), StandardCharsets.UTF_8);
         entries = fileEntries(lines);
     }
@@ -208,13 +205,16 @@ class ThirdPartyNoticesTest {
     }
 
     @Test
-    void theNoticesNameTheJavaRuntimeThatTheManifestPinsAndItsLicence() throws IOException {
-        Matcher pin = Pattern.compile("\"exactRelease\"\\s*:\\s*\"([^\"]+)\"").matcher(Files.readString(manifest, StandardCharsets.UTF_8));
-        assertTrue(pin.find(), "the launcher's manifest pins the runtime release");
-        String text = String.join("\n", lines);
+    void theNoticesNameTheJavaRuntimeOfTheDistributionAndPointAtTheLicenceTextsThatComeWithIt() throws IOException {
+        Matcher version = Pattern.compile("JAVA_VERSION=\"([^\"]+)\"").matcher(Files.readString(dist.resolve("runtime").resolve("release")));
+        assertTrue(version.find(), "the runtime's release file names its Java version");
+        int start = lines.indexOf("4. The Java runtime in the runtime folder");
+        assertTrue(start >= 0, "a section for the Java runtime");
+        String section = String.join("\n", lines.subList(start, lines.indexOf("5. Licence texts")));
 
-        assertTrue(text.contains("Eclipse Temurin " + pin.group(1) + " (OpenJDK)"), "the pinned release " + pin.group(1));
-        assertTrue(text.contains("Licence: GPL-2.0-with-classpath-exception"));
+        assertTrue(section.contains(version.group(1)), "the Java version of the runtime folder, " + version.group(1) + ": " + section);
+        assertTrue(section.contains("runtime/legal/java.base/LICENSE"), section);
+        assertTrue(Files.size(dist.resolve("runtime").resolve("legal").resolve("java.base").resolve("LICENSE")) > 500, "the runtime carries its licence");
     }
 
     @Test

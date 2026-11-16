@@ -17,8 +17,7 @@ import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.physics.Vector3;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.ui.render.FieldRenderer;
 import dev.ftcsim.ui.render.OrbitCamera;
 import java.io.IOException;
@@ -62,14 +61,14 @@ class RealFieldViewportTest {
     }
 
     private static Run open(Field field, Alliance alliance, String startPrefix) throws IOException {
-        RobotProfile profile = RobotProfileLoader.loadBundled("hornet-2026.json");
+        RobotSpec profile = HornetMapping.spec();
         StartPose start = field.description().startPoses().stream()
                 .filter(pose -> pose.name().startsWith(startPrefix))
                 .findFirst()
                 .orElseThrow(() -> new AssertionError("no start pose " + startPrefix + " in " + field.description().startPoses()));
         TestSessions.Handle handle = TestSessions.open(
                 profile, TestSessions.program(), field, new FieldSetup(1, alliance), start.x(), start.y(), start.headingRadians());
-        MecanumConfig box = profile.chassis().toConfig();
+        MecanumConfig box = profile.chassis();
         return new Run(handle, ViewportShots.robotInfo(profile.name(), box.lengthM(), box.widthM(), box.heightM()), start, alliance, field);
     }
 
@@ -203,8 +202,6 @@ class RealFieldViewportTest {
     void decodeWithPiecesCarriedAndInFlight() throws Exception {
         try (ViewportShots shots = openViewport(); Run run = open(new DecodeField(), Alliance.BLUE, "BLUE GOAL SIDE")) {
             SimulationSession session = run.session();
-            assertEquals(2, session.preload("magazine", PURPLE, 2));
-            assertEquals(1, session.preload("magazine", GREEN, 1));
             show(shots, run);
             orbitRobot(shots, 40.0, 25.0, 1.6);
             shoot(shots, "real-decode-carried");
@@ -336,7 +333,6 @@ class RealFieldViewportTest {
     void theFrameCostOfTheRealDecodeScene() throws Exception {
         try (ViewportShots shots = openViewport(); Run run = open(new DecodeField(), Alliance.BLUE, "BLUE GOAL SIDE")) {
             SimulationSession session = run.session();
-            session.preload("magazine", PURPLE, 2);
             show(shots, run);
             shots.camera().select(OrbitCamera.Preset.DRIVER);
 

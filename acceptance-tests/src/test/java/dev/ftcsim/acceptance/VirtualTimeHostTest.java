@@ -86,7 +86,7 @@ class VirtualTimeHostTest {
     }
 
     @Test
-    void aLoopThatOnlyWaitsForAButtonEndsWhenTheButtonIsPressedAtTheSameSimulatedTimeEveryRun() throws Exception {
+    void aLoopThatOnlyWaitsForAButtonEndsWhenTheButtonIsPressedAtTheSameSimulatedTimeWhateverTheSlicing() throws Exception {
         List<Long> idleTimes = new ArrayList<>();
         for (long slice : new long[] {Long.MAX_VALUE / 4, 2 * MS, 9 * MS}) {
             try (VirtualSession session = new VirtualSession()) {

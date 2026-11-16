@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.Alliance;
-import dev.ftcsim.simulator.profile.RobotProfile;
-import dev.ftcsim.simulator.profile.RobotProfileLoader;
+import dev.ftcsim.simulator.robot.HornetMapping;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.EnumMap;
@@ -42,12 +43,12 @@ class ShotSweepTest {
     private static final double MIN_AIM_WINDOW_SHARE = 0.85;
     private static final double MIN_COMPLETE_VOLLEY_SHARE = 0.93;
 
-    private static RobotProfile profile;
+    private static RobotSpec profile;
     private static final Map<Alliance, List<ShotSweep.Result>> RESULTS = new EnumMap<>(Alliance.class);
 
     @BeforeAll
     static void sweepBothAlliances() throws IOException {
-        profile = RobotProfileLoader.loadBundled("hornet-2026.json");
+        profile = RobotDesign.decode().spec(HornetMapping.mapping());
         for (Alliance alliance : Alliance.values()) {
             List<ShotSweep.Result> results = ShotSweep.run(profile, ShotSweep.spots(profile, alliance), SPEEDS, AIMS);
             RESULTS.put(alliance, results);

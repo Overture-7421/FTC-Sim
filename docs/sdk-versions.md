@@ -10,16 +10,17 @@ means: a program built against that SDK runs, and the same adapter serves all of
 
 | Check | SDK 11.0.0 | 11.1.0 | 11.2.0 | 11.2.1 | 12.0.0 |
 |---|:-:|:-:|:-:|:-:|:-:|
-| The fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, the IMU, digital and analog pins, the Pinpoint, the colour sensor, the OctoQuad, the Limelight, sessions and matches on the real SDK | 176 pass | 176 pass | 176 pass | 176 pass | 176 pass |
+| The fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, the IMU, unmapped pins, the Pinpoint, the colour sensor, sensors by driver class, the Limelight, mechanisms and the turret fixture, sessions and matches on the real SDK | not re-run since the sensors became fixed | 169 pass | not re-run | not re-run | 169 pass |
 | Hornet, a real program (Pedro Pathing, SolversLib, Panels, Limelight): 12 OpModes, autos, teleop, tuners, both fields | | 193 pass | | | 9 pass, see below |
 
-The SDK 11.1.0 column is the default of the build. The suite has 193 tests; 17 of them need a prepared Hornet program and
-are skipped without one, which leaves the 176 of the first row; with Hornet all 193 ran on 11.1.0. The 9 of the SDK 12.0.0
+The SDK 11.1.0 column is the default of the build. The suite has 189 tests (2026-11-15); 20 of them need a prepared Hornet program and
+are skipped without one, which leaves the 169 of the first row. The Hornet row (193 on 11.1.0, 9 on 12.0.0) is from before the sensors
+became fixed and ideal and has not been re-run since: the Hornet gate has to be run again. The 9 of the SDK 12.0.0
 column in the second row are the rehearsal below: the bring-up and autonomous tests on a Hornet project moved to the
 SDK 12 template. Run the matrix with `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (the build refuses a
-version that is not in `gradle/libs.versions.toml`). The OctoQuad model answers the firmware 3.1 uptime and IMU
-diagnostics that SDK 12's driver reads; SDK 12's AprilTag API break (singleton fields moved to `AprilTagSingleDetection`)
-touches the vision portal, which the simulator does not run, and not the Limelight, which speaks REST.
+version that is not in `gradle/libs.versions.toml`; quote the property in PowerShell: `'-PftcSdk=12.0.0'`). SDK 12's AprilTag
+API break (singleton fields moved to `AprilTagSingleDetection`) touches the vision portal, which the simulator does not run, and
+not the Limelight, which speaks REST.
 
 ## Hornet on SDK 12
 

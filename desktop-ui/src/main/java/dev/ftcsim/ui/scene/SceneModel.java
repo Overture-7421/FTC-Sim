@@ -141,6 +141,16 @@ public final class SceneModel {
                 && floor.y() - floor.reachY() <= -half + slack && floor.y() + floor.reachY() >= half - slack;
     }
 
+    /**
+     * A scene of fixed solids only, already in world coordinates, on the renderer's own floor: what a picture of something
+     * other than a field is made of, such as the robot editor's. Nothing moves, so no snapshot is needed to draw it.
+     *
+     * @param floorHalf half the width of the floor that is drawn, metres
+     */
+    public static SceneModel ofParts(List<Part> parts, float floorHalf) {
+        return new SceneModel(List.copyOf(parts), new int[0], new Part[0][], new int[0], new Part[0][], floorHalf);
+    }
+
     /** The same as {@link #of(FieldDescription, RobotInfo, int)} with the robot in {@link #DEFAULT_ROBOT_RGB}. */
     public static SceneModel of(FieldDescription field, RobotInfo robot) {
         return of(field, robot, DEFAULT_ROBOT_RGB);

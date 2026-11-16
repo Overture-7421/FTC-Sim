@@ -1,50 +1,72 @@
 package dev.ftcsim.app;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
+import java.util.Properties;
 
 /**
- * What the launcher's manifest ({@code jdk-manifest.json}, which the build copies into this module as a resource) says
- * about the Java the application runs on: its major version, which the launcher enforces by never starting the
- * application on another, and the options it starts the application with, which the window needs.
+ * What the build says about the Java runtime that comes with the application ({@code runtime} beside {@code lib}): the
+ * major version it was made from, and the options {@code FTC-Sim.cmd} starts it with. Both are resources of the
+ * application's jar, so the self test can check the running Java against them; the options are the file
+ * {@code runtime-options} of the distribution, which the launcher reads as a Java argument file.
  *
- * @param major         the one Java major version the application runs on
+ * @param major         the Java major version the application is compiled for and its runtime is made from
  * @param jvmArguments  the options the launcher passes to the Java that runs the application
  */
 record RuntimePin(int major, List<String> jvmArguments) {
+
+    private static final String OPTIONS_RESOURCE = "runtime-options";
+    private static final String VERSION_RESOURCE = "runtime.properties";
 
     RuntimePin {
         jvmArguments = List.copyOf(jvmArguments);
     }
 
-    /** The pin of the manifest that came with this application. */
+    /** The pin that came with this application. */
     static RuntimePin bundled() throws IOException {
-        try (InputStream manifest = RuntimePin.class.getResourceAsStream("jdk-manifest.json")) {
-            if (manifest == null) {
-                throw new IOException("the application lacks its runtime manifest (jdk-manifest.json)");
+        try (InputStream version = RuntimePin.class.getResourceAsStream(VERSION_RESOURCE);
+                InputStream options = RuntimePin.class.getResourceAsStream(OPTIONS_RESOURCE)) {
+            if (version == null || options == null) {
+                throw new IOException("the application lacks its runtime description (" + VERSION_RESOURCE + ", " + OPTIONS_RESOURCE + ")");
             }
-            return read(manifest);
+            return read(version, options);
         }
     }
 
-    static RuntimePin read(InputStream manifest) throws IOException {
-        JsonNode root = new ObjectMapper().readTree(manifest);
-        JsonNode major = root.path("runtime").path("major");
-        JsonNode options = root.path("application").path("jvmArguments");
-        if (!major.isInt() || !options.isArray()) {
-            throw new IOException("jdk-manifest.json has no runtime.major or application.jvmArguments");
+    static RuntimePin read(InputStream version, InputStream options) throws IOException {
+        Properties properties = new Properties();
+        properties.load(version);
+        int major;
+        try {
+            major = Integer.parseInt(properties.getProperty("major", "").trim());
+        } catch (NumberFormatException notANumber) {
+            throw new IOException(VERSION_RESOURCE + " has no major version: " + properties.getProperty("major"), notANumber);
         }
         List<String> arguments = new ArrayList<>();
-        for (JsonNode option : options) {
-            if (!option.isTextual() || option.asText().isBlank()) {
-                throw new IOException("jdk-manifest.json: application.jvmArguments must be a list of options");
+        for (String line : new String(options.readAllBytes(), StandardCharsets.UTF_8).split("\\R")) {
+            String option = line.strip();
+            if (!option.isEmpty() && !option.startsWith("#")) {
+                arguments.add(option);
             }
-            arguments.add(option.asText());
         }
-        return new RuntimePin(major.asInt(), arguments);
+        if (arguments.isEmpty()) {
+            throw new IOException(OPTIONS_RESOURCE + " lists no option");
+        }
+        return new RuntimePin(major, arguments);
+    }
+
+    /** Where the runtime folder of the installation this program runs from is, whether it is there or not; empty when it runs from build folders, as in development. */
+    static Optional<Path> installedRuntime() {
+        Path jar = AppClasspath.applicationJar();
+        if (jar == null || !Files.isRegularFile(jar) || jar.getParent() == null || jar.getParent().getParent() == null) {
+            return Optional.empty();
+        }
+        return Optional.of(jar.getParent().getParent().resolve("runtime"));
     }
 }

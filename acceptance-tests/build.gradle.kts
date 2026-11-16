@@ -98,15 +98,19 @@ dependencies {
     testImplementation(project(":sim-contracts"))
     testImplementation(project(":sim-core"))
     testImplementation(project(":sim-hardware"))
-    testImplementation(project(":sim-mechanisms"))
     testImplementation(project(":simulator"))
     testImplementation(project(":sim-link"))
     testImplementation(project(":project-import"))
     // The application's host, which starts the real worker and prepares projects; its interfaces are the window's.
     testImplementation(project(":app"))
     testImplementation(project(":desktop-ui"))
-    testImplementation(project(":game-decode"))
-    testImplementation(project(":game-biobuzz"))
+    testImplementation(project(":games"))
+}
+
+tasks.named<JavaCompile>("compileTestJava") {
+    // desktop-ui's Kotlin classes (the robot editor's models) carry the Compose compiler's stability annotation, whose class
+    // these tests have no reason to have on their classpath; javac warns about every such class.
+    options.compilerArgs.add("-Xlint:-classfile")
 }
 
 tasks.test {
@@ -145,6 +149,13 @@ tasks.test {
     }
     providers.gradleProperty("ftcsim.jdk").orNull?.let { systemProperty("ftcsim.jdk", it) }
     providers.gradleProperty("ftcsim.androidSdk").orNull?.let { systemProperty("ftcsim.androidSdk", it) }
+    // -Pftcsim.runtime=<runtime folder> runs the test JVMs, and so the worker the real-host tests start (it runs on the Java
+    // of its parent), on that Java runtime instead of the toolchain's JDK: app\build\dist\FTC-Sim\runtime is the distribution's own.
+    // Tests that need a JDK's tools (a compiler, jcmd) are not meant to run that way: use --tests '*RealHost*Hornet*'.
+    providers.gradleProperty("ftcsim.runtime").orNull?.let { runtime ->
+        executable = File(runtime, "bin/java.exe").path
+        outputs.upToDateWhen { false }
+    }
     // HornetBringupTest runs Hornet's OpModes on the simulated robot; the package it needs is imported once into this folder.
     providers.gradleProperty("ftcsim.hornetPackage").orNull?.let {
         systemProperty("ftcsim.hornetPackage", it)
@@ -168,10 +179,6 @@ tasks.test {
     })
     jvmArgumentProviders.add(CommandLineArgumentProvider {
         listOf("-Dftcsim.workerClasspath=${workerRuntime.files.joinToString(File.pathSeparator)}")
-    })
-    // The class path a test starts a JVM of its own with (HornetCrossJvmTest).
-    jvmArgumentProviders.add(CommandLineArgumentProvider {
-        listOf("-Dftcsim.childClasspath=${sourceSets.test.get().runtimeClasspath.asPath}")
     })
     jvmArgumentProviders.add(CommandLineArgumentProvider {
         val robotClasspath = scenarios.output.classesDirs.files + hookScenarios.output.classesDirs.files +

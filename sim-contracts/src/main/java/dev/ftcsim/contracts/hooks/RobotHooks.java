@@ -25,28 +25,6 @@ public interface RobotHooks {
         return currentTimeMillis() * 1_000_000L;
     }
 
-    /**
-     * A seed for a pseudo-random generator that robot code created without one, which the JDK would seed from the
-     * clock and the operating system, so that two runs of the same program get different numbers. A host that wants
-     * runs to repeat answers with a number derived from its own seed, in an order that does not depend on how fast
-     * the machine is. The default is unpredictable, as the JDK's own.
-     */
-    default long randomSeed() {
-        return java.util.concurrent.ThreadLocalRandom.current().nextLong();
-    }
-
-    /** The next number of {@code Math.random}; the default is the JDK's own. */
-    default double mathRandom() {
-        return Math.random();
-    }
-
-    /**
-     * Robot code did something that the simulator cannot make reproducible, such as asking {@code ThreadLocalRandom}
-     * for numbers on a JVM that does not let its seed be set. A host with diagnostics records it. The default ignores it.
-     */
-    default void nondeterministic(String description) {
-    }
-
     void sleep(long millis) throws InterruptedException;
 
     void sleep(long millis, int nanos) throws InterruptedException;
@@ -145,10 +123,9 @@ public interface RobotHooks {
 
     /**
      * Whether the calling thread is one the host orders in simulated time: the robot thread and the simulator
-     * thread. Any other thread, such as a library's timer, runs in real time next to the simulation, so what it does
-     * to the simulated world cannot be reproduced; code that reaches into the host, such as the hub wire, asks so
-     * that the host can treat such a call apart. A host with no scheduler has no other kind of thread, which is
-     * what the default says.
+     * thread. Any other thread, such as a library's timer, runs in real time next to the simulation and must not move
+     * simulated time; code that reaches into the host, such as the hub wire, asks so that the host can treat such a
+     * call apart. A host with no scheduler has no other kind of thread, which is what the default says.
      */
     default boolean isScheduledThread() {
         return true;

@@ -1,14 +1,10 @@
 package dev.ftcsim.scenarios.opmodes;
 
-import com.qualcomm.hardware.lynx.LynxModule;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.IMU;
 import com.qualcomm.robotcore.hardware.ImuOrientationOnRobot;
-import com.qualcomm.robotcore.hardware.LynxModuleImuType;
-import java.util.Map;
-import java.util.TreeMap;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
 
@@ -17,7 +13,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.YawPitchRollAngles;
  * the whole robot: the sticks turn the wheels, the chassis moves, and yaw, pitch, roll and turn rate come from the
  * IMU as the SDK's driver reads them from the chip. The IMU is asked for as most teams do, by the {@code IMU}
  * interface and the name "imu", and told how the hub is mounted; a subclass can leave the IMU out, to compare the
- * world with and without a program that reads it, or ask for a second one, an Expansion Hub's.
+ * world with and without a program that reads it.
  */
 abstract class ImuDrive extends OpMode {
     private DcMotor frontLeft;
@@ -25,8 +21,6 @@ abstract class ImuDrive extends OpMode {
     private DcMotor frontRight;
     private DcMotor backRight;
     private IMU imu;
-    private IMU secondImu;
-    private String report = "";
 
     /** What the code tells the SDK about how the hub is mounted. */
     abstract ImuOrientationOnRobot mounting();
@@ -39,11 +33,6 @@ abstract class ImuDrive extends OpMode {
     /** Whether the program reads the IMU in its loop, which takes it time, or only sets it up. */
     boolean readsImuInLoop() {
         return true;
-    }
-
-    /** The name of a second IMU the program uses too, mounted as the first is, or null. */
-    String secondImuName() {
-        return null;
     }
 
     @Override
@@ -65,18 +54,6 @@ abstract class ImuDrive extends OpMode {
             // The driver zeroes the yaw when it is created, before the code has said how the hub is mounted.
             imu.resetYaw();
         }
-        if (secondImuName() != null) {
-            secondImu = hardwareMap.get(IMU.class, secondImuName());
-            secondImu.initialize(new IMU.Parameters(mounting()));
-            secondImu.resetYaw();
-            Map<Integer, LynxModuleImuType> types = new TreeMap<>();
-            for (LynxModule hub : hardwareMap.getAll(LynxModule.class)) {
-                types.put(hub.getModuleAddress(), hub.getImuType());
-            }
-            StringBuilder hubs = new StringBuilder();
-            types.forEach((address, type) -> hubs.append(" hub ").append(address).append(" ").append(type));
-            report = imu.getClass().getSimpleName() + " and " + secondImu.getClass().getSimpleName() + ";" + hubs;
-        }
     }
 
     @Override
@@ -96,10 +73,6 @@ abstract class ImuDrive extends OpMode {
             telemetry.addData("imu pitch deg", angles.getPitch(AngleUnit.DEGREES));
             telemetry.addData("imu roll deg", angles.getRoll(AngleUnit.DEGREES));
             telemetry.addData("imu rate deg/s", imu.getRobotAngularVelocity(AngleUnit.DEGREES).zRotationRate);
-        }
-        if (secondImu != null) {
-            telemetry.addData("imu 1 yaw deg", secondImu.getRobotYawPitchRollAngles().getYaw(AngleUnit.DEGREES));
-            telemetry.addData("imus", report);
         }
     }
 

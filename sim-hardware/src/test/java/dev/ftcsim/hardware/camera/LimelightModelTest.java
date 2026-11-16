@@ -485,21 +485,24 @@ class LimelightModelTest {
     }
 
     @Test
-    void theRackAnswersForTheCamerasItHasAndReportsTheOnesItLacks() {
+    void theRackNamesItsOneCameraAfterTheFirstNameThatAsksAndReportsTheOtherNames() {
         ScriptedBody body = CameraWorld.parkedFacing(CameraWorld.blueGoal(), 1.5, 0.0, 0.0);
         CameraWorld world = new CameraWorld(body, CameraWorld.OPEN_SPACE, GOALS, CameraWorld.settings("decode"), 3);
-        CameraRack rack = new CameraRack().add("limelight", world.camera);
+        CameraRack rack = new CameraRack().plug(world.camera);
         world.rig.runTo(300 * MS);
 
-        assertTrue(rack.connect("limelight"));
-        assertTrue(rack.get("limelight", "/results", 300 * MS).ok());
+        assertTrue(rack.connect("cam"), "the first name is the camera's");
+        assertTrue(rack.connect("cam"), "and stays its name");
+        assertTrue(rack.get("cam", "/results", 300 * MS).ok());
         assertFalse(rack.connect("limelight2"));
         assertFalse(rack.get("limelight2", "/results", 300 * MS).reachable());
         assertEquals(CameraWire.Reply.UNREACHABLE, rack.post("nothing", "/pipeline-switch?index=0", null, 0).status());
 
         List<String> problems = rack.problems();
-        assertTrue(problems.stream().anyMatch(p -> p.contains("\"limelight2\"") && p.contains("no camera by that name")), problems.toString());
+        assertTrue(problems.stream().anyMatch(p -> p.contains("\"limelight2\"") && p.contains("one camera, \"cam\"")), problems.toString());
         assertTrue(problems.stream().anyMatch(p -> p.contains("\"nothing\"")), problems.toString());
         assertEquals(2, problems.size());
+        assertThrows(IllegalStateException.class, () -> rack.plug(world.camera));
+        assertFalse(new CameraRack().connect("limelight"), "a robot without a camera has every name unplugged");
     }
 }

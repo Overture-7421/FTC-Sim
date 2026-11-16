@@ -33,6 +33,9 @@ public interface RobotHost extends AutoCloseable {
 
     TelemetrySnapshot telemetry();
 
+    /** Clears what the Driver Station screen shows: the telemetry lines, the warning and the error, such as a crash. */
+    default void clearMessages() {}
+
     @Override
     void close();
 }

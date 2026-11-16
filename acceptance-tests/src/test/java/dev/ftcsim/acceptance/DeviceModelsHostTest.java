@@ -6,7 +6,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.world.SurfaceHit;
 import dev.ftcsim.hardware.device.scripted.ScriptedBody;
-import dev.ftcsim.physics.DcMotor;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -15,10 +14,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * The real SDK drivers of a goBILDA Pinpoint, a REV Color Sensor V3 and an OctoQuad, run by robot programs exactly as
- * a team writes them, talking over the simulated hub to the device models, with a chassis that follows a script so
- * that the truth the devices measure is known. Every run is repeated with other slicings of simulated time, which
- * must not change a single reading.
+ * The real SDK drivers of a goBILDA Pinpoint and a REV Color Sensor V3, run by robot programs exactly as a team writes
+ * them, talking over the simulated hub to the device models, with a chassis that follows a script so that the truth the
+ * devices measure is known. Every run is repeated with other slicings of simulated time, which must not change what a
+ * program reads.
  */
 @Timeout(300)
 class DeviceModelsHostTest {
@@ -95,20 +94,6 @@ class DeviceModelsHostTest {
 
     // ---- goBILDA Pinpoint -------------------------------------------------------------------------------------
 
-    /** Hornet's pods: the forward pod 4.467131 in right of the tracking point, the strafe pod 0.160124 in behind it. */
-    private static Map<String, Object> hornetPods() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("xPod.x", 0.02);
-        settings.put("xPod.y", -4.467131 * 0.0254);
-        settings.put("xPod.ticksPerMetre", 19_894.36789);
-        settings.put("xPod.direction", -1);
-        settings.put("yPod.x", -0.160124 * 0.0254);
-        settings.put("yPod.y", 0.03);
-        settings.put("yPod.ticksPerMetre", 19_894.36789);
-        settings.put("yPod.direction", -1);
-        return settings;
-    }
-
     /** One metre forward, a quarter turn on the spot, half a metre forward again: now along +Y. */
     private static ScriptedBody forwardTurnForward() {
         return ScriptedBody.startingAt(0, 0, 0)
@@ -120,14 +105,12 @@ class DeviceModelsHostTest {
     }
 
     private static Run pinpointRun(String opMode, long slice) throws Exception {
-        TestRobot.Builder robot = TestRobot.builder()
-                .chassis(forwardTurnForward())
-                .device("odopods", 1, "gobilda-pinpoint", hornetPods());
+        TestRobot.Builder robot = TestRobot.builder().chassis(forwardTurnForward()).pinpoint();
         return run(robot, opMode, 1000 * MS, 6000 * MS, slice, new ArrayList<>());
     }
 
     @Test
-    void pedroPathingsPinpointSequenceWorksAndTheChipTracksTheRobot() throws Exception {
+    void pedroPathingsPinpointSequenceWorksAndTheChipReportsTheTruePose() throws Exception {
         Run run = pinpointRun("Pinpoint Odometry", Long.MAX_VALUE / 4);
 
         assertEquals(List.of(), run.problems());
@@ -140,28 +123,32 @@ class DeviceModelsHostTest {
         assertEquals(Math.PI / 2, last(run, "heading"), 2e-3);
         assertEquals(667.0, last(run, "loopTime"));
         assertEquals(1.0, last(run, "status"), "READY");
-        assertEquals(19_894.37 * (1.5 + 0.113462 * Math.PI / 2), last(run, "encoderX"), 5.0);
+        assertEquals(19.89436789 * 1500.0, last(run, "encoderX"), 5.0, "the true travel forward, at the resolution the code wrote");
+        assertEquals(0.0, last(run, "encoderY"), 5.0);
         assertEquals(0.0, last(run, "velX"), 1e-3);
     }
 
     @Test
-    void whileTheRobotTurnsInPlaceThePinpointDoesNotMoveBecauseTheOffsetsAreRight() throws Exception {
+    void whileTheRobotTurnsInPlaceThePinpointDoesNotMove() throws Exception {
         Run run = pinpointRun("Pinpoint Odometry", Long.MAX_VALUE / 4);
 
         assertAllWithin("x during the turn", 1000.0, 1.5, between(run, "x", 3.6, 4.5));
         assertAllWithin("y during the turn", 0.0, 1.5, between(run, "y", 3.6, 4.5));
         List<Double> headings = between(run, "heading", 3.6, 4.5);
         assertTrue(headings.get(headings.size() - 1) - headings.get(0) > 1.0, "the heading did change");
-        assertEquals(500.0, between(run, "velY", 4.7, 5.3).get(0), 12.0, "driving along +Y at 0.5 m/s");
+        assertEquals(500.0, between(run, "velY", 4.7, 5.3).get(0), 1.0, "driving along +Y at 0.5 m/s");
     }
 
     @Test
-    void offsetsRobotCodeGotWrongMakeThePoseDriftByWhatTheGeometrySays() throws Exception {
-        Run run = pinpointRun("Pinpoint Odometry Without Offsets", Long.MAX_VALUE / 4);
+    void offsetsRobotCodeGotWrongChangeNothingBecauseThePinpointIsIdeal() throws Exception {
+        Run right = pinpointRun("Pinpoint Odometry", Long.MAX_VALUE / 4);
+        Run wrong = pinpointRun("Pinpoint Odometry Without Offsets", Long.MAX_VALUE / 4);
 
-        // The pods are 113.46 mm right of and 4.07 mm behind the tracking point; a quarter turn then moves it (a - b, a + b).
-        assertEquals(1000.0 + 117.5, last(run, "x"), 3.0);
-        assertEquals(500.0 + 109.4, last(run, "y"), 3.0);
+        assertEquals(last(right, "x"), last(wrong, "x"), 1e-3);
+        assertEquals(last(right, "y"), last(wrong, "y"), 1e-3);
+        assertEquals(last(right, "heading"), last(wrong, "heading"), 1e-6);
+        assertEquals(1000.0, last(wrong, "x"), 1.5);
+        assertEquals(500.0, last(wrong, "y"), 1.5);
     }
 
     @Test
@@ -205,7 +192,7 @@ class DeviceModelsHostTest {
                     boolean inRange = wall != null && seconds < 11 && wall.metres() <= maxMeters;
                     return inRange ? new SurfaceHit(wall.metres(), SurfaceHit.SCENERY, -1, wall.rgb()) : null;
                 })
-                .device("upSensor", 2, "rev-color-sensor-v3", sensorSettings());
+                .colorSensor(sensorSettings());
         return run(robot, "Color Range Sensor", 0, 11_500 * MS, slice, new ArrayList<>());
     }
 
@@ -266,93 +253,4 @@ class DeviceModelsHostTest {
         }
     }
 
-    // ---- OctoQuad ---------------------------------------------------------------------------------------------
-
-    /** One metre forward, half a metre left, then a quarter turn on the spot. */
-    private static ScriptedBody forwardLeftTurn() {
-        return ScriptedBody.startingAt(0, 0, 0)
-                .stay(1.5)
-                .move(2, 0.5, 0, 0)
-                .move(1, 0, 0.5, 0)
-                .move(1, 0, 0, Math.PI / 2)
-                .build();
-    }
-
-    private static Map<String, Object> octoquadSettings() {
-        Map<String, Object> settings = new HashMap<>();
-        settings.put("channel0.pod.x", 0.02);
-        settings.put("channel0.pod.y", -0.1135);
-        settings.put("channel0.pod.ticksPerMetre", 19_894.36789);
-        settings.put("channel1.pod.x", -0.004);
-        settings.put("channel1.pod.y", 0.03);
-        settings.put("channel1.pod.axisDegrees", 90);
-        settings.put("channel1.pod.ticksPerMetre", 19_894.36789);
-        settings.put("channel2.encoder", "flywheel");
-        return settings;
-    }
-
-    private static Run octoquadRun(long slice, List<String> log) throws Exception {
-        TestRobot.Builder robot = TestRobot.builder()
-                .motor("flywheel", 2, DcMotor.goBilda435(), 4.0e-4, 2.0e-4)
-                .shareEncoder("flywheel", 0)
-                .chassis(forwardLeftTurn())
-                .device("octoquad", 2, "octoquad-ftc-mk2", octoquadSettings());
-        return run(robot, "OctoQuad Localizer", 1000 * MS, 6000 * MS, slice, log);
-    }
-
-    @Test
-    void theOctoQuadsLocalizerAndEncodersWorkThroughTheSdkDriver() throws Exception {
-        Run run = octoquadRun(Long.MAX_VALUE / 4, new ArrayList<>());
-
-        assertEquals(List.of(), run.problems());
-        assertEquals(0x51, run.series().get("chipId").get(0));
-        assertEquals(List.of(3.0, 1.0, 0.0), List.of(
-                run.series().get("firmwareMajor").get(0), run.series().get("firmwareMinor").get(0), run.series().get("firmwareEngineering").get(0)));
-        assertEquals(1.0, run.series().get("directionOfChannel2").get(0), "REVERSE");
-        assertEquals(25.0, run.series().get("velocityIntervalOfChannel2").get(0));
-        assertTrue(run.counts().get("running") > 0, "the localizer finishes calibrating while the OpMode is initialising");
-        assertEquals(1000.0, last(run, "x"), 2.0);
-        assertEquals(500.0, last(run, "y"), 2.0);
-        assertEquals(Math.PI / 2, last(run, "heading"), 2e-3);
-        assertEquals(0.0, last(run, "velX"), 1.0);
-        for (double crcOk : run.series().get("crcOk")) {
-            assertEquals(1.0, crcOk, "the CRCs of both blocks hold");
-        }
-    }
-
-    @Test
-    void theOctoQuadCountsTheTrackingWheelsAndAMechanismsEncoder() throws Exception {
-        Run run = octoquadRun(Long.MAX_VALUE / 4, new ArrayList<>());
-
-        // The forward pod rolled 1 m, and 0.1135 m * pi/2 more as the robot turned; the sideways pod 0.5 m and -0.004 * pi/2.
-        assertEquals(19_894.4 + 0.1135 * Math.PI / 2 * 19_894.4, last(run, "encoder0"), 5.0);
-        assertEquals(0.5 * 19_894.4 - 0.004 * Math.PI / 2 * 19_894.4, last(run, "encoder1"), 5.0);
-        assertTrue(last(run, "encoder2") < -1000, "the flywheel's encoder, reversed on the OctoQuad, counts down");
-        assertTrue(last(run, "velocity2") < -20, "in counts per 25 ms: " + last(run, "velocity2"));
-    }
-
-    @Test
-    void theOctoQuadReadingsDoNotDependOnHowSimulatedTimeIsSliced() throws Exception {
-        Run first = octoquadRun(SLICES[0], new ArrayList<>());
-
-        for (int i = 1; i < SLICES.length; i++) {
-            assertEquals(first, octoquadRun(SLICES[i], new ArrayList<>()), "slice of " + SLICES[i] + " ns");
-        }
-    }
-
-    @Test
-    void theSdkTwelveDriverChecksTheOctoQuadsUptimeWhenTheOpModeEndsAndSdkElevenDoesNot() throws Exception {
-        List<String> log = new ArrayList<>();
-        Run run = octoquadRun(Long.MAX_VALUE / 4, log);
-        String text = String.join("\n", log);
-        String sdk = System.getProperty("ftcsim.sdkVersion", "11.1.0");
-
-        assertFalse(text.contains("Possible OctoQuad reboot"), "the chip's uptime agrees with the simulated clock");
-        assertFalse(text.contains("CRC error"));
-        assertEquals(sdk.startsWith("12"), text.contains("OctoQuad uptime delta agrees with OpMode runtime"), "SDK " + sdk);
-        assertEquals(
-                !sdk.startsWith("12"),
-                run.warnings().contains("newer minor firmware revision"),
-                "SDK 11 expects firmware 3.0.x and warns about the 3.1.0 of the model, SDK 12 expects 3.1.x: " + run.warnings());
-    }
 }

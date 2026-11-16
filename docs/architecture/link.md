@@ -47,7 +47,18 @@ skipped. The layout of every message is the table in the package description of 
 
 The protocol version changes whenever a message gains, loses or reorders a field. **Version 2** added `ArmMatch`,
 `StartMatch`, the `Catalogue` event and the match at the end of `Status`. **Version 3** added the `Refused` event; the
-decoder no longer judges a gamepad number, the worker does.
+decoder no longer judges a gamepad number, the worker does. **Version 4** added the drivetrain motors to the `Catalogue`.
+**Version 5** ended `Status` with the names the robot program asked the hardware map for that the profile does not place
+(`SessionStatus.unmapped`: a kind and a name each), which the Robot page lists. **Version 6**
+added the `Log` event (kind `0x46`): batches of lines the robot program wrote, which the window shows as its console.
+`SimulatorLink.Listener.log(List<String>)` is a default method that does nothing. The worker tees `System.out` and
+`System.err` (`LineCapture`, as `I/System.out: ...` and `W/System.err: ...`) and the SDK's log calls into a `WorkerLog`
+sink that batches lines and sends them in order, reliably (a `Log` is never dropped for a newer one). The worker does not
+log what it sends, so a failing connection cannot feed itself. **Version 7** replaced the robot profile of the `Open`
+command by the robot mapping, inline (`SessionRequest.mapping`: the robot's name, its motors each with a name, a slot, a model
+and Mirrored, then mass, wheel diameter, drive motor, turret ratio, the hub's logo and USB directions and the Limelight's
+six mount numbers), and took the profile names out of the `Catalogue`. The worker never reads `ftcsim.json`: it builds the
+robot with `RobotDesign.forField(request.field()).profile(request.mapping())`.
 
 ## Threads and what the UI can rely on
 
@@ -64,9 +75,12 @@ decoder no longer judges a gamepad number, the worker does.
   armed or started, when Start has nothing initialised, when a gamepad does not exist, and when the simulation says no.
   The message is a sentence a person can act on, in the simulation's own words.
 - **`failed(message)` is about the session or the worker, never about one command.** A session that was asked for could
-  not be opened (a profile or program that is not there, a field the worker does not know), or the open session cannot go
+  not be opened (a mapping with problems, which the message lists, a program that is not there, a field the worker does not know), or the open session cannot go
   on (the simulation stopped), or the worker is gone. While `isUsable()` is still true a new `open` or a `reset` may be
-  tried. When the connection drops or the worker exits it comes once, with how the worker ended and the last lines of its
+  tried. **`reset` is in place:** the session's robot program stays loaded and only the world is built again (a new physics
+  world and field, the chassis put into it, new mechanisms; `SimulationSession.resetWorld`). The hubs, devices and wiring are
+  kept, as a real robot's electronics are when it is carried back to its start, and simulated time goes on, so it takes
+  milliseconds where `open` takes seconds. The worker answers with `opened` again. When the connection drops or the worker exits it comes once, with how the worker ended and the last lines of its
   error output, `isUsable()` turns false and later calls do nothing.
 - A refused command is never a crash of the worker. The worker checks what the UI sends and answers with a message that
   says what there is (the OpModes of the program, the actions of the field).
@@ -80,15 +94,16 @@ decoder no longer judges a gamepad number, the worker does.
 
 Before a session is open the UI has to know what it can ask for. Right after the handshake the worker sends a
 `Catalogue`: for each field a `FieldChoice` (`id` as a `SessionRequest` takes it, display name, the start poses the
-field offers, the human actions it lists) and the names of the bundled robot profiles. `none`, the bare floor, comes first
-and has no start poses. Fields come from the worker's `FieldRegistry`, profiles from `RobotProfileLoader.bundledNames()`.
+field offers, the human actions it lists) and the motors a robot mapping may name (`MotorChoice`: id as the mapping spells
+it, display name; the default first), which the window's Robot page offers. `none`, the bare floor, comes first
+and has no start poses. Fields come from the worker's `FieldRegistry`, motors from `MotorCatalog`.
 Today it cannot change, so it is sent once; the listener method is called again if it ever does. A start pose is applied
 by the UI: it copies `x`, `y` and `headingRadians` into `startX`, `startY` and `startHeading` of the request.
 
 ## The timed match
 
 A match is played by the simulator in **simulated time**, never by the UI's clock, so pausing and speed apply to it and a
-different slicing of time gives the same match (`TimedMatch` in `simulator`; every boundary is a callback scheduled for
+different slicing of time gives the match (`TimedMatch` in `simulator`; every boundary is a callback scheduled for
 its exact instant). The lengths are named constants there: autonomous 30 s, transition 8 s, driver-controlled 120 s.
 
 | step | what happens |
@@ -108,7 +123,7 @@ added to the status `problems`.
 
 ## What the UI must do
 
-- Implement `Listener.catalogue` and build its choosers from it: fields, start poses, human actions, profiles.
+- Implement `Listener.catalogue` and build its choosers from it: fields, start poses, human actions, motors.
 - Show `SessionStatus.match` (state and `phaseElapsedNanos` against `phaseDurationNanos`) instead of a clock of its own.
 - Offer arming only when the robot is IDLE and the match state is NONE, starting only when it is ARMED, and keep Init and
   Start away from an armed or running match. Whatever slips through comes back as `refused`: show the message, keep the

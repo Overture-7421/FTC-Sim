@@ -3,6 +3,9 @@ package dev.ftcsim.ui.nav
 import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Button
 import androidx.compose.material3.Text
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
@@ -43,8 +46,8 @@ class AppShellTest {
         for (destination in Destination.entries) {
             onNodeWithText(destination.label).assertExists()
         }
-        onNodeWithText("Home").assertIsSelected()
-        onNodeWithText("Screen: Home").assertExists()
+        onNodeWithText("Projects").assertIsSelected()
+        onNodeWithText("Screen: Projects").assertExists()
     }
 
     @Test
@@ -64,20 +67,20 @@ class AppShellTest {
         show()
         onNodeWithContentDescription("Back").assertIsNotEnabled()
 
-        onNodeWithText("Setup").performClick()
+        onNodeWithText("Robot").performClick()
         waitForIdle()
         onNodeWithContentDescription("Back").assertIsEnabled()
         onNodeWithContentDescription("Back").performClick()
         waitForIdle()
 
-        onNodeWithText("Screen: Home").assertExists()
+        onNodeWithText("Screen: Projects").assertExists()
         onNodeWithContentDescription("Back").assertIsNotEnabled()
     }
 
     @Test
     fun controlNumberKeysGoToTheDestinationsInTheOrderOfTheRailWhereverTheFocusIs() = runComposeUiTest {
         show()
-        val digits = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five, Key.Six)
+        val digits = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five)
         assertEquals(digits.size, Destination.entries.size, "a digit for every destination")
 
         for ((index, destination) in Destination.entries.withIndex().reversed()) {
@@ -108,15 +111,15 @@ class AppShellTest {
         }
         waitForIdle()
 
-        assertEquals(Destination.HOME, navigator.state.value.current)
+        assertEquals(Destination.PROJECTS, navigator.state.value.current)
     }
 
     @Test
     fun theRailItemsCanBeReachedAndPressedWithoutAMouse() = runComposeUiTest {
         show()
-        onNodeWithText("Practice").requestFocus()
+        onNodeWithText("Simulator").requestFocus()
 
-        onNodeWithText("Practice").performKeyInput { pressKey(Key.Enter) }
+        onNodeWithText("Simulator").performKeyInput { pressKey(Key.Enter) }
         waitForIdle()
 
         assertEquals(Destination.PRACTICE, navigator.state.value.current)
@@ -125,7 +128,7 @@ class AppShellTest {
     @Test
     fun theBackButtonExplainsItselfInATooltipWhenThePointerRestsOnIt() = runComposeUiTest {
         show()
-        navigator.go(Destination.SETUP)
+        navigator.go(Destination.ROBOT)
         waitForIdle()
 
         onNodeWithContentDescription("Back").performMouseInput { moveTo(center) }

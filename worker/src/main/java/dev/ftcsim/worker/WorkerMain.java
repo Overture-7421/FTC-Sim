@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStream;
+import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.Socket;
@@ -81,7 +82,12 @@ public final class WorkerMain {
         }
         endWithTheLauncher(socket);
         int code;
-        try (WorkerLog log = new WorkerLog(System.out)) {
+        PrintStream stdout = System.out;
+        PrintStream stderr = System.err;
+        try (WorkerLog log = new WorkerLog(stdout)) {
+            // What team code prints goes to the log too, so that the window's console shows it as logcat would.
+            System.setOut(LineCapture.stream(log, "I/System.out"));
+            System.setErr(LineCapture.stream(log, "W/System.err"));
             Path natives = property(WorkerEnvironment.NATIVE_DIRECTORY_PROPERTY).orElseGet(WorkerEnvironment::defaultNativeDirectory);
             Path storage = property(WorkerEnvironment.STORAGE_DIRECTORY_PROPERTY).orElse(null);
             boolean ownStorage = storage == null;
@@ -91,10 +97,13 @@ public final class WorkerMain {
             try {
                 SessionFactory factory = new SessionFactory(programs(), fields(), natives, log);
                 OutputStream out = new BufferedOutputStream(socket.getOutputStream());
-                code = new WorkerServer(
-                                socket.getInputStream(), out, socket, new LiveSessions(factory, storage), factory.catalogue(), WorkerMain::say)
-                        .serve();
+                WorkerServer server = new WorkerServer(
+                        socket.getInputStream(), out, socket, new LiveSessions(factory, storage), factory.catalogue(), WorkerMain::say);
+                log.sink(server::log);
+                code = server.serve();
             } finally {
+                System.setOut(stdout);
+                System.setErr(stderr);
                 if (ownStorage) {
                     WorkerEnvironment.deleteTree(storage);
                 }

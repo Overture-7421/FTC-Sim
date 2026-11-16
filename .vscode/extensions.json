@@ -5,7 +5,9 @@
     "vscjava.vscode-java-test",
     "vscjava.vscode-java-dependency",
     "vscjava.vscode-gradle",
-    "ms-vscode.powershell",
     "JetBrains.kotlin-server"
+  ],
+  "unwantedRecommendations": [
+    "fwcd.kotlin"
   ]
 }
