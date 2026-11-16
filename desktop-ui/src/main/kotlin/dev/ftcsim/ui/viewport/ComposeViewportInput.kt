@@ -12,6 +12,8 @@ import androidx.compose.ui.input.key.nativeKeyCode
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.input.pointer.PointerEventType
+import androidx.compose.ui.input.pointer.isSecondaryPressed
+import androidx.compose.ui.input.pointer.isTertiaryPressed
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.positionChange
 import androidx.compose.ui.platform.LocalDensity
@@ -43,7 +45,10 @@ fun Modifier.heldKeyCapture(
         input.focused() && input.mapsKey(code)
     }
 
-/** [heldKeyCapture] plus drag-to-orbit and wheel zoom for a viewport that Compose draws itself. */
+/**
+ * [heldKeyCapture] plus the mouse for a viewport that Compose draws itself: left drag orbits, right or middle drag
+ * pans, and the wheel zooms.
+ */
 @Composable
 fun Modifier.composeViewportInput(
     input: ViewportInput,
@@ -61,8 +66,13 @@ fun Modifier.composeViewportInput(
                     when (event.type) {
                         PointerEventType.Press -> focusRequester.requestFocus()
                         PointerEventType.Move -> if (change.pressed) {
-                            val delta = change.positionChange() / density
-                            input.orbit(delta.x.toDouble(), delta.y.toDouble())
+                            val panning = event.buttons.isSecondaryPressed || event.buttons.isTertiaryPressed
+                            val delta = change.positionChange()
+                            if (panning) {
+                                input.pan(delta.x.toDouble(), delta.y.toDouble(), size.height.toDouble())
+                            } else {
+                                input.orbit(delta.x.toDouble() / density, delta.y.toDouble() / density)
+                            }
                         }
                         PointerEventType.Scroll -> input.zoom(-change.scrollDelta.y.toDouble())
                         else -> Unit

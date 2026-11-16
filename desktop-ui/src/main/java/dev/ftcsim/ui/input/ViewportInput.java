@@ -104,6 +104,14 @@ public final class ViewportInput {
         camera.zoom(steps);
     }
 
+    /** Slides the view with the pointer; see {@link OrbitCamera#pan}. */
+    public synchronized void pan(double deltaXPixels, double deltaYPixels, double viewportHeightPixels) {
+        if (modalOpen || (deltaXPixels == 0.0 && deltaYPixels == 0.0)) {
+            return;
+        }
+        camera.pan(deltaXPixels, deltaYPixels, viewportHeightPixels);
+    }
+
     private void update(String reason) {
         keys.setCaptureEnabled(focused && windowFocused && !modalOpen, reason);
         activeListener.accept(viewportShown && windowFocused && !modalOpen);

@@ -118,6 +118,28 @@ class ViewportInputTest {
     }
 
     @Test
+    void panningSlidesTheViewAndLeavesThePresetAndZeroMovesAreIgnored() {
+        camera.select(OrbitCamera.Preset.DRIVER);
+        long before = camera.version();
+        input.pan(0, 0, 720);
+        assertEquals(before, camera.version(), "a drag that did not move must not count as a camera change");
+
+        double[] ndc = new double[2];
+        camera.project(0, 0, 0.15, 16.0 / 9.0, ndc);
+        double x = ndc[0];
+        input.pan(128, -72, 720);
+        camera.project(0, 0, 0.15, 16.0 / 9.0, ndc);
+
+        assertEquals(OrbitCamera.Preset.FREE, camera.preset());
+        assertTrue(ndc[0] > x, "dragging right moves the scene right");
+
+        input.modalChanged(true);
+        long held = camera.version();
+        input.pan(50, 50, 720);
+        assertEquals(held, camera.version(), "a modal stops pointer input");
+    }
+
+    @Test
     void wheelZoomMovesTheCameraCloser() {
         double distance = camera.distance();
 
