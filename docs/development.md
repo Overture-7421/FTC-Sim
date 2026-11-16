@@ -1,178 +1,126 @@
 # Working on FTC-Sim
 
-How to build, change, test and hand over work in this repository. The picture of what the program is lives in
-`architecture/overview.md`; the reasons for its shape in `architecture/decisions.md`; the editor setup in `vscode.md`;
-how tests are organised in `testing.md`.
+How to set up, build, test and hand over work in this repository; read it before your first change. Related: [architecture/overview.md](architecture/overview.md) (what the program is), [architecture/decisions.md](architecture/decisions.md) (why), [testing.md](testing.md), [vscode.md](vscode.md).
 
-## What you need
+## Setup
 
 - Windows 10 or 11, x64. Nothing else is supported.
-- Any JDK 17 or newer, only so that `gradlew.bat` can start. The build forces **JDK 25** for compiling, testing and
-  running (`jdk` in `gradle\libs.versions.toml`, the daemon in `gradle\gradle-daemon-jvm.properties`) and downloads one
-  when none is installed (`--release 25`: the final foreign function API and Java 25 language features are available).
-- To import a team's Android project, or to run the Hornet tests: an Android SDK (`ANDROID_HOME`, or Android Studio's)
-  and a **JDK 17 to 21**, because a 2024 project's own Gradle cannot read Java 25 class files. The acceptance tests find
-  or provision a JDK 21 themselves when a Hornet property is given; `-Pftcsim.jdk=<JDK home>` overrides it.
+- Any JDK 17 or newer, only so `gradlew.bat` can start. The build compiles, tests and runs on **JDK 25** (`jdk` in `gradle\libs.versions.toml`, the daemon in `gradle\gradle-daemon-jvm.properties`) and downloads it when missing.
+- To import a team's Android project or run Hornet tests, also: an Android SDK (`ANDROID_HOME`, or `-Pftcsim.androidSdk=<folder>`) and an **explicit JDK 17 to 21**, because a 2024 project's own Gradle cannot read Java 25 class files.
+  - The acceptance tests find or provision a JDK 21 when a Hornet property is given; `-Pftcsim.jdk=<JDK home>` overrides it.
+  - `:project-import:test` defaults to the test JVM's own JDK 25: pass `-Pftcsim.jdk` there.
 
-## The commands
+### Hornet
 
-Run them from the repository root. Add `--console=plain` when a script or an agent reads the output.
+Hornet (`Overture-7421/FTC-Hornet-2026`) is the real team program the gated tests run; the tests are listed in [testing.md](testing.md).
+
+- `-Pftcsim.hornet=<checkout>`: your clone of Hornet. It is hashed before and after, never changed.
+- `-Pftcsim.hornetPackage=<folder>`: **a disposable folder that survives between runs.** The first run imports Hornet into it (about a minute, needs the Android SDK and a JDK 17 to 21); later runs reuse it. Never point it at anything you keep.
+- Without these properties the Hornet tests are **skipped, not failed**: read the skipped count before you claim anything about Hornet.
+- Hornet's scores are not exact. Runs may differ a little, so the tests assert "at least" over a few attempts.
+
+## Commands
+
+Run from the repository root. Add `--console=plain` when a script or an agent reads the output.
 
 ```text
-.\gradlew.bat check                       every module's tests, checkModuleRules, the distribution's tests (about 4 minutes)
-.\gradlew.bat checkModuleRules            only the dependency rules
-.\gradlew.bat :sim-core:check             one module
-.\gradlew.bat :sim-core:test --tests "dev.ftcsim.core.kernel.FixedRateWorldTest" --rerun      one class, even if nothing changed
-.\gradlew.bat :acceptance-tests:test -PftcSdk=12.0.0       the fixture suite on another SDK (every ftcSdk* version of the catalog)
-.\gradlew.bat :acceptance-tests:test -Pftcsim.hornetPackage=<folder> [-Pftcsim.hornet=<Hornet checkout>]
-.\gradlew.bat :app:run                    the real application: window, worker process, importer
-.\gradlew.bat :desktop-ui:runFake         the window alone, on the fake host of the test fixtures (add --args="--practice" for a fake session)
-.\gradlew.bat :app:dist                   app\build\dist\FTC-Sim (with its runtime\) and FTC-Sim.zip; -Pftcsim.runtimeJdk=<JDK 25 home> links the runtime from another JDK
-.\gradlew.bat :acceptance-tests:test -Pftcsim.runtime=app\build\dist\FTC-Sim\runtime --tests "*RealHost*Hornet*" -Pftcsim.hornetPackage=<folder>
-                                          the real-host Hornet tests with the bundled runtime as the JVM (and so as the worker's)
+.\gradlew.bat check                      # all tests, module rules, the distribution's tests (about 4 minutes)
+.\gradlew.bat checkModuleRules           # only the dependency rules
+.\gradlew.bat :sim-core:check            # one module
+.\gradlew.bat :sim-core:test --tests "dev.ftcsim.core.kernel.FixedRateWorldTest" --rerun   # one class, even if nothing changed
+.\gradlew.bat :acceptance-tests:test -PftcSdk=12.0.0     # fixture suite on another SDK (11.0.0 11.1.0 11.2.0 11.2.1 12.0.0)
+.\gradlew.bat :acceptance-tests:test -Pftcsim.hornetPackage=<folder> [-Pftcsim.hornet=<checkout>]   # with Hornet
+.\gradlew.bat :project-import:test -Pftcsim.hornet=<checkout> -Pftcsim.jdk=<JDK 17-21 home>        # Hornet import test only
+.\gradlew.bat :app:run                   # the real application: window, worker process, importer
+.\gradlew.bat :app:run --args="--exit-after=30 --no-focus"   # the same, closes itself, takes no focus
+.\gradlew.bat :desktop-ui:runFake        # the window alone on a fake host, no robot code (--args="--practice" for a fake session)
+.\gradlew.bat :app:dist                  # app\build\dist\FTC-Sim (with runtime\) and FTC-Sim.zip; -Pftcsim.runtimeJdk=<JDK 25 home> links another JDK
+app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test   # checks an installation without opening a window
+.\gradlew.bat :acceptance-tests:test -Pftcsim.runtime=app\build\dist\FTC-Sim\runtime --tests "*RealHost*Hornet*" -Pftcsim.hornetPackage=<folder>   # real-host Hornet tests on the bundled runtime
 ```
 
-- Test results are XML under `<module>\build\test-results\test\` and HTML under `<module>\build\reports\tests\test\`.
-  Read them instead of scraping the console.
-- Gradle restores results from its build cache and skips tasks whose inputs did not change: add `--rerun` to the task or
-  `--no-build-cache` to the build when a test must actually run. `--continue` shows every failing task, and
-  `--configure-on-demand` configures only the projects a build needs.
-- The Hornet tests are skipped, not failed, without their properties; read the skipped count (`testing.md`).
-  `-Pftcsim.hornetPackage` names a folder that survives between runs: the first run imports Hornet into it from
-  `-Pftcsim.hornet` (about a minute; needs the Android SDK), later runs reuse it.
+- Results: XML in `<module>\build\test-results\test\`, HTML in `<module>\build\reports\tests\test\`. Read them, do not scrape the console.
+- Gradle skips tasks whose inputs did not change and restores results from its cache. To force a run, add `--rerun` to the task or `--no-build-cache` to the build.
+- `--continue` shows every failing task; `--configure-on-demand` configures only the projects a build needs.
+- Logs of a real run: `%LOCALAPPDATA%\FTC-Sim\logs\app-*.log` and `worker-*.log`.
 
-### Hazards of this build
+## Rules and hazards
 
-- **Never run `gradlew clean`.** Class folders and jars that test JVMs, other builds and the editor's test runner are
-  using disappear, and several tests read `build` folders. If a module's output is truly stale, delete that module's
-  `build` folder while nothing else runs.
-- **Two builds at once on one checkout need two private environments.** Gradle keeps the history of every task in the
-  project's `.gradle` folder, and a task that runs again deletes the "previous outputs" recorded there, which can be
-  the other build's class folders. A separate build directory alone does not help. Give each build both:
+### Build and machine
+
+- **Never run `gradlew clean`.** Tests, other builds and the editor read the `build` folders. If one module's output is stale, delete that module's `build` folder while nothing else runs.
+- **Side-by-side builds need a private build directory AND `--project-cache-dir`.** Gradle's task history lives in `.gradle`, and a task that reruns deletes the "previous outputs" it recorded, possibly the other build's classes. A separate build directory alone does not help.
 
   ```text
   .\gradlew.bat --console=plain --configure-on-demand --no-build-cache --project-cache-dir C:\work\mine\gradle-cache -I C:\work\mine\private-build.init.gradle check
   ```
 
-  with `private-build.init.gradle` redirecting every project's build directory:
-
   ```groovy
+  // private-build.init.gradle
   allprojects { p ->
       p.layout.buildDirectory.set(new File('C:/work/mine/build/' + (p == p.rootProject ? 'root' : p.path.replace(':', '_'))))
   }
   ```
 
-  The included build `build-logic` still builds in `build-logic\build`: do not start two builds at the same moment
-  after changing it. Delete your private folders when you finish.
-- **Windows will not replace a jar that a process has open.** A test JVM that is still running holds the jars it was
-  started with; the build then fails to rewrite them. Find the process, confirm it is yours, `Stop-Process -Id <pid>`.
-- **One robot world per JVM.** The FTC SDK keeps state in singletons, so the acceptance tests fork a JVM per test class
-  (`forkEvery = 1`, 2 GB), because a Hornet session leaves library threads that keep the robot world alive.
-- **Do not start the real window casually.** Use `FTC-Sim.cmd --self-test`, or `--no-focus --exit-after=<seconds>`
-  (`.\gradlew.bat :app:run --args="--exit-after=30 --no-focus"`). Tests drive the UI with synthetic events inside the
-  process; nothing here may use the real mouse or keyboard or take focus from the person at the machine.
-- **Logs.** The window and the worker write `%LOCALAPPDATA%\FTC-Sim\logs\app-*.log` and `worker-*.log`: the first place to
-  look when a real run went wrong.
+  The included `build-logic` still builds in `build-logic\build`: do not start two builds at once after changing it. Delete your private folders when you finish.
+- **Windows will not replace a jar a process has open.** A leftover test JVM holds its jars and the build cannot rewrite them. Find the process, confirm it is yours, `Stop-Process -Id <pid>`.
+- **No real window, mouse, keyboard or focus.** Tests drive the UI with synthetic events inside the process. Start the real window only as `--self-test` or `--no-focus --exit-after=<seconds>`.
+- **One robot world per JVM.** The FTC SDK keeps state in singletons and Hornet leaves library threads running, so each acceptance test class gets its own JVM (`forkEvery = 1`, 2 GB).
+- **Leave the machine as you found it.** No stray process (stop only yours, by id), private folder or temporary file. A test never writes into the real `%LOCALAPPDATA%\FTC-Sim`.
+- **Git:** do not commit, push, branch or change git state unless asked.
 
-## Rules for the code
+### Code
 
-What the product is, and what it rules out, was decided by the product owner: `architecture/decisions.md` has the reasons
-and `AGENTS.md` the list of what is not yours to reverse (emulate hardware and the Android environment only, no special
-cases for a team's classes, only DECODE and BIOBUZZ, lockstep time, no repeatability promise). Ask before going against it.
+Ask before going against a product-owner decision ([architecture/decisions.md](architecture/decisions.md)).
 
-### Time
+- **No wall clock in simulation code** (`System.nanoTime`, `currentTimeMillis`, `Instant.now`, `LocalDateTime.now`). Time arrives as an argument, in simulated nanoseconds. Only `RealtimeRunner` touches wall-clock time, and only to decide when simulated time moves; the window and `platform` pace themselves in real time.
+- Nothing else is promised about order or repeatability: hash-ordered collections, unseeded randomness and `Math` instead of `StrictMath` are fine where harmless. A field's seed (`FieldSetup.seed`) still decides its layout.
+- **No duplicated logic.** Search first, then extend or reuse (`RegisterFilePeripheral`, `PieceReserve`, `Region`, `EntityIds`). Remove duplication you find, or say so.
+- **Modules have one job and the rules are enforced.** The `moduleRules` block of the root `build.gradle.kts` lists what each module may depend on; `check` fails on anything else. Do not widen it, move the code. A dependency on another module's test fixtures counts as a dependency on that module. The two games in `games` must not refer to each other (`GamePackagesTest`).
+- **A new module needs:** a folder with a `build.gradle.kts` applying `ftcsim.java-conventions`; an `include` in `settings.gradle.kts`; a `module(...)` line in `moduleRules`; an entry in the `module` list of `.vscode\tasks.json`; a `package-info.java` per package; a row in the module table of [architecture/overview.md](architecture/overview.md).
+- **Only `dev.ftcsim.contracts.*` is shared** between host and robot world. No SDK type in the host; the host's classes are invisible to the robot world.
+- Java everywhere; Kotlin only for the Compose screens of `desktop-ui`. Four-space indent, lines up to 120 columns, records for data, `final` by default.
+- **Every warning fails the build** (`-Xlint:all,-serial,-processing -Werror -parameters`; Kotlin warnings are errors). Suppress only with a reason the code shows: `restricted` on classes that exist to make native calls (`WindowsWaitableTimer`, `NativeLibrary`), `removal` on hooks that intercept members the JDK is removing (`NetworkHooks`).
+- Comment only what needs it. Javadoc on public types and non-obvious methods.
+- **Documentation is part of the change:** update the page that describes it, add a `package-info.java` to a new package, add a new page to [README.md](README.md).
+- **Tests** (JUnit 6): **a test must be able to fail; no sleeps.** More in [testing.md](testing.md).
 
-Simulated time is lockstep: robot code sees only the simulated clock (`architecture/decisions.md`, sections 2, 9 and 10).
-In code that is part of a run:
+### How the build is put together
 
-- **No wall clock.** No `System.nanoTime`, `currentTimeMillis`, `Instant.now`, `LocalDateTime.now`. Time arrives as an
-  argument, in simulated nanoseconds. The one place wall-clock time may touch a session is `RealtimeRunner`, and it only
-  decides when simulated time moves; the window and `platform` pace themselves in real time.
-
-Nothing else is promised about order or repeatability: hash-ordered collections, unseeded randomness and `Math` instead
-of `StrictMath` are fine where they are harmless. The field's own seed (`FieldSetup.seed`) still decides how a field is
-laid out.
-
-### Structure
-
-- **No logic duplication.** Search before you write (`grep`, `glob`): extend or reuse (`RegisterFilePeripheral` for
-  register maps, `PieceReserve` and `Region` for fields, `EntityIds` for ids). If you find duplicated logic, remove it or
-  say so.
-- **Modules have one responsibility, and the rules are enforced.** The `moduleRules` block of the root
-  `build.gradle.kts` lists what each module may depend on; anything else fails `check`. Do not widen the rules to get
-  something done; move the code to where it belongs. A dependency on another module's test fixtures
-  (`testFixtures(project(":x"))`) counts as a dependency on that module. A new module needs: a folder with a
-  `build.gradle.kts` that applies `ftcsim.java-conventions`, an `include` in `settings.gradle.kts`, a `module(...)` line in
-  `moduleRules`, an entry in the `module` list of `.vscode\tasks.json`, a `package-info.java` per package, and a row in
-  the module table of `architecture/overview.md`. Packages that share a module can still be kept apart: the two games in
-  `games` must not refer to each other (`GamePackagesTest`).
-- **The two sides share only `dev.ftcsim.contracts.*`.** No SDK type may appear in the host, and the host's classes are
-  not visible in the robot world.
-- **Languages.** Java everywhere; Kotlin only for the Compose screens of `desktop-ui` (the renderer, link and host seams
-  there are Java). Four-space indent, lines up to 120 columns, records for data, `final` by default.
-
-### Compiler, comments and tests
-
-- Every module compiles with `-Xlint:all,-serial,-processing -Werror -parameters` (Kotlin: all warnings are errors). Where
-  a suppression is truly right, make the reason visible from the code: `restricted` on the class that exists to make
-  native calls (`WindowsWaitableTimer`, `NativeLibrary`), `removal` on the hooks that must still intercept JDK members the
-  JDK is removing (`NetworkHooks`).
-- Comment only what needs clarification. Javadoc on public types and on non-obvious methods is welcome; narration is not.
-- **Tests** (`testing.md`): JUnit 6, `org.junit.jupiter.api`. A test must be able to fail, tests behaviour you add and
-  does not sleep.
-- **Documentation is part of the change.** A change that alters behaviour updates the page that describes it; a new
-  package gets a `package-info.java`; a new page is added to `docs/README.md`.
-
-## How the build is put together
-
-- `settings.gradle.kts` lists the modules, lets Gradle download a JDK 25 (the foojay resolver), and allows only Maven
-  Central and, for `androidx.*` alone, Google's repository: a project cannot add repositories of its own.
-- `build-logic` is an included build with three plugins. `ftcsim.java-conventions`: the JDK 25 toolchain, `--release 25`,
-  the lint flags, JUnit 6 and the test JVMs' flags. `ftcsim.module-rules`: the dependency rules. `ftcsim.ftc-sdk`: the FTC
-  SDK as the AARs it is published in, turned into jars by an artifact transform; `sdk-common` compiles against 11.1.0 and
-  `acceptance-tests` runs on the release `-PftcSdk` selects.
-- `gradle\libs.versions.toml` holds every version, exact: no ranges, and no Gradle lockfiles (the SDK-version
-  configurations of the matrix would have to be exempted, and a lock that must be regenerated at every change costs more
-  than it protects here). `gradle.properties` gives the daemon 3 GB and turns the build cache and parallel execution on.
-- What must not depend on something at compile time is handed to it as a file or a system property: `app` gives the
-  worker its jars as a class path file (`AppClasspath`, `:app:writeClasspath`, `architecture/app.md`), and
-  `acceptance-tests` computes the `-Dftcsim.*Classpath` properties of its test JVMs from isolated configurations.
-- Third-party licence notices are generated from the jars of the distribution (`:app:thirdPartyNotices`); a jar whose
-  licence cannot be determined fails the build with its name. The bundled Java runtime is made by `:app:runtimeImage`
-  (`architecture/distribution.md`).
+- `settings.gradle.kts` lists the modules, lets Gradle download JDK 25 (foojay), and allows only Maven Central and, for `androidx.*`, Google's repository. A project cannot add repositories.
+- `build-logic` has three plugins: `ftcsim.java-conventions` (toolchain, `--release 25`, lint, JUnit, test JVM flags), `ftcsim.module-rules` (the dependency rules) and `ftcsim.ftc-sdk` (SDK AARs turned into jars; `sdk-common` compiles against 11.1.0, `acceptance-tests` runs on the release `-PftcSdk` selects).
+- `gradle\libs.versions.toml` holds every version, exact: no ranges, no lockfiles. `gradle.properties` gives the daemon 3 GB and enables the build cache and parallel execution.
+- What must not depend on something at compile time is passed as a file or system property: `app` gives the worker its jars as a class path file ([architecture/app.md](architecture/app.md)); `acceptance-tests` computes the `-Dftcsim.*Classpath` properties of its test JVMs.
+- Third-party notices come from the distribution's jars (`:app:thirdPartyNotices`); a jar with an unknown licence fails the build with its name. `:app:runtimeImage` makes the bundled Java runtime ([architecture/distribution.md](architecture/distribution.md)).
 
 ## Recipes
 
-| To | Read | The short version |
+| To | Read | Do |
 |---|---|---|
-| Add an ideal sensor (an I2C model or a camera) | `architecture/adding-a-device.md`, `devices/` | One model class, one registry line (`DeviceModels.standard()`, `CameraModels.standard()`), a `HardwareDirectory.Sensor`, the binding in `I2cDriverProvider`, the rig's attachment; the SDK's own driver is the specification |
-| Add a motor to the catalogue | `robots/fixed-robots.md` (Mapping) | `MotorCatalog` in `simulator\robot`, one entry with the motor's constants and its gearbox |
-| Map another robot | `robots/fixed-robots.md`, `robots/hornet-fit.md` | The **Robot** screen writes `ftcsim.json` (schema 2) at the root of the robot project; no code |
-| Virtualise another JDK member | package-info of `dev.ftcsim.runtime`; `decisions.md` section 10 | A row in `TimeRules`, `NetworkRules` or `RewriteRules`, a method with the implied descriptor in the hooks class (`contracts.hooks`), a probe and a rewrite test; the rule tests scan the JDK and fail for a member that is missing |
-| Support another FTC SDK release | `sdk-versions.md` | A version named `ftcSdk...` in `gradle\libs.versions.toml`, the fixture suite with it, then the table in `sdk-versions.md`; keep any difference behind one seam |
-| Change the link between window and worker | `architecture/link.md`, package `link.wire` | A message that gains, loses or reorders a field bumps `Protocol.VERSION`; update the codec, the table in the package description and `link.md` together |
-| Change what the importer does | `architecture/prepared-program.md` | A change that makes packages come out different or better raises `IMPORTER_REVISION`, so that kept packages are made again |
-| Change what the bundled runtime holds, or move to another Java major version | `architecture/distribution.md`, `decisions.md` section 7 | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, the real-host Hornet tests on the runtime, and `DistributionLayoutTest`'s module list |
-| Refit the fixed robot | `robots/hornet-fit.md` | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted and should not move; change the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep and `HornetAutoRunTest` |
+| Add an ideal sensor (I2C model or camera) | [adding-a-device](architecture/adding-a-device.md) | One model class, one registry line (`DeviceModels.standard()`, `CameraModels.standard()`), a `HardwareDirectory.Sensor`, the binding in `I2cDriverProvider`, the rig's attachment. The SDK's own driver is the specification |
+| Add a motor | [fixed-robots](robots/fixed-robots.md) | One `MotorCatalog` entry (`simulator\robot`) with its constants and gearbox |
+| Map another robot | [fixed-robots](robots/fixed-robots.md), [hornet-fit](robots/hornet-fit.md) | The **Robot** screen writes `ftcsim.json` (schema 2) at the root of the robot project; no code |
+| Virtualise another JDK member | `package-info` of `dev.ftcsim.runtime`, [decisions](architecture/decisions.md) | A row in `TimeRules`, `NetworkRules` or `RewriteRules`, a method with the implied descriptor in the hooks class (`contracts.hooks`), a probe and a rewrite test. The rule tests scan the JDK and fail for a missing member |
+| Support another FTC SDK release | [sdk-versions](sdk-versions.md) | Add an `ftcSdk...` version to `gradle\libs.versions.toml`, run the fixture suite on it, add it to the table. Keep any difference behind one seam |
+| Change the window-worker link | [link](architecture/link.md) | A message that gains, loses or reorders a field bumps `Protocol.VERSION`; update the codec, the package description table and `link.md` together |
+| Change what the importer does | [prepared-program](architecture/prepared-program.md) | A change that makes packages come out different or better raises `IMPORTER_REVISION`, so kept packages are made again |
+| Change the bundled runtime or the Java major version | [distribution](architecture/distribution.md), [decisions](architecture/decisions.md) | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, the real-host Hornet tests on the runtime, and the module list in `DistributionLayoutTest` |
+| Refit the fixed robot | [hornet-fit](robots/hornet-fit.md) | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted, do not move them; update the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep and `HornetAutoRunTest` |
 
-## Before you hand work over
+## Hand-over checklist
 
-1. `.\gradlew.bat check` is green. It includes the module rules.
-2. If you touched the robot world, the SDK host, the hardware emulation, the mechanisms, physics, a field, the importer
-   or the link: run the acceptance suite with Hornet (`-Pftcsim.hornetPackage=...`) on the default SDK, and, for anything
-   that the SDK sees, the fixture suite on 11.0.0, 11.2.0, 11.2.1 and 12.0.0 (each about 3.5 minutes; Hornet about 7.5).
-3. If you touched `app`, the launcher or the window: `.\gradlew.bat :app:dist`, then `FTC-Sim.cmd --self-test` from
-   `app\build\dist\FTC-Sim` (with no Java on the PATH and no JAVA_HOME: it must run on its own `runtime`).
-4. The documentation that describes your change is updated, and `docs/README.md` still lists every page.
-5. You left no stray process, private build folder or temporary file behind, and did not change git state unless asked.
-   `git status --ignored` shows no ignored file under a `src` folder (a package folder named `build` would be ignored).
-6. Your report says what you ran, with counts, and what you could **not** verify. Do not claim what you did not run.
+1. `.\gradlew.bat check` is green (it includes the module rules).
+2. Touched the robot world, SDK host, hardware, mechanisms, physics, a field, the importer or the link? Run the acceptance suite with Hornet on the default SDK, and the fixture suite on 11.0.0, 11.2.0, 11.2.1 and 12.0.0 (about 3.5 minutes each; Hornet about 7.5).
+3. Touched `app`, the launcher or the window? Run `:app:dist`, then `FTC-Sim.cmd --self-test` from `app\build\dist\FTC-Sim` with no Java on the PATH and no `JAVA_HOME`: it must run on its own `runtime`.
+4. The pages that describe your change are updated, and [README.md](README.md) lists every page.
+5. You left no stray process, private build folder or temporary file, and `git status --ignored` shows no ignored file under a `src` folder (a package folder named `build` would be ignored).
+6. Your report says what you ran, with counts, and what you could **not** verify. Claim nothing you did not run.
 
 ## When something is odd
 
 | You see | Likely cause |
 |---|---|
-| `Could not execute test class` for a class that has no source | Stale class files in `<module>\build\classes` left by builds whose history was lost; delete that module's `build` folder (nothing else may be building) and run again |
-| Hornet or OpenGL tests show as skipped | The property is not given, or there is no OpenGL 3.3 context; skipped is not passed |
-| An acceptance test runs out of memory | Sessions of a Hornet-like program leak their robot world inside one JVM; keep one test class per JVM |
-| A session shows a problem (`SessionStatus.problems`) | The kernel noticed something about the robot thread; `decisions.md` sections 9 and 10 |
+| `Could not execute test class` for a class with no source | Stale class files in `<module>\build\classes` from builds whose history was lost: delete that module's `build` folder (nothing else building) and rerun |
+| Hornet or OpenGL tests skipped | The property is missing, or there is no OpenGL 3.3 context. Skipped is not passed |
+| An acceptance test runs out of memory | Sessions of a Hornet-like program leak their robot world inside one JVM: keep one test class per JVM |
+| A session reports a problem (`SessionStatus.problems`) | The kernel noticed something about the robot thread: [decisions](architecture/decisions.md) |

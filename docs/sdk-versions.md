@@ -1,52 +1,33 @@
-# FTC SDK 11 and SDK 12
+# FTC SDK 11 and 12
 
-The simulator never bundles an FTC SDK. A robot program brings its own: the importer packs the SDK jars the team's
-project was built with into the prepared program, and the simulator runs those real classes in the robot world. FTC-Sim
-adds the host around them (`sdk-common`, compiled once against 11.1.0), the Android shim and the hubs behind the wire. So
-"supported" means: a program built against that SDK runs, and the same adapter serves all of them.
+Which FTC SDK releases FTC-Sim runs, with the evidence; for anyone supporting a team on a given SDK or adding a release.
+
+The simulator bundles no FTC SDK. The importer packs the SDK jars the team's project was built with into the prepared program, and the robot world runs those real classes. FTC-Sim adds the host around them (`sdk-common`, compiled once against 11.1.0), the Android shim and the hubs behind the wire. "Supported" means a program built against that SDK runs on the same adapter.
 
 ## What was checked
 
-| Check | SDK 11.0.0 | 11.1.0 | 11.2.0 | 11.2.1 | 12.0.0 |
+| Check | 11.0.0 | 11.1.0 | 11.2.0 | 11.2.1 | 12.0.0 |
 |---|:-:|:-:|:-:|:-:|:-:|
-| The fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, the IMU, unmapped pins, the Pinpoint, the colour sensor, sensors by driver class, the Limelight, mechanisms and the turret fixture, sessions and matches on the real SDK | 169 pass | 169 pass | 169 pass | 169 pass | 169 pass |
-| Hornet, a real program (Pedro Pathing, SolversLib, Panels, Limelight): 12 OpModes, autos, teleop, tuners, both fields | | 19 pass | | | 9 pass, see below (2026-11-15, not re-run) |
+| Fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, IMU, unmapped pins, Pinpoint, colour sensor, sensors by driver class, Limelight, mechanisms, the turret fixture, sessions and matches | 169 pass | 169 pass | 169 pass | 169 pass | 169 pass |
+| Hornet (12 OpModes, autos, teleop, tuners, both fields) | | 19 pass | | | 9 pass, rehearsal below (2026-11-15, not re-run) |
 
-All of it was run on 2026-11-16 except where a cell says otherwise. The SDK 11.1.0 column is the default of the build. The
-acceptance suite has 187 tests; 18 of them need a prepared Hornet program (and `HornetImportTest` in `project-import` a
-checkout) and are skipped without one, which leaves the 169 of the first row. The 19 of the Hornet row are all of those
-that need the checkout, run together with it on 11.1.0. The 9 of the SDK 12.0.0 column are the rehearsal below.
+Everything else ran on 2026-11-16. 11.1.0 is the build's default.
 
-Run the matrix with `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (quote the property in PowerShell:
-`'-PftcSdk=12.0.0'`). Every `ftcSdk*` version of `gradle/libs.versions.toml` is accepted and the build refuses any other, so
-a new release needs only a catalog line (`development.md`, recipes). SDK 12's AprilTag API break (singleton fields moved to
-`AprilTagSingleDetection`) touches the vision portal, which the simulator does not run, and not the Limelight, which speaks
-REST.
+- The acceptance suite has 187 tests. 18 need a prepared Hornet program (and `HornetImportTest` in `project-import` needs a checkout); they skip without one, leaving the 169.
+- The 19 Hornet tests are all those needing the checkout, run with it on 11.1.0. The 9 on 12.0.0 are the rehearsal.
+- To run the matrix: `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (quote it in PowerShell: `'-PftcSdk=12.0.0'`). The build accepts every `ftcSdk*` version of `gradle/libs.versions.toml` and refuses any other, so a new release needs one catalog line ([development.md](development.md), recipes).
+- SDK 12 moved the AprilTag singleton fields to `AprilTagSingleDetection`. That touches the vision portal, which the simulator does not run, not the Limelight, which speaks REST.
 
 ## Hornet on SDK 12
 
-Hornet is written for SDK 11.1.0 and cannot move to SDK 12 on its own: SolversLib 0.3.4 declares the FTC libraries
-it needs as `{strictly 11.1.0}`, so Gradle refuses `RobotCore:12.0.0` next to it. A team that moves needs a SolversLib
-built for SDK 12. To see whether FTC-Sim would cope when that happens, the upgrade was rehearsed by hand, the way a team
-does it:
+Hornet targets SDK 11.1.0 and cannot move on its own: SolversLib 0.3.4 declares its FTC libraries `{strictly 11.1.0}`, so Gradle refuses `RobotCore:12.0.0`. A team that moves needs a SolversLib built for SDK 12. To see whether FTC-Sim would cope, the upgrade was rehearsed once by hand:
 
-1. Take the FIRST template of the new release (`FIRST-Tech-Challenge/FtcRobotController`, tag `v12.0`; Gradle 9.1.0, Android
-   Gradle plugin 8.13.2) and put Hornet's `TeamCode` folder (its own code, unchanged) in place of the template's, with
-   Hornet's two Maven repositories, its Pedro, Panels and SolversLib dependencies and its `compileSdk 34`.
-2. Override SolversLib's strict pin: `configurations.configureEach { resolutionStrategy.eachDependency { if
-   (it.requested.group == 'org.firstinspires.ftc') it.useVersion '12.0.0' } }`. This is a forced binary upgrade: the
-   libraries were compiled against 11.1.0 and run on 12.0.0 classes. It is **not a statement that SolversLib supports
-   SDK 12**.
-3. Prepare that folder with the importer and run the Hornet tests on the package
-   (`-Pftcsim.hornet=<that folder> -Pftcsim.hornetPackage=<a new folder>`).
+1. Take the FIRST template of the release (`FIRST-Tech-Challenge/FtcRobotController`, tag `v12.0`; Gradle 9.1.0, Android Gradle plugin 8.13.2). Replace its `TeamCode` with Hornet's, unchanged, with Hornet's two Maven repositories, its Pedro, Panels and SolversLib dependencies and `compileSdk 34`.
+2. Override SolversLib's pin: `configurations.configureEach { resolutionStrategy.eachDependency { if (it.requested.group == 'org.firstinspires.ftc') it.useVersion '12.0.0' } }`. This is a forced binary upgrade (libraries built for 11.1.0 run on 12.0.0 classes). It is **not a statement that SolversLib supports SDK 12**.
+3. Prepare that folder with the importer and run the Hornet tests on it: `-Pftcsim.hornet=<that folder> -Pftcsim.hornetPackage=<a new folder>`.
 
-Result: the importer builds it (with the project's own wrapper, on a JDK 21), the package holds the SDK 12.0.0 jars, the
-host lists the same 12 OpModes, every one initialises, starts and stops, and the autonomous routines score what they score
-on 11.1.0 (Close Auto 15, Far Auto 9, on both alliances). Nothing in FTC-Sim had to change. It was run once, by hand; the
-steps above are the procedure.
+Result: the importer builds it with the project's own wrapper on a JDK 21; the package holds the SDK 12.0.0 jars; the host lists the same 12 OpModes; each initialises, starts and stops; the autos score as on 11.1.0 (Close Auto 15, Far Auto 9, both alliances). Nothing in FTC-Sim had to change.
 
 ## When a program fails on one SDK only
 
-The simulator reports what the SDK reports. Start from the problem list of the session and the worker's log
-(`%LOCALAPPDATA%\FTC-Sim\logs`): a class the shim cannot load, a call into Android that the shim does not have, or a
-device the robot's mapping does not wire is named there with the member and where it was called from.
+The simulator reports what the SDK reports. Start from the session's problem list and the worker's log (`%LOCALAPPDATA%\FTC-Sim\logs`): a class the shim cannot load, an Android call the shim lacks, or a device the mapping does not wire is named there with the member and its caller.
