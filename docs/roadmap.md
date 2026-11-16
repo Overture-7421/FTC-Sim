@@ -42,15 +42,13 @@ Each is explained in `architecture/decisions.md` section 10.
   LEAVE, BASE and PARK is a rectangle (default 18 in), BIOBUZZ's manual leaves two scoring questions open.
 - Hornet cannot score on BIOBUZZ: its camera map, intake and aim are DECODE's. That is the robot code, not the simulator. It
   also means BIOBUZZ's turret has no real program to check it with; only a fixture OpMode does (`robots/fixed-robots.md`).
-- The Limelight was never plugged into a session before the rig did it (it was only in the tests), so Hornet's `Camera`
-  subsystem, which corrects its pose from `botpose`, now gets results in the window; check that a Hornet run still behaves.
 
 ## The window
 
 All in `architecture/ui.md` ("Deliberately not done yet"). The ones that matter most to a driver:
 
 - The robot is its chassis box in the simulator's viewport; no wheels, and nothing for a mechanism that rises above the box (a piece carried up
-  Hornet's conveyor is drawn above it). A profile with visual parts would fix this.
+  Hornet's conveyor is drawn above it). Drawing the design's wheels and mechanisms would fix this.
 - No countdown, buzzer or sound in a timed match; no rumble or LED on controllers; controller hot-plug and GUID matching are
   untested on hardware.
 - Start poses are matched to alliances by the name beginning with RED or BLUE (`StartPoses`); a structured alliance on

@@ -86,7 +86,7 @@ needs a Windows graphics preference or a driver setting, which was not changed.
 ## The real fields
 
 Everything above was measured on a scene we made up. `RealFieldViewportTest` (acceptance-tests) opens real
-`SimulationSession`s with the Hornet profile on DECODE and BIOBUZZ and draws their `FieldDescription` and
+`SimulationSession`s with Hornet's mapping on DECODE and BIOBUZZ and draws their `FieldDescription` and
 `WorldSnapshot` with the application's own renderer, scene model and camera presets on a hidden OpenGL context at 1280x720
 with 4x MSAA, into `acceptance-tests\build\screens\real-*.png` (a build output, not committed). It was run on the RTX 5080
 (OpenGL 3.3 core, driver 621.14) and is skipped where there is no OpenGL 3.3 context.

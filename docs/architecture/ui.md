@@ -467,7 +467,7 @@ OpenGL (which way the driver looks, the chase camera stopping short of a goal or
 detection).
 
 `RealFieldViewportTest` (in `acceptance-tests`, because it needs a real `SimulationSession`) is the harness for how the
-real fields look: it opens Hornet's profile on DECODE and BIOBUZZ, draws their description and snapshots with the
+real fields look: it opens Hornet's mapping on DECODE and BIOBUZZ, draws their description and snapshots with the
 application's own renderer and camera presets on a hidden OpenGL context, writes 1280x720 pictures to
 `acceptance-tests\build\screens\real-*.png` (top, driver, corners, chase and a view from in front of the robot for each field
 and alliance, the obelisk and the goal tags, the ramp, pieces carried in the robot and in flight, a BIOBUZZ HIVE after it
@@ -480,7 +480,7 @@ a build output and are not committed; `viewport-measurements.md` describes what 
 - The perimeter walls are drawn opaque. DECODE's are polycarbonate in reality, so a low camera behind the near wall loses the
   pieces that lie against it; drawing walls translucent needs a sorted pass and a way to know which scenery is glass.
 - The robot is the chassis box from `RobotInfo` and nothing else: no wheels, and nothing for a mechanism that rises above
-  the box (a piece carried up Hornet's conveyor is drawn above the box). A profile with visual parts would fix this.
+  the box (a piece carried up Hornet's conveyor is drawn above the box). Drawing the design's wheels and mechanisms would fix this.
 - `FieldDescription` does not say which way the driver stands, so Top and Driver use the start pose's heading when it is
   square to the walls and the audience's end (-X) otherwise; a field that says so would remove the guess.
 - The real file chooser (`AwtFileChooser`) and log opener (`AwtLogOpener`), and the real preparer and link, are only

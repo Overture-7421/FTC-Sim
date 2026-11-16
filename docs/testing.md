@@ -1,9 +1,9 @@
 # Testing
 
 What is tested where, how to run it, and how to write a test that earns its place. At the last full verification
-(2026-11-15, after the sensors became fixed and ideal and the turret was added) `gradlew check` ran 1,927 tests with no
-failures; 21 were skipped because they need Hornet (20 in `acceptance-tests`, 1 in `project-import`). The Hornet tests passed
-when last given it (2026-11-14), before this change, and have to be run again.
+(2026-11-16, on a Ryzen 9 9950X) `gradlew check` with the Hornet properties given ran 1,790 tests with no failures and none
+skipped; without them 19 are skipped because they need Hornet (18 in `acceptance-tests`, 1 in `project-import`). The
+counts change with every test added or removed: run the build for today's.
 
 ## The layers
 
@@ -59,7 +59,7 @@ Hornet mapping that the tests that open a session through a request share.
 | `HornetTeleopTest` | A synthetic gamepad drives the robot across the field and the left trigger aligns and shoots what it carries |
 | `HornetBiobuzzTest` | All 12 OpModes run on BIOBUZZ with a silent simulator (Hornet cannot score there: its camera map, intake and aim are DECODE's) |
 | `HornetNetworkTest` | Panels' ports are simulated; no real socket is open during a run |
-| `HornetPackageTest`, `HornetImportTest` | The unmodified checkout imports, the original is hashed before and after, the package opens and the SDK host lists its OpModes |
+| `HornetPackageTest` (`acceptance-tests`), `HornetImportTest` (`project-import`) | The unmodified checkout imports, the original is hashed before and after, the package opens and the SDK host lists its OpModes |
 | `RealHostHornetTest` | A session on Hornet in the real worker; the preparer builds nothing twice |
 
 Hornet is `Overture-7421/FTC-Hornet-2026`; everything here was developed and checked against commit `5bdc809`

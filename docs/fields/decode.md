@@ -132,6 +132,6 @@ robot's outline is within 2.5 cm of the zone's square, partial when it overlaps 
 the panels, obelisk faces, start poses, step cost. `DecodeScoringTest`: drop, overflow, pattern, bounces, gate
 and robot, phases and settle, human player, returned pieces, depot, base. `GoalFlowTest`: balls dropped on a 4 cm grid
 over the opening and thrown at the boards from 1.0 to 1.3 m, both goals, all reach the SQUARE. `RampLineTest`,
-`ZonesTest`, `OrientationTest`. `ShotSweepTest` in `simulator` shoots the robot of the Hornet profile into the field from
+`ZonesTest`, `OrientationTest`. `ShotSweepTest` in `simulator` shoots the fixed robot (fitted to Hornet) into the field from
 all over the launch zones (see `docs/robots/hornet-profile.md`). A step with the whole field costs 0.03 to 0.04 ms at
 the median and 0.1 to 0.18 ms at the 99th percentile, measured on a Ryzen 9 9950X while other work ran on the machine.

@@ -68,9 +68,8 @@ the fixed tags of the field the robot stands on (`field`: the camera is set up f
 1280x960. The camera's pipelines are not a setting a student makes. **The mount of Hornet's camera and its 1280x960 pipeline
 are estimates**: Hornet's repository does not say.
 
-Before this was wired into the rig (it was only available to the tests), the Limelight of a session was always unplugged;
-with the camera plugged in, a program that corrects its pose from `botpose` (Hornet's `Camera` subsystem does) now gets
-results.
+With the camera plugged into the session, a program that corrects its pose from `botpose` (Hornet's `Camera` subsystem does)
+gets results.
 
 ## Measured with the tests
 

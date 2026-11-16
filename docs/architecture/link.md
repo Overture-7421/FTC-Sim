@@ -58,7 +58,7 @@ log what it sends, so a failing connection cannot feed itself. **Version 7** rep
 command by the robot mapping, inline (`SessionRequest.mapping`: the robot's name, its motors each with a name, a slot, a model
 and Mirrored, then mass, wheel diameter, drive motor, turret ratio, the hub's logo and USB directions and the Limelight's
 six mount numbers), and took the profile names out of the `Catalogue`. The worker never reads `ftcsim.json`: it builds the
-robot with `RobotDesign.forField(request.field()).profile(request.mapping())`.
+robot with `RobotDesign.forField(request.field()).spec(request.mapping())`.
 
 ## Threads and what the UI can rely on
 
