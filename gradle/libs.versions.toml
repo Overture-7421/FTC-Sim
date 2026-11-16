@@ -11,7 +11,8 @@ composeIconsCore = "1.7.3"
 coroutines = "1.11.0"
 lwjgl = "3.4.3"
 ftcSdk11 = "11.1.0"
-# The other published SDK 11 releases, which the acceptance tests also run on (-PftcSdk=<version>).
+# The other published SDK 11 releases, which the acceptance tests also run on (-PftcSdk=<version>). Every version named
+# ftcSdk* is accepted by -PftcSdk, so a new release needs only a line here.
 ftcSdk11First = "11.0.0"
 ftcSdk11Second = "11.2.0"
 ftcSdk11Last = "11.2.1"

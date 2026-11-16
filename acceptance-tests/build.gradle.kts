@@ -11,10 +11,9 @@ plugins {
 }
 
 // The tests run on SDK 11.1.0 unless -PftcSdk selects another release the simulator supports: the other SDK 11 releases or 12.0.0.
-val supportedSdks = listOf(
-    libs.versions.ftcSdk11First.get(), libs.versions.ftcSdk11.get(), libs.versions.ftcSdk11Second.get(),
-    libs.versions.ftcSdk11Last.get(), libs.versions.ftcSdk12.get(),
-)
+val sdkCatalog = versionCatalogs.named("libs")
+val supportedSdks = sdkCatalog.versionAliases.filter { it.startsWith("ftcSdk") }
+    .map { sdkCatalog.findVersion(it).get().requiredVersion }
 val sdkVersion = providers.gradleProperty("ftcSdk").orElse(libs.versions.ftcSdk11).get()
 require(sdkVersion in supportedSdks) { "-PftcSdk=$sdkVersion is not an SDK release the simulator supports: $supportedSdks" }
 
