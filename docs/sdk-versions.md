@@ -9,12 +9,13 @@ adds the host around them (`sdk-common`, compiled once against 11.1.0), the Andr
 
 | Check | SDK 11.0.0 | 11.1.0 | 11.2.0 | 11.2.1 | 12.0.0 |
 |---|:-:|:-:|:-:|:-:|:-:|
-| The fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, the IMU, unmapped pins, the Pinpoint, the colour sensor, sensors by driver class, the Limelight, mechanisms and the turret fixture, sessions and matches on the real SDK | not re-run since the sensors became fixed | 169 pass | not re-run | not re-run | 169 pass |
-| Hornet, a real program (Pedro Pathing, SolversLib, Panels, Limelight): 12 OpModes, autos, teleop, tuners, both fields | | 193 pass | | | 9 pass, see below |
+| The fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, the IMU, unmapped pins, the Pinpoint, the colour sensor, sensors by driver class, the Limelight, mechanisms and the turret fixture, sessions and matches on the real SDK | 169 pass | 169 pass | 169 pass | 169 pass | 169 pass |
+| Hornet, a real program (Pedro Pathing, SolversLib, Panels, Limelight): 12 OpModes, autos, teleop, tuners, both fields | | 19 pass | | | 9 pass, see below (2026-11-15, not re-run) |
 
-The SDK 11.1.0 column is the default of the build. The suite has 189 tests (2026-11-15), 20 of which need a prepared Hornet
-program, which leaves the 169 of the first row. The Hornet row is from before the sensors became fixed and ideal and has
-not been re-run since: the Hornet gate has to be run again. The 9 of the SDK 12.0.0 column are the rehearsal below.
+All of it was run on 2026-11-16 except where a cell says otherwise. The SDK 11.1.0 column is the default of the build. The
+acceptance suite has 187 tests; 18 of them need a prepared Hornet program (and `HornetImportTest` in `project-import` a
+checkout) and are skipped without one, which leaves the 169 of the first row. The 19 of the Hornet row are all of those
+that need the checkout, run together with it on 11.1.0. The 9 of the SDK 12.0.0 column are the rehearsal below.
 
 Run the matrix with `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (quote the property in PowerShell:
 `'-PftcSdk=12.0.0'`). Every `ftcSdk*` version of `gradle/libs.versions.toml` is accepted and the build refuses any other, so
@@ -48,4 +49,4 @@ steps above are the procedure.
 
 The simulator reports what the SDK reports. Start from the problem list of the session and the worker's log
 (`%LOCALAPPDATA%\FTC-Sim\logs`): a class the shim cannot load, a call into Android that the shim does not have, or a
-device the profile does not wire is named there with the member and where it was called from.
+device the robot's mapping does not wire is named there with the member and where it was called from.
