@@ -2,6 +2,7 @@ package dev.ftcsim.ui.practice
 
 import androidx.compose.ui.test.ComposeUiTest
 import androidx.compose.ui.test.ExperimentalTestApi
+import androidx.compose.ui.test.assertIsEnabled
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
@@ -11,6 +12,8 @@ import dev.ftcsim.ui.host.ProgramPreparer.Step
 import dev.ftcsim.ui.prepare.PrepareState
 import dev.ftcsim.ui.prepare.Project
 import dev.ftcsim.ui.project.ProjectActivity
+import dev.ftcsim.ui.render.OrbitCamera
+import dev.ftcsim.ui.scene.ViewportFeed
 import java.nio.file.Path
 import kotlinx.coroutines.flow.MutableStateFlow
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -66,6 +69,27 @@ class RestartStripTest {
 
         onNodeWithText("Starting").assertExists()
         onNodeWithText("Cancelling").assertIsNotEnabled()
+    }
+
+    @Test
+    fun whileTheCodeBuildsTheMainButtonWaitsInsteadOfOfferingInit() = runComposeUiTest {
+        val rig = Rig()
+        val link = StubLink()
+        val session = PracticeSession(ViewportFeed(), OrbitCamera()).also { it.attach(link) }
+        session.open(Fixtures.request())
+        link.listener!!.opened(Fixtures.info())
+        link.listener!!.status(Fixtures.status())
+        rig.activity.value = ProjectActivity.Building(project, restarting = true)
+        setContent { FtcSimTheme(darkTheme = true) { PracticeTopBar(session, PracticeUi(), rig, {}) } }
+
+        onNodeWithText("Restarting").assertIsNotEnabled()
+        onNodeWithText("Init").assertDoesNotExist()
+
+        rig.activity.value = ProjectActivity.Idle
+        waitForIdle()
+
+        onNodeWithText("Restarting").assertDoesNotExist()
+        onNodeWithText("Init").assertIsEnabled()
     }
 
     @Test

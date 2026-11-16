@@ -42,14 +42,37 @@ class ControlsTest {
     }
 
     @Test
-    fun restartingTheCodeIsPossibleInEveryPhaseOfAnOpenSessionButNotWhileTheCodeIsBeingBuilt() {
+    fun restartingTheCodeIsPossibleInEveryPhaseOfAnOpenSessionButNotWhileSomethingIsWaited() {
         for (phase in RobotPhase.entries) {
             assertTrue(controls(phase = phase).restart, "phase $phase")
         }
-        val building = Controls.of(SessionState(Connection.OPEN, Fixtures.info(), "Teleop A"), RunState(), building = true)
+        val building = Controls.of(SessionState(Connection.OPEN, Fixtures.info(), "Teleop A"), RunState(), waiting = "Restarting")
 
         assertFalse(building.restart, "a second restart waits for the first")
-        assertTrue(building.pause && building.reset, "the session itself is untouched while the code builds")
+        assertTrue(building.pause, "pausing is still the driver's")
+    }
+
+    @Test
+    fun whileTheRunControlsWaitNothingCanBeInitialisedStartedStoppedResetOrArmed() {
+        val session = SessionState(Connection.OPEN, Fixtures.info(), "Teleop A")
+
+        for (phase in RobotPhase.entries) {
+            val waiting = Controls.of(session, RunState(phase), waiting = "Resetting")
+
+            assertFalse(waiting.init || waiting.start || waiting.stop || waiting.selectOpMode, "phase $phase")
+            assertFalse(waiting.arm || waiting.restart || waiting.reset, "phase $phase")
+            assertEquals("Resetting", waiting.matchReason)
+        }
+    }
+
+    @Test
+    fun theRunControlsWaitForTheCodeBeingBuiltAHoldOrTheSessionOpeningInThatOrder() {
+        assertNull(waitingFor(Connection.OPEN, building = false, holds = emptySet()))
+        assertNull(waitingFor(Connection.NONE, building = false, holds = emptySet()))
+        assertEquals("Restarting", waitingFor(Connection.OPENING, building = true, holds = setOf(Hold.RESETTING, Hold.SCANNING)))
+        assertEquals("Resetting", waitingFor(Connection.OPENING, building = false, holds = setOf(Hold.RESETTING, Hold.SCANNING)))
+        assertEquals("Starting", waitingFor(Connection.OPENING, building = false, holds = setOf(Hold.SCANNING)))
+        assertEquals("Scanning", waitingFor(Connection.OPEN, building = false, holds = setOf(Hold.SCANNING)))
     }
 
     @Test

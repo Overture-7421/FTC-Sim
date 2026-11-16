@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -62,8 +63,10 @@ fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestar
     val match by session.match.collectAsState()
     val plan by session.matchPlan.collectAsState()
     val activity by restart.activity.collectAsState()
+    val holds by session.holds.collectAsState()
     val building = activity is ProjectActivity.Building
-    val controls = Controls.of(state, run, match, building = building)
+    val waiting = waitingFor(state.connection, building, holds)
+    val controls = Controls.of(state, run, match, waiting)
     TopAppBar(
         expandedHeight = 56.dp,
         title = {
@@ -76,7 +79,7 @@ fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestar
                         onExpandedChange = { ui.opModeMenuOpen = it },
                         onSelect = { session.selectOpMode(it) },
                     )
-                    MainButton(run.phase, controls, session, focusViewport)
+                    MainButton(run.phase, controls, waiting, session, focusViewport)
                 }
             }
         },
@@ -100,9 +103,26 @@ fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestar
     )
 }
 
-/** The one button of a run: Init from idle, Start once initialised, Stop while it runs. */
+/**
+ * The one button of a run: Init from idle, Start once initialised, Stop while it runs. While the run controls wait for
+ * something ([waitingFor]) it is a disabled "[waiting]" with a spinner, so that nothing looks ready that is about to
+ * be replaced or is being used by the application.
+ */
 @Composable
-private fun MainButton(phase: RobotPhase, controls: Controls, session: PracticeSession, focusViewport: () -> Unit) {
+private fun MainButton(phase: RobotPhase, controls: Controls, waiting: String?, session: PracticeSession, focusViewport: () -> Unit) {
+    if (waiting != null) {
+        FilledTonalButton(
+            onClick = {},
+            enabled = false,
+            contentPadding = ButtonDefaults.ButtonWithIconContentPadding,
+            modifier = Modifier.semantics { contentDescription = waiting },
+        ) {
+            CircularProgressIndicator(modifier = Modifier.size(ButtonDefaults.IconSize), strokeWidth = 2.dp)
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text(waiting)
+        }
+        return
+    }
     when (phase) {
         RobotPhase.IDLE -> FilledTonalButton(onClick = { session.init(); focusViewport() }, enabled = controls.init) { Text("Init") }
         RobotPhase.INIT -> Button(

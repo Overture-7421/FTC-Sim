@@ -3,6 +3,7 @@ package dev.ftcsim.ui.practice
 import dev.ftcsim.contracts.field.Score
 import dev.ftcsim.contracts.hardware.UnmappedDevice
 import dev.ftcsim.contracts.robot.GamepadState
+import dev.ftcsim.contracts.robot.RobotPhase
 import dev.ftcsim.contracts.robot.TelemetrySnapshot
 import dev.ftcsim.contracts.session.Catalogue
 import dev.ftcsim.contracts.session.Readout
@@ -50,6 +51,8 @@ class PracticeSession(
     private val mutableHardware = MutableStateFlow<List<Readout>>(emptyList())
     private val mutableUnmapped = MutableStateFlow<List<UnmappedDevice>>(emptyList())
     private val mutableOpenings = MutableStateFlow(0)
+    private val mutableHolds = MutableStateFlow<Set<Hold>>(emptySet())
+    private val openedListeners = java.util.concurrent.CopyOnWriteArrayList<(SessionInfo) -> Unit>()
 
     /** What the robot program and the SDK logged during the session that is open; the newest lines only. */
     val console = OutputLog()
@@ -67,7 +70,9 @@ class PracticeSession(
     private var request: SessionRequest? = null
     private var latestStatus: SessionStatus? = null
     private var failure: String? = null
+    private var awaitingIdle = false
     private var shownSimTime = -TIMING_PERIOD_NANOS
+    @Volatile private var openingNumber = 0
     @Volatile private var generation = 0L
 
     val session: StateFlow<SessionState> = mutableSession.asStateFlow()
@@ -81,6 +86,33 @@ class PracticeSession(
 
     /** How many times a session has opened, a reset or a restart included; two sessions with equal descriptions are still two. */
     val openings: StateFlow<Int> = mutableOpenings.asStateFlow()
+
+    /**
+     * Why the run controls (Init, Start, Stop) are off although a session is open. The simulator opens a session before
+     * its robot program has stopped, and the application runs an OpMode of its own to find the hardware, so the phase
+     * the status shows is not always the driver's: until a hold ends, nothing of the driver's may be started on it. A
+     * session that opens starts with none, apart from the ones [whenOpened] claims at once.
+     */
+    val holds: StateFlow<Set<Hold>> = mutableHolds.asStateFlow()
+
+    /** Takes [hold] for the session that is open now; returns which opening that is, for [release]. */
+    fun hold(hold: Hold): Int {
+        mutableHolds.update { it + hold }
+        return openingNumber
+    }
+
+    /** Ends [hold], unless a session has opened since [opening], which then owns it. */
+    fun release(hold: Hold, opening: Int) {
+        if (opening == openingNumber) mutableHolds.update { it - hold }
+    }
+
+    /**
+     * Calls [listener] on the link's thread as soon as a session opens, before the controls can be used on it, so that
+     * it can [hold] them without a moment in between.
+     */
+    fun whenOpened(listener: (SessionInfo) -> Unit) {
+        openedListeners += listener
+    }
     val score: StateFlow<Score> = mutableScore.asStateFlow()
     val problems: StateFlow<List<Problem>> = mutableProblems.asStateFlow()
 
@@ -163,6 +195,9 @@ class PracticeSession(
             failure = null
             latestStatus = null
             mutableSession.value = SessionState(Connection.OPENING)
+            mutableRun.value = RunState()
+            awaitingIdle = false
+            mutableHolds.value = emptySet()
             mutableMatch.value = MatchDisplay.NONE
             mutableUnmapped.value = emptyList()
             mutablePlan.value = null
@@ -195,7 +230,13 @@ class PracticeSession(
         }
 
         override fun refused(message: String) {
-            if (current()) mutableRefusals.tryEmit(message)
+            if (!current()) return
+            // A refused Reset world leaves the old session running, so the controls must not wait for a new one.
+            synchronized(lock) {
+                awaitingIdle = false
+                mutableHolds.update { it - Hold.RESETTING }
+            }
+            mutableRefusals.tryEmit(message)
         }
 
         override fun catalogue(catalogue: Catalogue) {
@@ -214,14 +255,24 @@ class PracticeSession(
         feed.show(SceneModel.of(info.field(), info.robot(), SceneModel.robotRgb(alliance)))
         synchronized(lock) {
             failure = null
-            mutableSession.update {
-                val keep = it.selectedOpMode?.takeIf { name -> info.opModes().any { mode -> mode.name() == name } }
-                SessionState(Connection.OPEN, info, keep ?: info.opModes().firstOrNull()?.name())
-            }
+            // The run of the session that ended must not show on the new one until its own status says otherwise.
+            mutableRun.value = RunState()
+            // The simulator answers Reset world with this before the robot program has finished stopping, so the
+            // reset is over only when a status of the new session says Idle.
+            awaitingIdle = Hold.RESETTING in mutableHolds.value
             mutableMatch.value = MatchDisplay.NONE
             mutableUnmapped.value = emptyList()
             mutablePlan.value = null
             refreshProblems()
+            openingNumber++
+            // What held the session that ended does not hold this one, but whoever wants to hold it must do so before
+            // the session shows as open, or there is a moment in which the driver could press Init.
+            mutableHolds.update { it - Hold.SCANNING }
+            openedListeners.forEach { it(info) }
+            mutableSession.update {
+                val keep = it.selectedOpMode?.takeIf { name -> info.opModes().any { mode -> mode.name() == name } }
+                SessionState(Connection.OPEN, info, keep ?: info.opModes().firstOrNull()?.name())
+            }
             mutableOpenings.update { it + 1 }
             // A new session starts with both gamepads untouched; tell it what they are doing now.
             for (index in gamepads.indices) {
@@ -245,6 +296,10 @@ class PracticeSession(
         mutableScore.value = status.score()
         synchronized(lock) {
             latestStatus = status
+            if (awaitingIdle && status.phase() == RobotPhase.IDLE) {
+                awaitingIdle = false
+                mutableHolds.update { it - Hold.RESETTING }
+            }
             refreshProblems()
         }
     }
@@ -252,6 +307,8 @@ class PracticeSession(
     private fun onFailed(message: String) {
         synchronized(lock) {
             failure = message
+            awaitingIdle = false
+            mutableHolds.value = emptySet()
             mutableSession.update { it.copy(connection = Connection.FAILED) }
             refreshProblems()
         }
@@ -308,7 +365,10 @@ class PracticeSession(
     fun setSpeed(speed: Double) = send { it.setSpeed(speed) }
 
     /** Stops the code and puts the world back at the start; the link answers with `opened` again, almost at once. */
-    fun reset() = send { it.reset() }
+    fun reset() = send {
+        mutableHolds.update { it + Hold.RESETTING }
+        it.reset()
+    }
 
     fun humanAction(id: String) = send { it.humanAction(id) }
 

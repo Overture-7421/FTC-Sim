@@ -2,7 +2,9 @@ package dev.ftcsim.ui.project
 
 import dev.ftcsim.contracts.hardware.UnmappedDevice
 import dev.ftcsim.contracts.robot.RobotPhase
+import dev.ftcsim.ui.practice.Connection
 import dev.ftcsim.ui.practice.Fixtures
+import dev.ftcsim.ui.practice.Hold
 import java.nio.file.Path
 import java.util.concurrent.TimeUnit
 import kotlinx.coroutines.CoroutineScope
@@ -28,6 +30,7 @@ import org.junit.jupiter.api.Test
 class HardwareScanTest {
     private val rig = ProjectRig()
     private val scan = rig.ui.scan
+    private val holds get() = rig.services.session.holds
     private val scope = CoroutineScope(Dispatchers.Default)
     private val follower: Job = scope.launch { scan.run() }
 
@@ -116,6 +119,39 @@ class HardwareScanTest {
         assertEquals(ScanState.Quiet, rig.await(scan.state) { it == ScanState.Quiet })
     }
 
+
+    @Test
+    fun aSessionThatOpensLaterIsHeldForTheScanFromTheMomentItOpensUntilTheScanEnds() {
+        opened()
+        scan.scan("Teleop A")
+        awaitCall("init Teleop A")
+        assertEquals(setOf(Hold.SCANNING), holds.value, "a scan the person asked for holds the run controls too")
+        initialisedUntilStop()
+        status(RobotPhase.IDLE, simSeconds = 500)
+        awaitState<ScanState.Done>()
+        assertEquals(emptySet<Hold>(), holds.value)
+        rig.link.calls.clear()
+
+        rig.link.listener!!.opened(Fixtures.info())
+        assertEquals(setOf(Hold.SCANNING), holds.value, "held at once, not when the scan gets going")
+        assertEquals(Connection.OPEN, rig.services.session.session.value.connection)
+        awaitCall("init Teleop A")
+        initialisedUntilStop()
+        status(RobotPhase.IDLE, simSeconds = 500)
+
+        rig.await(holds) { it.isEmpty() }
+        assertEquals("Teleop A", rig.services.session.session.value.selectedOpMode)
+    }
+
+    @Test
+    fun aSessionWithNothingRememberedToScanIsNotHeld() {
+        opened()
+        assertEquals(emptySet<Hold>(), holds.value)
+
+        rig.link.listener!!.opened(Fixtures.info())
+
+        assertEquals(emptySet<Hold>(), holds.value)
+    }
 
     @Test
     fun anOpModeThatNeverInitialisesIsGivenUpOnAfterTenSimulatedSecondsWithTheProgramsError() {

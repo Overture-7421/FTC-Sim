@@ -2,6 +2,7 @@ package dev.ftcsim.ui.project
 
 import dev.ftcsim.contracts.robot.RobotPhase
 import dev.ftcsim.contracts.session.SessionInfo
+import dev.ftcsim.ui.practice.Hold
 import dev.ftcsim.ui.practice.PracticeSession
 import dev.ftcsim.ui.practice.RunState
 import dev.ftcsim.ui.practice.Severity
@@ -69,6 +70,23 @@ class HardwareScan(
 
     val state: StateFlow<ScanState> = mutableState.asStateFlow()
 
+    init {
+        // A scan that will run by itself holds the controls from the moment the session opens, not from the moment the scan notices it.
+        session.whenOpened { info ->
+            val open = project.value
+            if (open != null && ours(open) && remembered(info, open.project.folder) != null) session.hold(Hold.SCANNING)
+        }
+    }
+
+    /** Whether the session that was asked for runs the program of [open], which is when its hardware is the project's to find. */
+    private fun ours(open: OpenProject) = open.program.toString() == session.requested?.program()
+
+    /** The OpMode a session that opens runs by itself: the one remembered with the project, if the program still declares it. */
+    private fun remembered(info: SessionInfo, folder: Path): String? {
+        val names = info.opModes().map { it.name() }
+        return settings.state.value.project(folder)?.scanOpMode?.takeIf { it in names }
+    }
+
     /** Runs [opMode] to find the hardware. */
     fun scan(opMode: String) {
         requests.trySend(Request(opMode))
@@ -87,7 +105,7 @@ class HardwareScan(
     /** Follows the sessions that open, for as long as the caller lets it; never returns. */
     suspend fun run() {
         combine(session.openings, project) { count, open -> count to open }
-            .filter { (count, open) -> count > 0 && open != null && open.program.toString() == session.requested?.program() }
+            .filter { (count, open) -> count > 0 && open != null && ours(open) }
             .distinctUntilChanged { before, after -> before.first == after.first }
             .collectLatest { (_, open) ->
                 val info = session.session.value.info
@@ -99,7 +117,7 @@ class HardwareScan(
         mutableState.value = ScanState.Quiet
         val names = info.opModes().map { it.name() }
         if (names.isEmpty()) return
-        val remembered = settings.state.value.project(folder)?.scanOpMode?.takeIf { it in names }
+        val remembered = remembered(info, folder)
         var next: Request? = remembered?.let { Request(it) }
         var automatic = remembered != null
         while (true) {
@@ -112,14 +130,20 @@ class HardwareScan(
 
     private suspend fun scanWith(opMode: String, automatic: Boolean, folder: Path) {
         mutableState.value = ScanState.Scanning(opMode, automatic)
-        cancelsSeen = cancels.value
-        val failure = scanOnce(opMode)
-        if (failure == null) settings.update { it.withScanOpMode(folder, opMode) }
-        val found = session.unmapped.value.size
-        mutableState.value = when {
-            failure == CANCELLED -> ScanState.Quiet
-            failure == null && found == 0 && automatic -> ScanState.Quiet
-            else -> ScanState.Done(opMode, found, failure)
+        // The scan presses Init and Stop itself, so the driver's buttons wait until it is over.
+        val opening = session.hold(Hold.SCANNING)
+        try {
+            cancelsSeen = cancels.value
+            val failure = scanOnce(opMode)
+            if (failure == null) settings.update { it.withScanOpMode(folder, opMode) }
+            val found = session.unmapped.value.size
+            mutableState.value = when {
+                failure == CANCELLED -> ScanState.Quiet
+                failure == null && found == 0 && automatic -> ScanState.Quiet
+                else -> ScanState.Done(opMode, found, failure)
+            }
+        } finally {
+            session.release(Hold.SCANNING, opening)
         }
     }
 

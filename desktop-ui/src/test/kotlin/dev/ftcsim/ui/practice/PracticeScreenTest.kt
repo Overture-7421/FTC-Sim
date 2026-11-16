@@ -132,7 +132,8 @@ class PracticeScreenTest {
         val rig = Rig()
         show(rig)
 
-        onNodeWithText("Init").assertIsNotEnabled()
+        onNodeWithText("Starting").assertIsNotEnabled()
+        onNodeWithText("Init").assertDoesNotExist()
         openMore()
         onNodeWithText("Match").assertIsNotEnabled()
         onNodeWithText("Pause").assertIsNotEnabled()
@@ -143,6 +144,38 @@ class PracticeScreenTest {
         waitForIdle()
 
         onNodeWithText("Match").assertIsEnabled()
+    }
+
+    @Test
+    fun resetWorldDisablesTheMainButtonUntilTheNewSessionIsThere() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+        rig.openSession()
+        waitForIdle()
+        onNodeWithText("Init").performClick()
+        rig.listener.status(Fixtures.status(phase = RobotPhase.INIT))
+        waitForIdle()
+        onNodeWithText("Start").assertIsEnabled()
+
+        onNodeWithText("Reset world").performClick()
+        waitForIdle()
+
+        onNodeWithText("Resetting").assertIsNotEnabled()
+        onNodeWithText("Start").assertDoesNotExist()
+        rig.listener.status(Fixtures.status(phase = RobotPhase.INIT))
+        waitForIdle()
+        onNodeWithText("Start").assertDoesNotExist()
+
+        rig.listener.opened(Fixtures.info())
+        rig.listener.status(Fixtures.status(phase = RobotPhase.INIT))
+        waitForIdle()
+        onNodeWithText("Resetting").assertIsNotEnabled()
+        onNodeWithText("Start").assertDoesNotExist()
+
+        rig.openSession()
+        waitForIdle()
+
+        onNodeWithText("Init").assertIsEnabled()
     }
 
     @Test

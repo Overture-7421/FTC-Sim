@@ -224,6 +224,66 @@ class PracticeSessionTest {
     }
 
     @Test
+    fun theRunOfAnEndedSessionDoesNotShowOnTheNewOneAfterAReopenOrAReset() {
+        open()
+        link.listener!!.status(Fixtures.status(phase = RobotPhase.RUNNING, paused = true, speed = 2.0))
+        assertEquals(RobotPhase.RUNNING, session.run.value.phase)
+
+        session.open(Fixtures.request(seed = 7L))
+        assertEquals(RunState(), session.run.value, "asking for a session at once clears the old run")
+
+        link.listener!!.opened(Fixtures.info())
+        link.listener!!.status(Fixtures.status(phase = RobotPhase.INIT))
+        link.listener!!.opened(Fixtures.info())
+        assertEquals(RobotPhase.IDLE, session.run.value.phase, "a reset opens the session again before its first status")
+        assertFalse(Controls.of(session.session.value, session.run.value).start)
+    }
+
+    @Test
+    fun resetWorldHoldsTheSessionUntilTheNewOneIsIdleFailsOrTheResetIsRefused() {
+        open()
+        assertEquals(emptySet<Hold>(), session.holds.value)
+
+        session.reset()
+        assertEquals(setOf(Hold.RESETTING), session.holds.value)
+        link.listener!!.status(Fixtures.status(phase = RobotPhase.IDLE))
+        assertEquals(setOf(Hold.RESETTING), session.holds.value, "an Idle status of the old session is not the end of the reset")
+        link.listener!!.opened(Fixtures.info())
+        assertEquals(setOf(Hold.RESETTING), session.holds.value, "the program may still be stopping when the session opens")
+        link.listener!!.status(Fixtures.status(phase = RobotPhase.INIT))
+        assertEquals(setOf(Hold.RESETTING), session.holds.value)
+        link.listener!!.status(Fixtures.status(phase = RobotPhase.IDLE))
+        assertEquals(emptySet<Hold>(), session.holds.value, "the new session is Idle")
+
+        session.reset()
+        link.listener!!.refused("Not now.")
+        assertEquals(emptySet<Hold>(), session.holds.value, "a refused reset leaves the old session running")
+
+        session.reset()
+        link.listener!!.failed("the worker died")
+        assertEquals(emptySet<Hold>(), session.holds.value)
+    }
+
+    @Test
+    fun aHoldClaimedWhenTheSessionOpensIsThereBeforeTheSessionShowsAsOpenAndOnlyItsOwnerEndsIt() {
+        session.whenOpened { session.hold(Hold.SCANNING) }
+        session.open(Fixtures.request())
+
+        link.listener!!.opened(Fixtures.info())
+        assertEquals(Connection.OPEN to setOf(Hold.SCANNING), session.session.value.connection to session.holds.value)
+        val opening = session.openings.value
+
+        session.release(Hold.SCANNING, opening - 1)
+        assertEquals(setOf(Hold.SCANNING), session.holds.value, "the owner of an earlier session cannot end it")
+        session.release(Hold.SCANNING, session.hold(Hold.SCANNING))
+        assertEquals(emptySet<Hold>(), session.holds.value)
+
+        session.hold(Hold.SCANNING)
+        session.open(Fixtures.request(seed = 7L))
+        assertEquals(emptySet<Hold>(), session.holds.value, "asking for another session drops what held the old one")
+    }
+
+    @Test
     fun anOpenedSessionOffersItsOpModesPicksTheFirstAndGivesTheViewportItsScene() {
         open()
 

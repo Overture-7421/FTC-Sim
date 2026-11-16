@@ -118,6 +118,28 @@ data class MatchPlan(val autonomous: String?, val teleOp: String) {
     }
 }
 
+/** Why the run controls are held on a session that is open: see [PracticeSession.holds]. */
+enum class Hold(val label: String) {
+    /** Reset world was sent, and the new session is not Idle yet. */
+    RESETTING("Resetting"),
+
+    /** The application is running an OpMode of its own to find the hardware the program asks for. */
+    SCANNING("Scanning"),
+}
+
+/**
+ * What the run controls are waiting for, in words, or null when the driver may use them. This is the one place that says
+ * so: the code is being rebuilt for a restart, a hold is on the session, or the session is still opening. Whatever
+ * replaces the session that is shown has to appear here before it is gone, or there is a moment in which Start looks usable.
+ */
+fun waitingFor(connection: Connection, building: Boolean, holds: Set<Hold>): String? = when {
+    building -> "Restarting"
+    Hold.RESETTING in holds -> Hold.RESETTING.label
+    connection == Connection.OPENING -> "Starting"
+    Hold.SCANNING in holds -> Hold.SCANNING.label
+    else -> null
+}
+
 /**
  * Which controls of the Practice screen do something right now. Init and Start and Stop follow the phase of the
  * OpMode the way the Driver Station's do: Init only from idle with an OpMode picked, Start only after Init, Stop any
@@ -143,31 +165,40 @@ data class Controls(
 
     companion object {
         /**
-         * @param building whether the project's code is being built, which a restart waits for; the session goes on meanwhile
+         * @param waiting what the run is waiting for, from [waitingFor], or null: the session on screen is about to be
+         *     replaced or is still being prepared, so running anything on it would be thrown away or would race with
+         *     the application's own run. Init, Start, Stop, the choice of OpMode, the match controls and Reset world wait.
          */
-        fun of(session: SessionState, run: RunState, match: MatchDisplay = MatchDisplay.NONE, building: Boolean = false): Controls {
+        fun of(
+            session: SessionState,
+            run: RunState,
+            match: MatchDisplay = MatchDisplay.NONE,
+            waiting: String? = null,
+        ): Controls {
             val open = session.connection == Connection.OPEN && session.info != null
             val idle = run.phase == RobotPhase.IDLE
             val matching = match.inProgress
+            val free = waiting == null
             val picked = session.selectedOpMode != null && session.opModes.any { it.name() == session.selectedOpMode }
             return Controls(
-                selectOpMode = open && idle && !matching && session.opModes.isNotEmpty(),
-                init = open && idle && !matching && picked,
-                start = open && !matching && run.phase == RobotPhase.INIT,
-                stop = open && !matching && !idle,
+                selectOpMode = open && free && idle && !matching && session.opModes.isNotEmpty(),
+                init = open && free && idle && !matching && picked,
+                start = open && free && !matching && run.phase == RobotPhase.INIT,
+                stop = open && free && !matching && !idle,
                 pause = open,
-                reset = open,
+                reset = open && free,
                 // A session that failed is what a restart is for: the code may be what was wrong.
-                restart = (open || session.connection == Connection.FAILED) && !building,
+                restart = (open || session.connection == Connection.FAILED) && free,
                 matchReason = when {
                     !open -> "No session"
+                    !free -> waiting
                     match.state == MatchState.ENDED -> "Reset the world to play another match"
                     !idle -> "Stop the OpMode first"
                     session.opModes.none { it.kind() == OpModeKind.TELEOP } -> "No TeleOp OpMode"
                     else -> null
                 },
-                startMatch = open && match.state == MatchState.ARMED,
-                stopMatch = open && matching,
+                startMatch = open && free && match.state == MatchState.ARMED,
+                stopMatch = open && free && matching,
             )
         }
     }
