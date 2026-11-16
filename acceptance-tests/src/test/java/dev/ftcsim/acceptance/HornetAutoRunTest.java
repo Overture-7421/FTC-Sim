@@ -32,7 +32,7 @@ class HornetAutoRunTest {
     private static final long SECOND = 1_000_000_000L;
     private static final double INCH = 0.0254;
     // The close routines shoot from a short distance and the far ones from the edge of the field; with the launcher
-    // fitted to Hornet's shooter table (docs/robots/hornet-profile.md) both score alike on both sides. They reach 15
+    // fitted to Hornet's shooter table (docs/robots/hornet-fit.md) both score alike on both sides. They reach 15
     // and 9, the far routine having filled the ramp's nine places; the bars keep a margin.
     private static final int CLOSE_AT_LEAST = 12;
     private static final int FAR_AT_LEAST = 7;

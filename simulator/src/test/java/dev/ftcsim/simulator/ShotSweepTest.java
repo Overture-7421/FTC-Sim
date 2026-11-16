@@ -20,7 +20,7 @@ import org.junit.jupiter.api.Test;
  * Hornet's own shooter table, flywheel speed against distance, played into the DECODE field by the bundled robot
  * profile from stances all over the launch zones. It fails when the launcher's calibration or the field's scoring
  * stops working together: a ball that falls short on the goal's front panel, flies over its backboard or jams in the
- * goal. The bars are well below what the calibration reaches, which docs/robots/hornet-profile.md tells.
+ * goal. The bars are well below what the calibration reaches, which docs/robots/hornet-fit.md tells.
  */
 class ShotSweepTest {
 

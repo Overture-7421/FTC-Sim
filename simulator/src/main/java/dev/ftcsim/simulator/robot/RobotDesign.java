@@ -19,7 +19,7 @@ import java.util.Map;
 
 /**
  * The robot of a game: a fixed drivetrain, intake, conveyor, shooter and sensors whose numbers are those of the robot
- * the simulator was fitted to (see {@code docs/robots/hornet-profile.md}), and a {@link RobotMapping} that says which
+ * the simulator was fitted to (see {@code docs/robots/hornet-fit.md}), and a {@link RobotMapping} that says which
  * motors of a team's code are which of its parts. DECODE's robot has no turret; BIOBUZZ's is the same robot with one.
  *
  * <p>Parts exist only when the mapping gives them a motor: no intake motor, no intake. The conveyor and the intake

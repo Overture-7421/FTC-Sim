@@ -263,7 +263,7 @@ Each of these was considered and decided against; adding one back is the product
 - **TOML and YAML robot files.** One format, JSON (`ftcsim.json`, read and written whole by `ProjectMappingsImpl`): no
   second parser to keep in step.
 - **Air drag.** The owner judged it excessive for what the shot tests need. The launcher is fitted by its angle and
-  efficiency to the shooter table of the robot (`robots/hornet-profile.md`), and a far shot scores by banking off the back
+  efficiency to the shooter table of the robot (`robots/hornet-fit.md`), and a far shot scores by banking off the back
   of the goal, as real ones do (`fields/decode.md`, "Friction, bounce and bank shots").
 - **Mechanisms that push on the chassis** (section 8), **foul and ranking-point rules, an opposing robot or a second robot**,
   and **features for other seasons**: the aim is to test a team's code and to practise driving, not to referee or to

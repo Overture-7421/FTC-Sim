@@ -14,7 +14,7 @@ code.
 | write or run tests; know what each layer proves | `testing.md` |
 | set up VS Code | `vscode.md` |
 | add an ideal sensor, or know how a driver class is bound to one | `architecture/adding-a-device.md`, then `devices/pinpoint.md`, `devices/color-sensor.md`, `devices/bno055-imu.md`, `devices/limelight.md` |
-| map a robot, or fit the fixed one | `robots/fixed-robots.md`, `robots/hornet-profile.md` |
+| map a robot, or fit the fixed one | `robots/fixed-robots.md`, `robots/hornet-fit.md` |
 | know what a field models, and what it estimates | `fields/decode.md`, `fields/biobuzz.md` |
 | change the window, or its 3D view | `architecture/ui.md`, `architecture/viewport-measurements.md` |
 | change how the window talks to the simulation | `architecture/link.md` |

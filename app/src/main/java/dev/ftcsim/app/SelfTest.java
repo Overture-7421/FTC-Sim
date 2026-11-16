@@ -74,30 +74,30 @@ final class SelfTest {
     private final PrintStream out;
     private final Jvm jvm;
     private final Machine machine;
-    private final Source<RuntimePin> pin;
+    private final Source<RuntimeDescription> description;
     private final Source<AppClasspath> classpath;
     private final Optional<Path> installedRuntime;
     private final List<String> problems = new ArrayList<>();
 
     /** @param installedRuntime where the runtime folder of the installation is; empty when not running from an installation */
-    SelfTest(PrintStream out, Jvm jvm, Machine machine, Source<RuntimePin> pin, Source<AppClasspath> classpath, Optional<Path> installedRuntime) {
+    SelfTest(PrintStream out, Jvm jvm, Machine machine, Source<RuntimeDescription> description, Source<AppClasspath> classpath, Optional<Path> installedRuntime) {
         this.out = out;
         this.jvm = jvm;
         this.machine = machine;
-        this.pin = pin;
+        this.description = description;
         this.classpath = classpath;
         this.installedRuntime = installedRuntime;
     }
 
     /** The self test of this computer: the Java that runs it, the user's folders and the class path file of the installation. */
     static SelfTest forThisMachine(PrintStream out) {
-        return new SelfTest(out, Jvm.current(), Machine.real(), RuntimePin::bundled, AppClasspath::locate, RuntimePin.installedRuntime());
+        return new SelfTest(out, Jvm.current(), Machine.real(), RuntimeDescription::bundled, AppClasspath::locate, RuntimeDescription.installedRuntime());
     }
 
     /** @return 0 when every check passed, 1 when one did not; the output says which */
     int run() {
         out.println("FTC-Sim self-test");
-        RuntimePin runtime = attempt("runtime description", pin);
+        RuntimeDescription runtime = attempt("runtime description", description);
         if (runtime != null) {
             checkJava(runtime);
         }
@@ -129,7 +129,7 @@ final class SelfTest {
         }
     }
 
-    private void checkJava(RuntimePin runtime) {
+    private void checkJava(RuntimeDescription runtime) {
         if (jvm.major() != runtime.major()) {
             fail("Java version", jvm.describe() + "; FTC-Sim runs on Java " + runtime.major() + " only");
         } else if (!(jvm.arch().equals("amd64") || jvm.arch().equals("x86_64")) || !jvm.os().toLowerCase(Locale.ROOT).startsWith("windows")) {

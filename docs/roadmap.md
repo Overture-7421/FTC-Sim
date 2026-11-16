@@ -23,7 +23,7 @@ on the chassis.
 Per-device limits are in the "Not modelled" or "Not simulated" sections of `devices/*.md`; a field's are in "Known gaps" of
 `fields/decode.md` and `fields/biobuzz.md`. Hornet cannot score on BIOBUZZ (its camera map, intake and aim are DECODE's), so
 BIOBUZZ's turret has no real program to check it with, only a fixture OpMode. The chassis constants are fitted to Hornet
-(`robots/hornet-profile.md`) and are the fixed robot's for every team.
+(`robots/hornet-fit.md`) and are the fixed robot's for every team.
 
 ## The robot world: what is still open
 

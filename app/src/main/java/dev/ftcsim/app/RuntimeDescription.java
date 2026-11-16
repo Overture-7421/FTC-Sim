@@ -19,19 +19,19 @@ import java.util.Properties;
  * @param major         the Java major version the application is compiled for and its runtime is made from
  * @param jvmArguments  the options the launcher passes to the Java that runs the application
  */
-record RuntimePin(int major, List<String> jvmArguments) {
+record RuntimeDescription(int major, List<String> jvmArguments) {
 
     private static final String OPTIONS_RESOURCE = "runtime-options";
     private static final String VERSION_RESOURCE = "runtime.properties";
 
-    RuntimePin {
+    RuntimeDescription {
         jvmArguments = List.copyOf(jvmArguments);
     }
 
-    /** The pin that came with this application. */
-    static RuntimePin bundled() throws IOException {
-        try (InputStream version = RuntimePin.class.getResourceAsStream(VERSION_RESOURCE);
-                InputStream options = RuntimePin.class.getResourceAsStream(OPTIONS_RESOURCE)) {
+    /** The description that came with this application. */
+    static RuntimeDescription bundled() throws IOException {
+        try (InputStream version = RuntimeDescription.class.getResourceAsStream(VERSION_RESOURCE);
+                InputStream options = RuntimeDescription.class.getResourceAsStream(OPTIONS_RESOURCE)) {
             if (version == null || options == null) {
                 throw new IOException("the application lacks its runtime description (" + VERSION_RESOURCE + ", " + OPTIONS_RESOURCE + ")");
             }
@@ -39,7 +39,7 @@ record RuntimePin(int major, List<String> jvmArguments) {
         }
     }
 
-    static RuntimePin read(InputStream version, InputStream options) throws IOException {
+    static RuntimeDescription read(InputStream version, InputStream options) throws IOException {
         Properties properties = new Properties();
         properties.load(version);
         int major;
@@ -58,7 +58,7 @@ record RuntimePin(int major, List<String> jvmArguments) {
         if (arguments.isEmpty()) {
             throw new IOException(OPTIONS_RESOURCE + " lists no option");
         }
-        return new RuntimePin(major, arguments);
+        return new RuntimeDescription(major, arguments);
     }
 
     /** Where the runtime folder of the installation this program runs from is, whether it is there or not; empty when it runs from build folders, as in development. */

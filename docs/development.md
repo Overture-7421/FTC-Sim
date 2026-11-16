@@ -147,13 +147,13 @@ laid out.
 |---|---|---|
 | Add an ideal sensor (an I2C model or a camera) | `architecture/adding-a-device.md`, `devices/` | One model class, one registry line (`DeviceModels.standard()`, `CameraModels.standard()`), a `HardwareDirectory.Sensor`, the binding in `I2cDriverProvider`, the rig's attachment; the SDK's own driver is the specification |
 | Add a motor to the catalogue | `robots/fixed-robots.md` (Mapping) | `MotorCatalog` in `simulator\robot`, one entry with the motor's constants and its gearbox |
-| Map another robot | `robots/fixed-robots.md`, `robots/hornet-profile.md` | The **Robot** screen writes `ftcsim.json` (schema 2) at the root of the robot project; no code |
+| Map another robot | `robots/fixed-robots.md`, `robots/hornet-fit.md` | The **Robot** screen writes `ftcsim.json` (schema 2) at the root of the robot project; no code |
 | Virtualise another JDK member | package-info of `dev.ftcsim.runtime`; `decisions.md` section 10 | A row in `TimeRules`, `NetworkRules` or `RewriteRules`, a method with the implied descriptor in the hooks class (`contracts.hooks`), a probe and a rewrite test; the rule tests scan the JDK and fail for a member that is missing |
 | Support another FTC SDK release | `sdk-versions.md` | A version named `ftcSdk...` in `gradle\libs.versions.toml`, the fixture suite with it, then the table in `sdk-versions.md`; keep any difference behind one seam |
 | Change the link between window and worker | `architecture/link.md`, package `link.wire` | A message that gains, loses or reorders a field bumps `Protocol.VERSION`; update the codec, the table in the package description and `link.md` together |
 | Change what the importer does | `architecture/prepared-program.md` | A change that makes packages come out different or better raises `IMPORTER_REVISION`, so that kept packages are made again |
 | Change what the bundled runtime holds, or move to another Java major version | `architecture/distribution.md`, `decisions.md` section 7 | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, the real-host Hornet tests on the runtime, and `DistributionLayoutTest`'s module list |
-| Refit the fixed robot | `robots/hornet-profile.md` | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted and should not move; change the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep and `HornetAutoRunTest` |
+| Refit the fixed robot | `robots/hornet-fit.md` | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted and should not move; change the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep and `HornetAutoRunTest` |
 
 ## Before you hand work over
 

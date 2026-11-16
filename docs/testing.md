@@ -61,7 +61,7 @@ about Hornet. The window is tested with synthetic events only, with bounded wait
 | `RealHostHornetTest` | A session on Hornet in the real worker; the preparer builds nothing twice |
 
 Hornet is `Overture-7421/FTC-Hornet-2026`; everything here was developed and checked against commit `5bdc809`
-(2026-11-11, "Merge pull request #5 from Overture-7421/SolverLib"). `robots/hornet-profile.md` says how its drivetrain
+(2026-11-11, "Merge pull request #5 from Overture-7421/SolverLib"). `robots/hornet-fit.md` says how its drivetrain
 was fitted. `HornetImportTest` needs only the checkout: `.\gradlew.bat :project-import:test -Pftcsim.hornet=<checkout>`.
 A rehearsal on the SDK 12 template is in `sdk-versions.md`.
 

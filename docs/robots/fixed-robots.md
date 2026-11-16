@@ -2,7 +2,7 @@
 
 A team does not describe its robot to FTC-Sim; it tells the simulator which motor of its code is which part of the robot the
 game fixes. The robot of each game, its size, its mechanisms and the physics of its parts, is designed once, in
-`dev.ftcsim.simulator.robot.RobotDesign`, from the numbers of the robot the simulator was fitted to (`hornet-profile.md`).
+`dev.ftcsim.simulator.robot.RobotDesign`, from the numbers of the robot the simulator was fitted to (`hornet-fit.md`).
 What a student supplies is a small **mapping**, `dev.ftcsim.contracts.session.RobotMapping`, kept in `ftcsim.json` at the
 root of their project. The worker never reads `ftcsim.json`: it receives the mapping inline in the session request (link
 protocol 7, `architecture/link.md`) and builds the robot from the design of the request's field. `RobotDesign.spec(mapping)`
@@ -18,7 +18,7 @@ consume.
 
 Any other field (the bare floor included) gets DECODE's robot. A part exists only when the mapping gives it a motor: no intake
 motor, no intake. The numbers are `RobotDesign`'s constants (Javadoc there; `RobotDesignTest` spells them out one by one, so a
-change of a fitted number fails a test); they are Hornet's fitted numbers (`hornet-profile.md`):
+change of a fitted number fails a test); they are Hornet's fitted numbers (`hornet-fit.md`):
 
 - **Chassis**: the generic 18 inch mecanum chassis (0.36 m wheelbase and track) with its fitted wheel damping, friction and
   roller numbers. Mass and wheel diameter come from the mapping.

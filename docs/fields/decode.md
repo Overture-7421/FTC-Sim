@@ -86,7 +86,7 @@ would stand 3.4 cm from the walls), so the CAD value is used.
   two, so a panel can never be less bouncy than the ball). The shot sweep is insensitive to the ball's restitution between 0.2
   and 0.45 and to the solids' up to 0.45; with 0.6 on every solid 30 % of the shots rebound off the boards and out of the
   goal. 0.35 stays as the estimate of a hollow polypropylene ball on corrugated sheet.
-- **Bank shots.** A shot at Hornet's table speeds (`docs/robots/hornet-profile.md`) meets the boards where the end board and
+- **Bank shots.** A shot at Hornet's table speeds (`docs/robots/hornet-fit.md`) meets the boards where the end board and
   the side board join, 0.96 to 1.24 m up at 2 to 3.5 m/s, rebounds with about a third of that speed and drops onto the plate.
   A shot 4 to 6 % faster than the table's clips the top of the boards (1.365 m) and leaves the field; one 6 % slower falls
   short on the front panel. No ball came to rest on a step of the boards in any of the 3762 sweep shots.

@@ -43,7 +43,7 @@ class SelfTestTest {
     private Outcome run(SelfTest.Jvm jvm, Source<AppClasspath> classpath, Optional<Path> installedRuntime) {
         ByteArrayOutputStream bytes = new ByteArrayOutputStream();
         Machine machine = new Machine(name -> name.equals("LOCALAPPDATA") ? temp.resolve("Local").toString() : null);
-        int code = new SelfTest(new PrintStream(bytes, true, StandardCharsets.UTF_8), jvm, machine, () -> new RuntimePin(25, OPTIONS), classpath, installedRuntime).run();
+        int code = new SelfTest(new PrintStream(bytes, true, StandardCharsets.UTF_8), jvm, machine, () -> new RuntimeDescription(25, OPTIONS), classpath, installedRuntime).run();
         return new Outcome(code, bytes.toString(StandardCharsets.UTF_8));
     }
 
@@ -54,11 +54,11 @@ class SelfTestTest {
     }
 
     @Test
-    void theBundledPinIsTheJavaTheBuildRunsOnAndCarriesTheOptionsTheWindowNeeds() throws IOException {
-        RuntimePin pin = RuntimePin.bundled();
+    void theBundledDescriptionIsTheJavaTheBuildRunsOnAndCarriesTheOptionsTheWindowNeeds() throws IOException {
+        RuntimeDescription description = RuntimeDescription.bundled();
 
-        assertEquals(Runtime.version().feature(), pin.major(), "the runtime is made from the JDK the project's toolchain builds and tests on");
-        assertTrue(pin.jvmArguments().containsAll(OPTIONS), pin.jvmArguments().toString());
+        assertEquals(Runtime.version().feature(), description.major(), "the runtime is made from the JDK the project's toolchain builds and tests on");
+        assertTrue(description.jvmArguments().containsAll(OPTIONS), description.jvmArguments().toString());
     }
 
     @Test
@@ -81,13 +81,13 @@ class SelfTestTest {
 
     @Test
     void theRuntimeDescriptionIsReadFromItsTwoResourcesAndAnEmptyOneIsRefused() throws IOException {
-        RuntimePin pin = RuntimePin.read(
+        RuntimeDescription description = RuntimeDescription.read(
                 new ByteArrayInputStream("major=25\n".getBytes(StandardCharsets.UTF_8)),
                 new ByteArrayInputStream("# a comment\r\n--one\r\n\r\n  --two=2  \r\n".getBytes(StandardCharsets.UTF_8)));
 
-        assertEquals(new RuntimePin(25, List.of("--one", "--two=2")), pin);
-        assertThrows(IOException.class, () -> RuntimePin.read(new ByteArrayInputStream("major=x".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("--one".getBytes(StandardCharsets.UTF_8))));
-        assertThrows(IOException.class, () -> RuntimePin.read(new ByteArrayInputStream("major=25".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("# nothing".getBytes(StandardCharsets.UTF_8))));
+        assertEquals(new RuntimeDescription(25, List.of("--one", "--two=2")), description);
+        assertThrows(IOException.class, () -> RuntimeDescription.read(new ByteArrayInputStream("major=x".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("--one".getBytes(StandardCharsets.UTF_8))));
+        assertThrows(IOException.class, () -> RuntimeDescription.read(new ByteArrayInputStream("major=25".getBytes(StandardCharsets.UTF_8)), new ByteArrayInputStream("# nothing".getBytes(StandardCharsets.UTF_8))));
     }
 
     @Test
