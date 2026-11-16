@@ -156,9 +156,7 @@ public final class Mechanisms {
 
     private static void requireConditionsMotors(PlantView plants, List<Condition> conditions, String user) {
         for (Condition condition : conditions) {
-            if (condition instanceof Condition.ShaftSpeed speed) {
-                requireShaft(plants, speed.motor(), user);
-            }
+            requireShaft(plants, condition.motor(), user);
         }
     }
 

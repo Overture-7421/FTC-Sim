@@ -67,13 +67,13 @@ class RobotDesignTest {
         assertEquals(List.of(new StorageSpec("magazine", 3, PATH, drives)), spec.storages(), "path, capacity and the drives that move pieces along it");
         assertEquals(
                 List.of(new CaptureSpec(
-                        "front", "magazine", new Volume.Box(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),
-                        List.of(Condition.ShaftSpeed.atLeast("intake", 10.0)), 0.10, 0.15)),
+                        "front", "magazine", new Volume(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),
+                        List.of(Condition.atLeast("intake", 10.0)), 0.10, 0.15)),
                 spec.captures(),
                 "the intake zone, its roller condition and the pieces it takes");
         assertEquals(
                 List.of(new LaunchSpec(
-                        "shooter", "magazine", List.of(Condition.ShaftSpeed.atMost("upMotor", -20.0)),
+                        "shooter", "magazine", List.of(Condition.atMost("upMotor", -20.0)),
                         List.of(new LaunchSpec.Wheel("shooterLeft", 0.05, 1), new LaunchSpec.Wheel("shooterRight", 0.05, 1)),
                         0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3)),
                 spec.launches(),
@@ -102,9 +102,9 @@ class RobotDesignTest {
 
         RobotSpec spec = RobotDesign.decode().spec(mapping);
 
-        assertEquals(List.of(Condition.ShaftSpeed.atMost("roll", -10.0)), spec.captures().get(0).active());
+        assertEquals(List.of(Condition.atMost("roll", -10.0)), spec.captures().get(0).active());
         LaunchSpec launch = spec.launches().get(0);
-        assertEquals(List.of(Condition.ShaftSpeed.atLeast("belt", 20.0)), launch.active(), "an unmirrored belt feeds forward when it turns forward");
+        assertEquals(List.of(Condition.atLeast("belt", 20.0)), launch.active(), "an unmirrored belt feeds forward when it turns forward");
         assertEquals(-1, launch.wheels().get(0).sign());
         assertEquals(List.of(-1, 1), spec.storages().get(0).drives().stream().map(StorageSpec.Drive::sign).toList());
         assertNull(spec.chassis(), "a robot without wheels has no body");

@@ -177,8 +177,8 @@ public final class RobotDesign {
     /** Turning forward at least this fast in the sense the part works in, or backward at least this fast when mirrored. */
     private static Condition turning(MotorMapping motor, double radPerSec) {
         return motor.mirrored()
-                ? Condition.ShaftSpeed.atMost(motor.name(), -radPerSec)
-                : Condition.ShaftSpeed.atLeast(motor.name(), radPerSec);
+                ? Condition.atMost(motor.name(), -radPerSec)
+                : Condition.atLeast(motor.name(), radPerSec);
     }
 
     private void mechanisms(RobotMapping mapping, List<StorageSpec> storages, List<CaptureSpec> captures, List<LaunchSpec> launches) {
@@ -200,7 +200,7 @@ public final class RobotDesign {
         storages.add(new StorageSpec(STORAGE, 3, path, drives));
         if (!intake.isEmpty()) {
             captures.add(new CaptureSpec(
-                    INTAKE, STORAGE, new Volume.Box(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),
+                    INTAKE, STORAGE, new Volume(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),
                     intake.stream().map(motor -> turning(motor, 10.0)).toList(), game.minPieceM, game.maxPieceM));
         }
         if (!shooter.isEmpty()) {

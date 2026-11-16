@@ -242,8 +242,7 @@ final class HornetShot {
                 double radPerSec = ticksPerSecond * 2 * Math.PI / MotorCatalog.motor(name).encoderTicksPerRevolution();
                 speeds.put(wheel.motor(), wheel.sign() * radPerSec);
             }
-            for (Condition condition : launcher.active()) {
-                Condition.ShaftSpeed speed = (Condition.ShaftSpeed) condition;
+            for (Condition speed : launcher.active()) {
                 boolean capped = speed.maxRadPerSec() != Double.POSITIVE_INFINITY;
                 speeds.put(speed.motor(), capped ? speed.maxRadPerSec() - 80 : speed.minRadPerSec() + 80);
             }

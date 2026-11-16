@@ -67,14 +67,14 @@ class MechanismsTest {
 
     private static CaptureSpec intakeZone() {
         return new CaptureSpec(
-                "intake", "magazine", new Volume.Box(new Vec3(0.30, 0, RADIUS), new Vec3(0.05, 0.20, 0.10)),
-                List.of(Condition.ShaftSpeed.atLeast("intake", 10.0)));
+                "intake", "magazine", new Volume(new Vec3(0.30, 0, RADIUS), new Vec3(0.05, 0.20, 0.10)),
+                List.of(Condition.atLeast("intake", 10.0)));
     }
 
     private static LaunchSpec shooter() {
         // Staging runs the conveyor slowly; only the faster feed pushes a piece into the wheels.
         return new LaunchSpec(
-                "shooter", "magazine", List.of(Condition.ShaftSpeed.atLeast("up", 20.0)),
+                "shooter", "magazine", List.of(Condition.atLeast("up", 20.0)),
                 List.of(new LaunchSpec.Wheel("shooterLeft", 0.05, 1), new LaunchSpec.Wheel("shooterRight", 0.05, -1)),
                 0.8, new Vec3(-0.6, 0, 0.8), 0.3);
     }
@@ -330,8 +330,8 @@ class MechanismsTest {
         int smallKind = 101;
         PieceSpec small = new PieceSpec(0.0355f, 0.02f, 0.5f, 0.2f, 0.02f);
         CaptureSpec forBigPieces = new CaptureSpec(
-                "intake", "magazine", new Volume.Box(new Vec3(0.30, 0, RADIUS), new Vec3(0.05, 0.20, 0.10)),
-                List.of(Condition.ShaftSpeed.atLeast("intake", 10.0)), 0.10, 0.15);
+                "intake", "magazine", new Volume(new Vec3(0.30, 0, RADIUS), new Vec3(0.05, 0.20, 0.10)),
+                List.of(Condition.atLeast("intake", 10.0)), 0.10, 0.15);
         mechanisms = new Mechanisms(
                 List.of(magazine()), List.of(forBigPieces), List.of(), plants, Map.of(PIECE_KIND, PIECE, smallKind, small));
         world.spawnPiece(1001, smallKind, small, new Vector3(0.30, 0.10, 0.0355), Vector3.ZERO);
@@ -344,14 +344,14 @@ class MechanismsTest {
         assertTrue(world.hasPiece(1001), "a smaller piece in the same volume is left in the world");
         assertEquals(List.of(1000), mechanisms.contents("magazine"));
         assertThrows(IllegalArgumentException.class, () -> new CaptureSpec(
-                "bad", "magazine", new Volume.Box(Vec3.ZERO, new Vec3(1, 1, 1)), List.of(), 0.15, 0.10));
+                "bad", "magazine", new Volume(Vec3.ZERO, new Vec3(1, 1, 1)), List.of(), 0.15, 0.10));
     }
 
     @Test
     void mechanismsThatNameWhatDoesNotExistAreRefusedWhenTheyAreBuilt() {
         StorageSpec lonely = magazine();
         assertThrows(IllegalArgumentException.class, () -> new Mechanisms(
-                List.of(lonely), List.of(new CaptureSpec("c", "nowhere", new Volume.Box(Vec3.ZERO, new Vec3(1, 1, 1)), List.of())),
+                List.of(lonely), List.of(new CaptureSpec("c", "nowhere", new Volume(Vec3.ZERO, new Vec3(1, 1, 1)), List.of())),
                 List.of(), plants, Map.of()));
         assertThrows(IllegalArgumentException.class, () -> new Mechanisms(
                 List.of(new StorageSpec("s", 1, List.of(Vec3.ZERO, new Vec3(1, 0, 0)), List.of(new StorageSpec.Drive("ghost", 0.02, 1, 0, 1)))),
