@@ -28,14 +28,6 @@ class PhysicsWorldTest {
     }
 
     @Test
-    void refusesANativeLibraryThatDoesNotMatchThePin() {
-        IllegalStateException e = assertThrows(
-                IllegalStateException.class,
-                () -> PhysicsWorld.create(TestNatives.directory(), "0".repeat(64), 0));
-        assertTrue(e.getMessage().contains(TestNatives.RELEASE_SHA256), e.getMessage());
-    }
-
-    @Test
     void droppedPieceBouncesWithItsRestitutionAndComesToRest() {
         try (PhysicsWorld world = worldWithFloor()) {
             world.spawnPiece(1, KIND_BALL, FOAM_BALL, new Vector3(0, 0, 1.0), Vector3.ZERO);

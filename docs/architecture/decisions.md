@@ -61,9 +61,12 @@ thread runs when the operating system lets it, and what it changes is then up to
 
 ## 4. Physics: Jolt (Gate 3, conditional pass)
 
-**Decision.** Jolt through jolt-jni 7.0.0, single precision, one thread, 240 Hz fixed step. The pinned natives are
-Jolt's cross-platform-deterministic build, and the code still refuses any other, but nothing promises a repeatable run
-(section 9).
+**Decision.** Jolt through jolt-jni 7.0.0, single precision, one thread, 240 Hz fixed step. The natives are the exact
+jolt-jni 7.0.0 release build, Jolt's cross-platform-deterministic one; the code refuses a build that is not (or is double
+precision), but nothing promises a repeatable run (section 9). The DLL is no longer checked against a hash at run time,
+and no longer probed for flush-to-zero modes: both served the repeatability promise that section 9 dropped. The DLL is
+still unpacked into a folder named after its SHA-256, so that two builds never share a file, and a test asserts the
+hash of the one that ships.
 
 **Evidence.** A step costs about 0.15 ms against a 4.17 ms budget. The DLL imports only `KERNEL32`.
 

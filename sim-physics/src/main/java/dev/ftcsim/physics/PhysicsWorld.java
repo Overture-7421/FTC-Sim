@@ -10,7 +10,6 @@ import com.github.stephengold.joltjni.BroadPhaseLayerInterfaceTable;
 import com.github.stephengold.joltjni.IgnoreMultipleBodiesFilter;
 import com.github.stephengold.joltjni.JobSystem;
 import com.github.stephengold.joltjni.JobSystemSingleThreaded;
-import com.github.stephengold.joltjni.JobSystemThreadPool;
 import com.github.stephengold.joltjni.Jolt;
 import com.github.stephengold.joltjni.MassProperties;
 import com.github.stephengold.joltjni.ObjectLayerFilter;
@@ -119,7 +118,7 @@ public final class PhysicsWorld implements AutoCloseable {
     private long stepIndex;
     private boolean closed;
 
-    private PhysicsWorld(String dllSha256, int workerThreads) {
+    private PhysicsWorld(String dllSha256) {
         this.dllSha256 = dllSha256;
         broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_STATIC, LAYER_STATIC);
         broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_MOVING, LAYER_MOVING);
@@ -134,30 +133,17 @@ public final class PhysicsWorld implements AutoCloseable {
         bodyLocks = system.getBodyLockInterfaceNoLock();
         pivots = new PivotBodies(system, bodies);
         rolling = new RollingResistance(bodies, this::castGroundRay);
-        jobSystem = workerThreads == 0
-                ? new JobSystemSingleThreaded(Jolt.cMaxPhysicsJobs)
-                : new JobSystemThreadPool(Jolt.cMaxPhysicsJobs, Jolt.cMaxPhysicsBarriers, workerThreads);
+        jobSystem = new JobSystemSingleThreaded(Jolt.cMaxPhysicsJobs);
     }
 
     /**
-     * Creates a world with the native library this build is validated against, single threaded, which is the
+     * Creates a world with the native library that comes with this build, single threaded, which is the
      * configuration the build is tested with.
      *
      * @param nativeDirectory directory the DLL is extracted into before it is loaded
      */
     public static PhysicsWorld create(Path nativeDirectory) {
-        return create(nativeDirectory, NativeLibrary.VALIDATED_SHA256, 0);
-    }
-
-    /**
-     * Loads and verifies the native library, then creates an empty world.
-     *
-     * @param nativeDirectory directory the DLL is extracted into before it is loaded
-     * @param dllSha256       SHA-256 the DLL must have, as lower-case hex
-     * @param workerThreads   0 for the single-threaded job system; more is for experiments
-     */
-    public static PhysicsWorld create(Path nativeDirectory, String dllSha256, int workerThreads) {
-        String loaded = NativeLibrary.load(nativeDirectory, dllSha256);
+        String loaded = NativeLibrary.load(nativeDirectory);
         startEngine();
         if (!Jolt.implementsCrossPlatformDeterminism()) {
             throw new IllegalStateException("the native library was not built for cross-platform determinism");
@@ -165,8 +151,7 @@ public final class PhysicsWorld implements AutoCloseable {
         if (Jolt.isDoublePrecision()) {
             throw new IllegalStateException("the native library is double precision; single precision is pinned");
         }
-        DenormalProbe.require();
-        return new PhysicsWorld(loaded, workerThreads);
+        return new PhysicsWorld(loaded);
     }
 
     private static synchronized void startEngine() {
@@ -213,7 +198,6 @@ public final class PhysicsWorld implements AutoCloseable {
             throw new IllegalStateException("Jolt reported update error bits " + error + " at step " + stepIndex);
         }
         stepIndex++;
-        DenormalProbe.require();
     }
 
     /** Pose of every entity, ordered by entity id. */

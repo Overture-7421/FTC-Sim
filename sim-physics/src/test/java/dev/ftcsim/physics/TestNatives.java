@@ -2,7 +2,7 @@ package dev.ftcsim.physics;
 
 import java.nio.file.Path;
 
-/** Where the tests find the native library and what it must hash to. */
+/** Where the tests find the native library and what the one that comes with the build must hash to. */
 final class TestNatives {
 
     static final String RELEASE_SHA256 = "f74b89d91fb305876df3a3c577121d4b2742cb3b0ed642e6828c419755b45b75";
@@ -14,6 +14,6 @@ final class TestNatives {
     }
 
     static PhysicsWorld newWorld() {
-        return PhysicsWorld.create(directory(), RELEASE_SHA256, 0);
+        return PhysicsWorld.create(directory());
     }
 }

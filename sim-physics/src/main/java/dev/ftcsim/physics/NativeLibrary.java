@@ -9,13 +9,10 @@ import java.nio.file.StandardCopyOption;
 import java.util.Arrays;
 
 /**
- * Extracts the jolt-jni DLL from the classpath, checks it against a SHA-256 pin and loads it once per
- * JVM. The pin makes a different native build fail loudly instead of silently changing the results.
+ * Extracts the jolt-jni DLL from the classpath into a folder named after its SHA-256 and loads it once per JVM. The
+ * folder name keeps the DLLs of different builds apart: Windows cannot replace one that another JVM has loaded.
  */
 final class NativeLibrary {
-
-    /** SHA-256 of the release joltjni.dll this build of the simulator is validated against (jolt-jni 7.0.0, ReleaseSp). */
-    static final String VALIDATED_SHA256 = "f74b89d91fb305876df3a3c577121d4b2742cb3b0ed642e6828c419755b45b75";
 
     private static final String RESOURCE = "/windows/x86-64/com/github/stephengold/joltjni.dll";
 
@@ -24,29 +21,19 @@ final class NativeLibrary {
     private NativeLibrary() {}
 
     /**
-     * @param directory      extraction root; the DLL lands in a subdirectory named after its hash
-     * @param expectedSha256 lower-case hex SHA-256 of the DLL this build is validated against
+     * @param directory extraction root; the DLL lands in a subdirectory named after its hash
      * @return the SHA-256 of the loaded DLL
      */
     @SuppressWarnings("restricted")
-    static synchronized String load(Path directory, String expectedSha256) {
+    static synchronized String load(Path directory) {
         if (loadedSha256 != null) {
-            requirePin(loadedSha256, expectedSha256);
             return loadedSha256;
         }
         byte[] dll = readResource();
         String actual = Sha256.hex(dll);
-        requirePin(actual, expectedSha256);
         System.load(extract(directory.resolve(actual), dll).toAbsolutePath().toString());
         loadedSha256 = actual;
         return actual;
-    }
-
-    private static void requirePin(String actual, String expected) {
-        if (!actual.equals(expected)) {
-            throw new IllegalStateException(
-                    "joltjni.dll SHA-256 is " + actual + " but " + expected + " is pinned");
-        }
     }
 
     private static byte[] readResource() {
