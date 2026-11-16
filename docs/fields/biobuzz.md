@@ -1,7 +1,7 @@
 # BIOBUZZ presented by RTX (2026-27) field
 
-Package `dev.ftcsim.game.biobuzz` in `games`. `BiobuzzField` builds the whole field in an empty `PhysicsWorld`
-and `BiobuzzRun` plays its rules. Numbers are metres in the field frame unless they say inches; the CAD is in inches and
+Package `dev.ftcsim.game.biobuzz` in `games`. `BiobuzzField` builds the whole field in an empty `PhysicsWorld` and
+`BiobuzzRun` plays its rules. Numbers are metres in the field frame unless they say inches; the CAD is in inches and
 `Solids.in` converts.
 
 ## Sources
@@ -18,11 +18,10 @@ and `BiobuzzRun` plays its rules. Numbers are metres in the field frame unless t
 
 ## Frame
 
-Origin at the middle of the field on the tile top, Z up, +X towards the audience, +Y towards the blue wall: the red
-wall is at -Y (audience's left), the blue wall at +Y. The field is the same when turned half a turn about the origin,
-which swaps red and blue. The SDK gives only placeholder poses
-for the BIOBUZZ tags, so no global tag map exists: every tag is fixed to a HIVE (`FieldTag.hostEntityId`) and the
-vision model works from the live pose of that body.
+Origin at the middle of the field on the tile top, Z up, +X towards the audience, +Y towards the blue wall: the red wall is
+at -Y (audience's left), the blue wall at +Y. The field is the same when turned half a turn about the origin, which swaps red
+and blue. The SDK gives only placeholder poses for the BIOBUZZ tags, so no global tag map exists: every tag is fixed to a HIVE
+(`FieldTag.hostEntityId`) and the vision model works from the live pose of that body.
 
 ## Dimensions that were chosen
 
@@ -42,88 +41,77 @@ vision model works from the live pose of that body.
 | POLLEN | ball of radius 1.40 in (2.80 in), 0.02495 kg | CAD, am-5851 |
 | NECTAR | ball of radius 1.81 in (3.62 in), 0.04128 kg | CAD, am-5852 |
 
-The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of 3.55 in, as the manual says). The model
-uses 3.86 in so that a 3.62 in NECTAR cannot squeeze through within the engine's 1 mm contact tolerance.
+The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of 3.55 in, as the manual says). The model uses
+3.86 in so that a 3.62 in NECTAR cannot squeeze through within the engine's 1 mm contact tolerance.
 
 ## What is physics and what is a rule
 
-- **Solids** are boxes, tilted boxes and 16-sided rings of boxes; the same list that collides is the scenery of the
-  description, so what is drawn is what is collided with. Tape is drawn only. The perimeter is four wall boxes; the
-  frame feet, the screws and the brackets under the wall are left out.
-- **HIVE.** A dynamic body on a hinge (`PhysicsWorld.addPivot`) that the load turns: two CELLS of thickened boxes round
-  the CAD interior, mass 1.5 kg, centre of mass 58.5 mm above the pivot when the arm is level, stops at +-30 degrees, a
-  velocity damper over the last 6 degrees before each stop. Pieces in a CELL are ordinary bodies resting on the CELL
-  floor, so a load tips the HIVE by its weight and position, the CELL that goes down spills through its opening onto
-  the floor, and the other end comes up with its tags. A TIP is counted once, when the arm enters the damper zone on the
-  other side (the manual's "damper begins to contact the frame"); it is the ordered `BiobuzzRun.tips()` event list.
-- **Calibration.** The checklist wants 7 POLLEN not to tip and 8 to tip, and 3 NECTAR with 2 POLLEN not to tip and 3 to
-  tip. Both hold if a NECTAR weighs about 5/3 of a POLLEN: the AndyMark weights give 1.65. The centre of mass height was
-  swept until all eight loads in `HiveTest` came out as the checklist says, set down gently or tossed in at 1.5 m/s, for
-  both HIVES. The window is narrow: 57.5 to 59.5 mm, which is +-1.7 %, because 7 against 8 POLLEN is a 14 % difference in
-  load. At the start position the load of seven POLLEN turns the arm with about 0.41 N m, which must not tip it, and
-  that of eight with about 0.46 N m, which must.
-- **FLOWER.** Real collision rings and pipes. A POLLEN dropped in from the top falls to the pocket, a NECTAR comes to rest
-  on the middle ring seat, whose opening is narrower than a NECTAR, so the stack is ordered by the order of loading and
-  a POLLEN in the pocket can be knocked out through the retrieval opening while a NECTAR cannot.
-- **Pieces** are balls. They lie where the setup guide stages them: four POLLEN stacked in each FLOWER, four lined along
-  the wall from the corner of each GARDEN, three NECTAR of its colour in the CELL facing up of each HIVE (the red
-  audience CELL, the blue scoring CELL), the other five NECTAR of each colour with that alliance's human player. Every
-  robot starts with four preload POLLEN: the robot's own are handed out by `takeFromReserve(POLLEN)` and are not in the
-  world, its partner's lie in the middle of its LOADING ZONE against the wall, and the other alliance's eight lie in the
-  middle of theirs (CM 10.3.1: robots that are not present). 44 bodies at the start, 42 pieces and two HIVES, and 14
-  pieces in reserve: 56 in all.
+- **Solids** are boxes, tilted boxes and 16-sided rings of boxes; the same list is the scenery of the description, so what is
+  drawn is what is collided with. Tape is drawn only; the frame feet, screws and wall brackets are left out.
+- **HIVE.** A dynamic body on a hinge (`PhysicsWorld.addPivot`) that the load turns: two CELLS of thickened boxes round the
+  CAD interior, mass 1.5 kg, centre of mass 58.5 mm above the pivot when the arm is level, stops at +-30 degrees, a velocity
+  damper over the last 6 degrees before each stop. Pieces in a CELL are ordinary bodies resting on the CELL floor, so a load
+  tips the HIVE by its weight and position, the CELL that goes down spills through its opening onto the floor, and the other
+  end comes up with its tags. A TIP is counted once, when the arm enters the damper zone on the other side (the manual's
+  "damper begins to contact the frame"); it is the ordered `BiobuzzRun.tips()` event list.
+- **Calibration.** The checklist wants 7 POLLEN not to tip and 8 to tip, and 3 NECTAR with 2 POLLEN not to tip and 3 to tip.
+  Both hold if a NECTAR weighs about 5/3 of a POLLEN; the AndyMark weights give 1.65. The centre of mass height was swept
+  until all eight loads of `HiveTest` came out as the checklist says, set down gently or tossed in at 1.5 m/s, for both
+  HIVES. The window is narrow, 57.5 to 59.5 mm (+-1.7 %), because 7 against 8 POLLEN is a 14 % difference in load: at the
+  start position seven POLLEN turn the arm with about 0.41 N m (must not tip) and eight with about 0.46 N m (must).
+- **FLOWER.** Real collision rings and pipes. A POLLEN dropped in from the top falls to the pocket, a NECTAR comes to rest on
+  the middle ring seat, whose opening is narrower than a NECTAR, so the stack is ordered by the order of loading and a POLLEN
+  in the pocket can be knocked out through the retrieval opening while a NECTAR cannot.
+- **Pieces** are balls, where the setup guide stages them: four POLLEN stacked in each FLOWER, four lined along the wall from
+  the corner of each GARDEN, three NECTAR of its colour in the CELL facing up of each HIVE (the red audience CELL, the blue
+  scoring CELL), the other five NECTAR of each colour with that alliance's human player. Every robot starts with four preload
+  POLLEN: the robot's own are handed out by `takeFromReserve(POLLEN)` and are not in the world, its partner's lie in the middle
+  of its LOADING ZONE against the wall, the other alliance's eight in the middle of theirs (CM 10.3.1: robots that are not
+  present). 44 bodies at the start (42 pieces and two HIVES) and 14 pieces in reserve: 56 in all.
 - **Rolling.** A ball on the tiles gets rolling resistance from the engine layer (`PieceSpec.rollingResistance`, 0.06): a
-  constant slowdown of 0.42 m/s^2, so a ball rolled at 1 m/s stops after about a metre and then sleeps. Without it the
-  engine leaves a damped ball crawling at several cm/s for ever. It applies to every static surface under a piece, so
-  also to a piece in a CELL or stacked in a FLOWER, which stays put unless the surface tilts more than 3.4 degrees.
+  constant slowdown of 0.42 m/s^2, so a ball rolled at 1 m/s stops after about a metre (without it the engine leaves a damped
+  ball crawling at several cm/s for ever). It applies to every static surface under a piece, so a piece in a CELL or stacked
+  in a FLOWER stays put unless the surface tilts more than 3.4 degrees.
 - **Phases.** AUTO is 30 s from `enterPhase(AUTONOMOUS)`; what happens until `enterPhase(TELEOP)`, the 8 s transition
   included, counts as AUTO (CM 10.5.B). TELEOP ends 120 s after it started and the run moves itself to `ENDED`.
-  `oneMinuteLeft()` is true from 60 s before the end and in PRACTICE. After `ENDED` the score latches when all pieces and
-  both HIVES have been at rest for 0.25 s, or after 10 s (`isFinal()`).
+  `oneMinuteLeft()` is true from 60 s before the end and in PRACTICE. After `ENDED` the score latches when all pieces and both
+  HIVES have been at rest for 0.25 s, or after 10 s (`isFinal()`).
 - **Scoring** (CM 10.5, assessed from the bodies as they are, so a resting or bouncing piece is never counted twice):
   LEAVE 3 and AUTO PARK 5 are read when AUTO ends; HIVE TIP 20 each, in AUTO or TELEOP; 2 for each piece in the CELL that
-  faces up; in each FLOWER the alliance whose colour of NECTAR is topmost owns it and gets 2 for every piece in its
-  scoring volume, and the alliance whose NECTAR is lowest gets 5; 1 for each piece partly in its GARDEN, of any colour;
-  TELEOP PARK 5 (partly in the LOADING ZONE, read at the end). A piece counts in one place only, in the order CELL,
-  FLOWER, GARDEN. In PRACTICE everything is read live. The score is the robot's alliance's. Its lines, in order: LEAVE,
-  AUTO PARK, HIVE TIP in AUTO, HIVE TIP in TELEOP, POLLEN and NECTAR in CELL, FLOWER bottom NECTAR bonus, POLLEN and
-  NECTAR in owned FLOWER, POLLEN and NECTAR in GARDEN, TELEOP PARK.
-- **Humans.** `load-nectar` and `load-opponent-nectar` drop one NECTAR into the LOADING ZONE: once for each TIP of that
-  colour of HIVE (G426.A), freely when 60 s or less remain (G426.B), always for a NECTAR that left the field; five
-  NECTAR per colour. `return-pollen` puts the POLLEN that has been outside longest back in at the wall where it left.
-  NECTAR that leaves the field goes back to its human; POLLEN waits for the staff. `takeFromReserve` hands out only the
-  robot's four preload POLLEN: NECTAR enters the game only through these actions, never into a robot.
+  faces up; in each FLOWER the alliance whose colour of NECTAR is topmost owns it and gets 2 for every piece in its scoring
+  volume, and the alliance whose NECTAR is lowest gets 5; 1 for each piece partly in its GARDEN, of any colour; TELEOP PARK 5
+  (partly in the LOADING ZONE, read at the end). A piece counts in one place only, in the order CELL, FLOWER, GARDEN. In
+  PRACTICE everything is read live. The score is the robot's alliance's.
+- **Humans.** `load-nectar` and `load-opponent-nectar` drop one NECTAR into the LOADING ZONE: once for each TIP of that colour
+  of HIVE (G426.A), freely when 60 s or less remain (G426.B), always for a NECTAR that left the field; five NECTAR per colour.
+  `return-pollen` puts the POLLEN that has been outside longest back in at the wall where it left. NECTAR that leaves the
+  field goes back to its human; POLLEN waits for the staff. NECTAR enters the game only through these actions, never into a
+  robot (`takeFromReserve` hands out only the robot's four preload POLLEN).
 - **Seed.** Moves the FLOWER stacks by up to 0.06 in and the GARDEN and LOADING ZONE balls by up to 0.08 in.
-- **Start poses.** Six, as G304 asks: on the robot's own half, touching its own wall, facing the field, outside the
-  LOADING ZONE and clear of every FLOWER and every piece: red x = 46, 0 and -58 in at 9.2 in from the wall; blue the
-  half turn of those.
-- **Robot outline.** LEAVE and PARK use the rectangle of `FieldSetup` (default 18 in).
+- **Start poses.** Six, as G304 asks: on the robot's own half, touching its own wall, facing the field, outside the LOADING
+  ZONE and clear of every FLOWER and every piece: red x = 46, 0 and -58 in at 9.2 in from the wall; blue the half turn of
+  those. LEAVE and PARK use the robot's outline, the rectangle of `FieldSetup` (default 18 in).
 
 ## Estimated numbers
 
 Not from a source: the HIVE mass 1.5 kg, inertia 0.27 kg m^2 about the pivot, centre of mass height 58.5 mm (calibrated),
 bearing friction 0.004 N m, damper 2.0 N m s/rad and the 6 degree damper zone, CELL friction 0.35 and bounce 0.1; ball
-friction 0.5, bounce 0.3, rolling resistance 0.06 and spin damping 0.05/s; floor friction 0.8, walls
-0.4, FLOWER and frame 0.35, no bounce; the nectar to pollen weight ratio of 1.65 is the AndyMark weights, not a constant
-the manual gives.
+friction 0.5, bounce 0.3, rolling resistance 0.06 and spin damping 0.05/s; floor friction 0.8, walls 0.4, FLOWER and frame
+0.35, no bounce. The NECTAR to POLLEN weight ratio of 1.65 is the AndyMark weights, not a constant the manual gives.
 
 ## Known gaps
 
-- No fouls, no ranking points, no opposing robot. A tip caused by anything but a ball in the CELL (G417, G420) still
-  counts, and early FLOWER scoring (G410) is scored.
+- No fouls, no ranking points, no opposing robot. A tip caused by anything but a ball in the CELL (G417, G420) still counts,
+  and early FLOWER scoring (G410) is scored.
 - The manual does not say whether "POLLEN and/or NECTAR remaining in CELL" is 2 points per piece or per CELL, nor which
-  alliance a TIP counts for. Per piece (the point table's wording and the community calculators), and the alliance whose
-  colour the HIVE is.
+  alliance a TIP counts for. Chosen: per piece (the point table's wording and the community calculators), and the alliance
+  whose colour the HIVE is.
 - Early NECTAR entry is refused rather than penalised.
-- The frame's feet, the under-tile strips and the tape of the ALLIANCE AREAS are not modelled; the tape of the zones is
-  drawn but does not collide.
+- The frame's feet, the under-tile strips and the tape of the ALLIANCE AREAS are not modelled; the tape of the zones is drawn
+  but does not collide.
 - The first step of a new world costs 3 to 6 ms, for all the contacts of the field at once; later steps cost 0.03 to 0.06 ms.
 
-## Checked by tests
+## Performance
 
-`HiveTest`: the checklist's loads and the setup guide's, on both HIVES, a spill, ordered tips, the other alliance's
-HIVE. `FlowerTest`: stacking order, NECTAR resting in the ring, retrieval of POLLEN but not NECTAR. `RulesTest`: FLOWER
-ownership and the bottom bonus, GARDEN, LEAVE and PARK, the phases and the settle, human NECTAR, pieces leaving the
-field. `FieldTest`: description against the world, tags following their HIVE, start poses, equal seeds, conservation of
-56 pieces, a rolling piece stopping, step cost. Step cost with the whole field, a driving robot and a tipping HIVE: mean
-0.03 to 0.06 ms, 99th percentile 0.11 to 0.34 ms of the 4.17 ms budget, measured while other work ran on the machine.
+A step with the whole field, a driving robot and a tipping HIVE: mean 0.03 to 0.06 ms, 99th percentile 0.11 to 0.34 ms of the
+4.17 ms budget, measured while other work ran on the machine.
