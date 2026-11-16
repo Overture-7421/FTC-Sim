@@ -50,7 +50,7 @@ class SettingsStoreTest {
             display = DisplaySettings(renderScalePercent = 75, frameCapHz = 90, performanceOverlay = true),
             gamepads = gamepads,
             projects = listOf(
-                project(1, SetupInput("decode", Alliance.BLUE, false, "9", "BLUE goal side", "1.25", "-0.5", "90", true)),
+                project(1, SetupInput("decode", Alliance.BLUE, true, "", "BLUE goal side", "1.25", "-0.5", "90", true)),
                 project(2, SetupInput("none", Alliance.RED, true, "", null, "0", "0", "0", false)),
                 project(3).copy(robotSkipped = true),
             ),
@@ -162,8 +162,8 @@ class SettingsStoreTest {
         assertEquals(listOf("one", "two"), settings.projects.map { it.name }, "a project with no folder is dropped")
         assertNull(settings.projects[0].run, "a run with an unknown alliance is not remembered, the project still is")
         assertEquals(Alliance.RED, settings.projects[1].run?.alliance)
-        assertEquals("42", settings.projects[1].run?.seedText)
-        assertFalse(settings.projects[1].run!!.randomSeed)
+        assertTrue(settings.projects[1].run!!.randomSeed, "a seed an older file kept is ignored: every run draws one")
+        assertEquals("", settings.projects[1].run?.seedText)
     }
 
     @Test

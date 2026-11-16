@@ -406,8 +406,8 @@ smaller than the area.
 Java helper for it there, so `UserDirectories` is a few lines in this module). A UTF-8 properties file with `format=1`:
 `display.*` (render scale, frame cap, overlay, an old `lengthInches` is ignored), `gamepad.N.*` (assignment kind, controller GUID and name, dead zones),
 `keyboard.<CONTROL>=<AWT key code>` (0 is unbound), `project.N.*` (a recent project: its folder, name and, when it was run, the
-field, alliance, seed and start pose of that run, the OpMode that finds its hardware, and `robotSkipped`; an older `recent.N.*` run list
-and the `trusted.N` keys of earlier versions are ignored, not read).
+field, alliance and start pose of that run, the OpMode that finds its hardware, and `robotSkipped`; an older `recent.N.*` run list,
+the `trusted.N` keys and the `run.seed` and `run.randomSeed` keys of earlier versions are ignored, not read).
 It is read once when the application starts and written after every change, on a thread of its own and coalesced
 (any number of changes before the writer runs is one write), through a temporary file that then replaces the real one. A
 missing file gives the defaults. A value that makes no sense is replaced by its default and the rest is kept; a file that

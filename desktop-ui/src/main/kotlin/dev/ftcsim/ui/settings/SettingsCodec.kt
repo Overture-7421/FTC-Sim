@@ -48,8 +48,6 @@ internal object SettingsCodec {
             project.run?.let { run ->
                 out.setProperty(prefix + "run.field", run.field)
                 out.setProperty(prefix + "run.alliance", run.alliance.name)
-                out.setProperty(prefix + "run.randomSeed", run.randomSeed.toString())
-                out.setProperty(prefix + "run.seed", run.seedText)
                 run.startPose?.let { out.setProperty(prefix + "run.startPose", it) }
                 out.setProperty(prefix + "run.startX", run.startX)
                 out.setProperty(prefix + "run.startY", run.startY)
@@ -120,7 +118,10 @@ internal object SettingsCodec {
         )
     }
 
-    /** What a project was last run with; a run with anything unreadable in it is not remembered, and the project starts from its defaults. */
+    /**
+     * What a project was last run with; a run with anything unreadable in it is not remembered, and the project starts
+     * from its defaults. Every run draws a new seed, so an older file's `run.seed` and `run.randomSeed` are ignored.
+     */
     private fun decodeRun(p: Properties, prefix: String): SetupInput? {
         val field = p.text(prefix + "field") ?: return null
         val alliance = p.text(prefix + "alliance")?.let { text -> Alliance.entries.firstOrNull { it.name.equals(text, ignoreCase = true) } }
@@ -128,8 +129,6 @@ internal object SettingsCodec {
         return SetupInput(
             field = field,
             alliance = alliance,
-            randomSeed = p.text(prefix + "randomSeed")?.toBooleanStrictOrNull() ?: true,
-            seedText = p.getProperty(prefix + "seed").orEmpty(),
             startPose = p.text(prefix + "startPose"),
             startX = p.text(prefix + "startX") ?: "0",
             startY = p.text(prefix + "startY") ?: "0",
