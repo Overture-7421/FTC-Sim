@@ -32,7 +32,7 @@ import java.util.Map;
  * @param opModes         the OpModes the program declares, found by scanning its bytecode
  * @param warnings        pointers to code that may not work in the simulator; not claims that it fails
  * @param files           every file of the package except this manifest, with its hash
- * @param extras          room for what later parts of the simulator attach, such as a robot profile or field
+ * @param extras          room for what later parts of the simulator attach, such as a robot mapping or field
  *                        references; the importer writes it empty and keeps what it finds
  */
 public record PackageManifest(

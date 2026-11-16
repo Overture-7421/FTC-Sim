@@ -6,9 +6,9 @@ import java.util.List;
  * What is known about the robot before anything runs, for drawing it and for the panels that list its hardware.
  *
  * @param lengthM  the chassis box, drawn centred on the robot's position
- * @param motors   the names of the motors the profile wires, in profile order
- * @param servos   the names of the servos the profile wires
- * @param devices  the names of the I2C devices the profile wires
+ * @param motors   the names of the motors the robot's design wires, in the design's order
+ * @param servos   the names of the servos the design wires
+ * @param devices  the names of the I2C devices the design wires
  */
 public record RobotInfo(
         String name, double lengthM, double widthM, double heightM, List<String> motors, List<String> servos, List<String> devices) {

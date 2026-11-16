@@ -62,7 +62,7 @@ final class Bno055Mount {
     }
 
     /**
-     * Reads {@code mount.logo} and {@code mount.port} of a profile (the directions UP, DOWN, FORWARD, BACKWARD, LEFT
+     * Reads {@code mount.logo} and {@code mount.port} of the settings (the directions UP, DOWN, FORWARD, BACKWARD, LEFT
      * and RIGHT; logo up and port forward when absent).
      *
      * @throws IllegalArgumentException if a direction is not one of those, or the two are not at right angles

@@ -7,7 +7,7 @@ import java.util.List;
  * A place where the robot carries pieces: a path in the robot's frame that pieces ride from its first point to its
  * last, at the speed of whatever drives them.
  *
- * @param name     what zones and profiles call it
+ * @param name     what zones call it
  * @param capacity the most pieces it holds
  * @param path     at least two points in the robot frame; a piece entering the storage appears at the first and
  *                 is held back at the last

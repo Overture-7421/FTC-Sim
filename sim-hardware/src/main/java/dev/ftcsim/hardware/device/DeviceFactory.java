@@ -2,7 +2,7 @@ package dev.ftcsim.hardware.device;
 
 import dev.ftcsim.hardware.i2c.I2cPeripheral;
 
-/** Builds the model of one kind of device from the settings a robot profile gives it. */
+/** Builds the model of one kind of device from the settings the robot's design gives it. */
 @FunctionalInterface
 public interface DeviceFactory {
 

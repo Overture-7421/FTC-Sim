@@ -65,6 +65,7 @@
  *   <tr><td>0x44<td>Catalogue<td>fields (id, name, start poses,  human actions); the motors a mapping may name (id,
  *       name) (see {@code Catalogue})
  *   <tr><td>0x45<td>Refused<td>message (text): a command was refused and nothing else changed
+ *   <tr><td>0x46<td>Log<td>batches of lines the robot program wrote, which the window shows as its console
  * </table>
  *
  * Fields of records are written in declaration order. A kind that this version does not know, a payload that ends

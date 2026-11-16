@@ -350,7 +350,7 @@ public final class Mechanisms {
         return storage(storage).pieces.stream().map(piece -> piece.id).toList();
     }
 
-    /** The names of the storages, in the order the profile lists them. */
+    /** The names of the storages, in the order the design lists them. */
     public List<String> storageNames() {
         return List.copyOf(storages.keySet());
     }

@@ -7,7 +7,7 @@ import java.util.Objects;
 
 /**
  * Everything outside the SDK that the simulated robot controller is connected to: the serial bus its hubs sit
- * on, the profile's account of what is plugged in where, and the smart cameras on its USB ports. The simulator
+ * on, the robot's account of what is plugged in where, and the smart cameras on its USB ports. The simulator
  * builds it; the SDK host only uses it.
  *
  * @param hubs      the bus the robot controller talks to its REV hubs over

@@ -40,7 +40,7 @@ import java.util.TreeSet;
  * camera relative to it, and the result is valid; it just adds nothing to {@code botpose}, which stays zero when
  * no mapped tag is seen, as in the specification's examples for pipelines that give no pose.
  *
- * <p><b>Profile settings</b> (flat names, numbers and text): {@code mount.x}, {@code mount.y}, {@code mount.z} in
+ * <p><b>Settings</b> (flat names, numbers and text): {@code mount.x}, {@code mount.y}, {@code mount.z} in
  * metres in the robot's frame (X forward, Y left, Z up, from the chassis reference), {@code mount.yawDegrees},
  * {@code mount.pitchDegrees} (positive looks up) and {@code mount.rollDegrees} (all default 0); then for each
  * pipeline slot N in 0..9 that the camera has configured: {@code pipelineN.type} ({@code apriltag}),
@@ -100,7 +100,7 @@ public final class LimelightModel implements CameraModel {
     /** The settings of one pipeline slot. */
     record PipelineSpec(int index, String fieldMap, Set<Integer> ids, Resolution resolution, boolean sendCorners) {}
 
-    /** What a profile says about one camera. */
+    /** What the settings say about one camera. */
     record Settings(CameraMount mount, Map<Integer, PipelineSpec> pipelines) {}
 
     private record Pipeline(PipelineSpec spec, Map<Integer, SceneTag> map) {}
@@ -174,7 +174,7 @@ public final class LimelightModel implements CameraModel {
     }
 
     // ---------------------------------------------------------------------------------------------
-    // Building it from a profile
+    // Building it from settings
     // ---------------------------------------------------------------------------------------------
 
     private static LimelightModel create(DeviceConfig config, DeviceContext context, long seed) {

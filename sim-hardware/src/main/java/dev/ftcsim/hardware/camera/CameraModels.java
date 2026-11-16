@@ -38,7 +38,7 @@ public final class CameraModels {
     }
 
     /**
-     * Builds the camera a profile calls {@code cameraName}.
+     * Builds the camera the robot's design calls {@code cameraName}.
      *
      * @param settings the camera's settings, numbers and text
      * @param seed     fixes the camera's noise

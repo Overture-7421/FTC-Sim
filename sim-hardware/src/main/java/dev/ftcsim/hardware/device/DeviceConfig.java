@@ -9,7 +9,7 @@ import java.util.TreeSet;
 /**
  * The settings of one device as the robot's design gives them: names mapped to numbers or text, immutable. Every
  * getter names the device and the setting when it fails, and a setting that the device model never asked for is
- * rejected once the model is built, so a misspelling in a profile fails loudly instead of changing nothing.
+ * rejected once the model is built, so a misspelling in a setting's name fails loudly instead of changing nothing.
  */
 public final class DeviceConfig {
 
