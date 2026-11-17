@@ -67,14 +67,15 @@ public record RobotSpec(
      * @param intake   the intake roller's motor, or null
      * @param conveyor the indexer's motor, or null
      * @param flywheel the flywheel's motor, or null
+     * @param intakeRatio, conveyorRatio, flywheelRatio motor turns to one turn of the roller, the rollers and the flywheel
      * @param servos   the positional servos by the joint each moves
      */
     public record Joints(
-            String intake, int intakeSign, String conveyor, int conveyorSign, String flywheel, int flywheelSign,
-            List<ServoJoint> servos) {
+            String intake, int intakeSign, double intakeRatio, String conveyor, int conveyorSign, double conveyorRatio, String flywheel,
+            int flywheelSign, double flywheelRatio, List<ServoJoint> servos) {
 
         /** A robot whose picture has nothing to follow. */
-        public static final Joints NONE = new Joints(null, 1, null, 1, null, 1, List.of());
+        public static final Joints NONE = new Joints(null, 1, 1.0, null, 1, 1.0, null, 1, 1.0, List.of());
 
         public Joints {
             servos = List.copyOf(servos);

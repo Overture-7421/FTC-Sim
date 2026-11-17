@@ -58,13 +58,13 @@ final class Samples {
                         new MotorMapping("fr", Slot.FRONT_RIGHT, "", false),
                         new MotorMapping("rl", Slot.REAR_LEFT, "", true),
                         new MotorMapping("rr", Slot.REAR_RIGHT, "", false),
-                        new MotorMapping("roller", Slot.INTAKE, "goBILDA-5202-1150", false),
+                        new MotorMapping("roller", Slot.INTAKE, "swyft-spike-6000", false, 2.0),
                         new MotorMapping("belt", Slot.CONVEYOR, "ünï", true),
-                        new MotorMapping("shooterA", Slot.SHOOTER, "", false),
-                        new MotorMapping("turret", Slot.TURRET, "goBILDA-5203-435", true)),
+                        new MotorMapping("shooterA", Slot.SHOOTER, "", false, 43.0 / 30.0),
+                        new MotorMapping("turret", Slot.TURRET, "goBILDA-bare-6000", true)),
                 11.3,
                 96,
-                "goBILDA-5203-435",
+                "goBILDA-bare-6000",
                 Double.longBitsToDouble(0x7FF8000000001234L),
                 "UP",
                 "BACKWARD",
@@ -78,7 +78,8 @@ final class Samples {
                         List.of(
                                 new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
                                 new RobotMapping.MechanismServo(
-                                        RobotMapping.ServoRole.COLIBRI_RIGHT, new RobotMapping.ServoMapping("arm ✓", "gobilda-2000-torque", true)))));
+                                        RobotMapping.ServoRole.COLIBRI_RIGHT, new RobotMapping.ServoMapping("arm ✓", "gobilda-2000-torque", true)))),
+                12.7);
     }
 
     static GamepadState gamepad() {
@@ -154,7 +155,7 @@ final class Samples {
                                 "DECODE ✓ 2025–26",
                                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
                                 List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")))),
-                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"),
+                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
                         new dev.ftcsim.contracts.session.MotorChoice("ünï", "Ünïcode motor")));
     }
 

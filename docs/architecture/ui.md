@@ -62,7 +62,7 @@ File choosers and the build-log opener sit behind `FileChooser` and `LogOpener`;
 
 ### Robot
 
-`MappingScreen` / `MappingModel` (`dev.ftcsim.ui.robot`) map a project's motors, whether it has an `ftcsim.json` or not. The robot is fixed by the game ([fixed-robots.md](../robots/fixed-robots.md), which also holds the schema); this page only says which of the team's motors is which part.
+`MappingScreen` / `MappingModel` (`dev.ftcsim.ui.robot`) map a project's motors, whether it has an `ftcsim.json` or not. The robot is fixed by the game ([fixed-robots.md](../robots/fixed-robots.md), which also holds the schema); this page only says which of the team's motors is which part. Each motor row has its base motor (a dropdown of the catalogue: base motors only, each once), a Ratio field (motor turns to one turn of what it drives; a number or a fraction such as `43/30`, empty is 1) and Mirrored; the four wheels share their motor and ratio. A ratio that is not a number, or is outside 0.05 to 1000, is said under the field and blocks the save.
 
 - The person picks an OpMode; the app runs it to Init to read the names it asks the hub for (`HardwareScan`); each motor is dragged (or clicked) onto a part.
 - Only motors are mapped on the page, and the BIOBUZZ turret's servo: a name, **Servo mirrored**, and **Limelight turns with the turret**. The turret's OctoQuad encoders and axis are in `ftcsim.json` only; saving the page keeps them. The simulator provides the other servos, the sensors and the pins. Hub and port are not asked: the design gives each motor the next free port, and the turret servo Control Hub servo port 0.

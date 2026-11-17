@@ -16,9 +16,9 @@ import org.junit.jupiter.api.Test
 
 class MappingModelTest {
     private val motors = listOf(
-        MotorChoice("goBILDA-5203-435", "435 rpm"),
-        MotorChoice("goBILDA-5203-1150", "1150 rpm"),
-        MotorChoice("goBILDA-bare-6000", "bare"),
+        MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
+        MotorChoice("swyft-spike-6000", "SWYFT Spike"),
+        MotorChoice("rev-hd-hex-6000", "REV HD Hex"),
     )
 
     private fun motor(name: String) = UnmappedDevice(Kind.MOTOR, name)
@@ -34,13 +34,13 @@ class MappingModelTest {
             MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
             MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
             MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
-            MotorMapping("shooterRight", Slot.SHOOTER, "goBILDA-5203-1150", true),
+            MotorMapping("shooterRight", Slot.SHOOTER, "swyft-spike-6000", true),
             MotorMapping("intake", Slot.INTAKE, "", false),
             MotorMapping("upMotor", Slot.CONVEYOR, "", true),
         ),
         11.3,
         96.5,
-        "goBILDA-5203-435",
+        "goBILDA-bare-6000",
         1.0,
         "LEFT",
         "UP",
@@ -53,6 +53,43 @@ class MappingModelTest {
         place("fr", Slot.FRONT_RIGHT)
         place("bl", Slot.REAR_LEFT)
         place("br", Slot.REAR_RIGHT)
+    }
+
+    @Test
+    fun aRatioIsTypedForEachMotorAndTheDriveAsANumberOrAFractionAndEmptyIsOneToOne() {
+        val model = model()
+        model.mapWheels()
+        model.addFound(listOf("fly", "roll").map(::motor))
+        model.place("fly", Slot.SHOOTER)
+        model.place("roll", Slot.INTAKE)
+
+        assertEquals("", model.ratio("fly"))
+        assertNull(model.ratioError("fly"), "empty is a ratio of one to one")
+        model.setRatio("fly", "43/30")
+        model.setRatio("roll", "2")
+        model.setRatio("fl", "12.7")
+        val mapping = model.mapping()!!
+
+        assertEquals(43.0 / 30.0, mapping.`in`(Slot.SHOOTER)[0].ratio(), 1e-12)
+        assertEquals(2.0, mapping.`in`(Slot.INTAKE)[0].ratio())
+        assertEquals(12.7, mapping.driveRatio(), "a wheel's ratio is the one of all four")
+        assertEquals("12.7", model.ratio("br"))
+
+        model.setModel("fly", "goBILDA-bare-6000")
+        assertEquals("43/30", model.ratio("fly"), "choosing the motor keeps the ratio")
+        model.setRatio("fly", "x/3")
+        assertNotNull(model.ratioError("fly"))
+        assertNull(model.mapping(), "a ratio that is not a number blocks the save")
+        model.setRatio("fly", "0")
+        assertNull(model.ratioError("fly"))
+        model.setRatio("fly", "5000")
+        assertNotNull(model.ratioError("fly"), "a ratio past the simulator's range")
+
+        val reloaded = model()
+        reloaded.load(RobotMapping.empty("Team").withMotors(listOf(MotorMapping("fly", Slot.SHOOTER, "", false, 1.4333333333333333))).withDrive("goBILDA-bare-6000", 3.0))
+        assertEquals("1.4333333333333333", reloaded.ratio("fly"))
+        assertEquals("3", reloaded.form.driveRatio)
+        assertFalse(reloaded.edited, "what is loaded is what is on the page")
     }
 
     @Test
@@ -223,15 +260,15 @@ class MappingModelTest {
         model.place("roll", Slot.INTAKE)
 
         assertEquals("goBILDA-bare-6000", model.model("fly"), "a flywheel usually turns on the bare motor")
-        assertEquals("goBILDA-5203-435", model.model("roll"))
-        model.setModel("fl", "goBILDA-5203-1150")
-        assertEquals(listOf("goBILDA-5203-1150"), listOf("fl", "fr", "bl", "br").map { model.model(it) }.distinct(), "one motor on all four")
-        assertEquals("goBILDA-5203-1150", model.mapping()!!.driveMotor())
+        assertEquals("goBILDA-bare-6000", model.model("roll"))
+        model.setModel("fl", "swyft-spike-6000")
+        assertEquals(listOf("swyft-spike-6000"), listOf("fl", "fr", "bl", "br").map { model.model(it) }.distinct(), "one motor on all four")
+        assertEquals("swyft-spike-6000", model.mapping()!!.driveMotor())
         assertEquals(setOf(""), model.mapping()!!.motors().filter { it.slot().wheel() }.map { it.model() }.toSet())
 
-        model.setModel("roll", "goBILDA-5203-1150")
-        assertEquals("goBILDA-5203-1150", model.mapping()!!.motors().first { it.name() == "roll" }.model())
-        model.setModel("roll", "goBILDA-5203-435")
+        model.setModel("roll", "swyft-spike-6000")
+        assertEquals("swyft-spike-6000", model.mapping()!!.motors().first { it.name() == "roll" }.model())
+        model.setModel("roll", "goBILDA-bare-6000")
         assertEquals("", model.mapping()!!.motors().first { it.name() == "roll" }.model(), "the part's usual motor is not written")
     }
 
@@ -241,12 +278,12 @@ class MappingModelTest {
         model.addFound(listOf(motor("m")))
         model.place("m", Slot.CONVEYOR)
         model.setMirrored("m", true)
-        model.setModel("m", "goBILDA-5203-1150")
+        model.setModel("m", "swyft-spike-6000")
 
         model.place("m", Slot.INTAKE)
 
         assertTrue(model.isMirrored("m"))
-        assertEquals("goBILDA-5203-1150", model.model("m"))
+        assertEquals("swyft-spike-6000", model.model("m"))
     }
 
     @Test
@@ -319,7 +356,7 @@ class MappingModelTest {
         assertEquals(3.5, mapping.turretRatio())
         assertEquals("FORWARD", mapping.hubLogo())
         assertEquals("RIGHT", mapping.hubUsb())
-        assertNotNull(model.motorName("goBILDA-5203-435"))
+        assertNotNull(model.motorName("goBILDA-bare-6000"))
         assertNull(model.motorName("nonsense"))
         assertEquals(emptyList<String>(), mapping.problems(true))
     }

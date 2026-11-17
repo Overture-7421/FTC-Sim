@@ -12,6 +12,7 @@ import dev.ftcsim.mechanisms.Condition;
 import dev.ftcsim.mechanisms.LaunchSpec;
 import dev.ftcsim.mechanisms.StorageSpec;
 import dev.ftcsim.mechanisms.Volume;
+import dev.ftcsim.physics.DcMotor;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.physics.WheelPosition;
 import java.util.ArrayList;
@@ -139,15 +140,6 @@ public final class RobotDesign {
         return game == Game.BIOBUZZ && usual ? BIOBUZZ_CAMERA : mapping.camera();
     }
 
-    /** Motor turns to one turn of the intake roller (the Yellow Jacket motors of the CAD's intake and indexer drive at 2:1). */
-    public static final double INTAKE_RATIO = 2.0;
-
-    /** Motor turns to one turn of the indexer's rollers. */
-    public static final double CONVEYOR_RATIO = 2.0;
-
-    /** Motor turns to one turn of the flywheel (the CAD's 43:30 belt). */
-    public static final double FLYWHEEL_RATIO = 43.0 / 30.0;
-
     /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
     public static final double COLIBRI_RATIO = 40.0 / 30.0;
 
@@ -206,9 +198,15 @@ public final class RobotDesign {
         MotorMapping conveyor = firstMotor(mapping, Slot.CONVEYOR);
         MotorMapping shooter = firstMotor(mapping, Slot.SHOOTER);
         return new RobotSpec.Joints(
-                intake == null ? null : intake.name(), intake == null ? 1 : sign(intake),
-                conveyor == null ? null : conveyor.name(), conveyor == null ? 1 : sign(conveyor),
-                shooter == null ? null : shooter.name(), shooter == null ? 1 : sign(shooter), servos);
+                intake == null ? null : intake.name(), intake == null ? 1 : sign(intake), intake == null ? 1.0 : ratioOf(intake),
+                conveyor == null ? null : conveyor.name(), conveyor == null ? 1 : sign(conveyor), conveyor == null ? 1.0 : ratioOf(conveyor),
+                shooter == null ? null : shooter.name(), shooter == null ? 1 : sign(shooter), shooter == null ? 1.0 : ratioOf(shooter),
+                servos);
+    }
+
+    /** Motor turns to one turn of what the motor drives: the mapping's ratio, or 1 when it gives none. */
+    private static double ratioOf(MotorMapping motor) {
+        return motor.ratio() == 0.0 ? 1.0 : motor.ratio();
     }
 
     private static MotorMapping firstMotor(RobotMapping mapping, Slot slot) {
@@ -274,16 +272,13 @@ public final class RobotDesign {
             return null;
         }
         MecanumConfig generic = MecanumConfig.generic18Inch();
-        // BIOBUZZ's robot drives on SWYFT Spike motors, 12.7:1 to its 112 mm wheels, unless the mapping names others.
-        boolean biobuzz = game == Game.BIOBUZZ;
-        String driveMotor = biobuzz && mapping.driveMotor().equals(RobotMapping.DEFAULT_DRIVE_MOTOR)
-                ? MotorCatalog.SWYFT_SPIKE_12_7 : mapping.driveMotor();
-        double wheelDiameterMm = biobuzz && mapping.wheelDiameterMm() == RobotMapping.DEFAULT_WHEEL_DIAMETER_MM
+        double driveRatio = mapping.driveRatio() == 0.0 ? 1.0 : mapping.driveRatio();
+        double wheelDiameterMm = game == Game.BIOBUZZ && mapping.wheelDiameterMm() == RobotMapping.DEFAULT_WHEEL_DIAMETER_MM
                 ? BIOBUZZ_WHEEL_DIAMETER_MM : mapping.wheelDiameterMm();
         return new MecanumConfig(
                 mapping.massKg(), generic.lengthM(), generic.widthM(), generic.heightM(), generic.groundClearanceM(),
                 generic.comHeightM(), wheelDiameterMm / 2000.0, generic.wheelbaseM(), generic.trackM(),
-                MotorCatalog.motor(driveMotor), generic.wheelInertiaKgM2(), 0.0034, generic.tireStiffnessNPerM(),
+                MotorCatalog.motor(mapping.driveMotor(), driveRatio), generic.wheelInertiaKgM2(), 0.0034, generic.tireStiffnessNPerM(),
                 generic.tireDampingNsPerM(), generic.tractionFriction(), generic.slipStiffnessNsPerM(), 0.5, 2.2, 0.12, 0.053);
     }
 
@@ -292,14 +287,17 @@ public final class RobotDesign {
     }
 
     private static RobotSpec.Motor shaft(MotorMapping motor, int hub, int port) {
+        String model = motor.model().isEmpty() ? RobotMapping.USUAL_MOTOR : motor.model();
+        DcMotor catalogue = MotorCatalog.motor(model);
+        // Inertia and friction at the motor's shaft, estimated. A roller's inertia is on the far side of the reduction, so the motor
+        // sees it divided by the ratio squared; its friction is 5 percent of what the motor's own curve is (stall torque over free speed).
+        double ratio = ratioOf(motor);
         double[] load = switch (motor.slot()) {
-            case INTAKE -> new double[] {2.0e-4, 2.0e-3};
-            case CONVEYOR -> new double[] {1.0e-4, 2.0e-3};
+            case INTAKE -> new double[] {2.0e-4 / (ratio * ratio), 0.05 * catalogue.stallTorqueNm() / catalogue.freeSpeedRadPerSec()};
+            case CONVEYOR -> new double[] {1.0e-4 / (ratio * ratio), 0.05 * catalogue.stallTorqueNm() / catalogue.freeSpeedRadPerSec()};
             case SHOOTER -> new double[] {2.5e-4, 8.0e-5};
             default -> new double[] {1.0e-3, 5.0e-3};
         };
-        String model = motor.model().isEmpty() ? RobotMapping.usualModel(motor.slot()) : motor.model();
-        MotorCatalog.motor(model);
         return new RobotSpec.Motor(hub, port, model, null, new RobotSpec.Shaft(load[0], load[1]));
     }
 
@@ -307,8 +305,12 @@ public final class RobotDesign {
         return motor.mirrored() ? -1 : 1;
     }
 
-    /** Turning forward at least this fast in the sense the part works in, or backward at least this fast when mirrored. */
-    private static Condition turning(MotorMapping motor, double radPerSec) {
+    /**
+     * Turning forward at least this fast in the sense the part works in, or backward at least this fast when mirrored. The speed is the
+     * part's own; the motor turns {@link #ratioOf} times faster.
+     */
+    private static Condition turning(MotorMapping motor, double partRadPerSec) {
+        double radPerSec = partRadPerSec * ratioOf(motor);
         return motor.mirrored()
                 ? Condition.atMost(motor.name(), -radPerSec)
                 : Condition.atLeast(motor.name(), radPerSec);
@@ -353,10 +355,10 @@ public final class RobotDesign {
         double length = new StorageSpec(STORAGE, 3, path, List.of()).lengthMeters();
         List<StorageSpec.Drive> drives = new ArrayList<>();
         for (MotorMapping motor : intake) {
-            drives.add(new StorageSpec.Drive(motor.name(), 0.025, sign(motor), 0.0, 0.20));
+            drives.add(new StorageSpec.Drive(motor.name(), 0.025 / ratioOf(motor), sign(motor), 0.0, 0.20));
         }
         for (MotorMapping motor : conveyor) {
-            drives.add(new StorageSpec.Drive(motor.name(), 0.02, sign(motor), 0.15, length));
+            drives.add(new StorageSpec.Drive(motor.name(), 0.02 / ratioOf(motor), sign(motor), 0.15, length));
         }
         StorageSpec.Turned turned = cad ? new StorageSpec.Turned(BIOBUZZ_TURNED_FROM_POINT, BIOBUZZ_TURRET_AXIS_X, 0.0) : null;
         RobotMapping.ServoMapping stopper = mapping.turretParts().servoFor(RobotMapping.ServoRole.STOPPER);
@@ -370,10 +372,11 @@ public final class RobotDesign {
                     intake.stream().map(motor -> turning(motor, 10.0)).toList(), game.minPieceM, game.maxPieceM));
         }
         if (!shooter.isEmpty()) {
-            // BIOBUZZ's flywheels are 3 in Stealth wheels turned by the motor through a 43:30 belt: the rim moves at the motor's
-            // speed times the wheel's radius over the ratio. DECODE's fit (Hornet, no belt) treats the motor as the wheel.
-            double wheelRadius = cad ? BIOBUZZ_FLYWHEEL_RADIUS_M / FLYWHEEL_RATIO : 0.05;
-            List<LaunchSpec.Wheel> wheels = shooter.stream().map(motor -> new LaunchSpec.Wheel(motor.name(), wheelRadius, sign(motor))).toList();
+            // A flywheel's rim moves at the motor's speed times the wheel's radius over the reduction between them. BIOBUZZ's are
+            // 3 in Stealth wheels behind a 43:30 belt; DECODE's radius is Hornet's fit, with the motor as the wheel (ratio 1).
+            double wheelRadius = cad ? BIOBUZZ_FLYWHEEL_RADIUS_M : 0.05;
+            List<LaunchSpec.Wheel> wheels = shooter.stream()
+                    .map(motor -> new LaunchSpec.Wheel(motor.name(), wheelRadius / ratioOf(motor), sign(motor))).toList();
             List<Condition> feed = new ArrayList<>(conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0)));
             RobotMapping.ServoMapping hood = mapping.turretParts().servoFor(RobotMapping.ServoRole.HOOD);
             LaunchSpec.Hood tilt = hood == null ? null : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS, HOOD_RANGE_RADIANS);

@@ -12,8 +12,8 @@ import com.qualcomm.robotcore.util.Range;
  */
 @TeleOp(name = "Turret Aim", group = "Mechanisms")
 public final class TurretAimTeleOp extends OpMode {
-    /** The goBILDA 435 rpm motor's encoder. */
-    private static final double TICKS_PER_MOTOR_REVOLUTION = 384.5;
+    /** The goBILDA Yellow Jacket's encoder, on the motor's own shaft. */
+    private static final double TICKS_PER_MOTOR_REVOLUTION = 28.0;
     /** Motor turns for one turn of the turret, which the robot mapping of the test says as well. */
     private static final double TURRET_RATIO = 3.0;
     private static final double GAIN = 0.8;

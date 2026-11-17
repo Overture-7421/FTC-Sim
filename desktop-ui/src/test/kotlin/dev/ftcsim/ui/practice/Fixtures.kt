@@ -112,7 +112,7 @@ object Fixtures {
                 listOf(HumanAction("feed", "Feed a piece")),
             ),
         ),
-        listOf(MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"), MotorChoice("goBILDA-5203-312", "goBILDA 5203, 312 rpm")),
+        listOf(MotorChoice("goBILDA-bare-6000", "Yellow Jacket"), MotorChoice("rev-hd-hex-6000", "REV HD Hex")),
     )
 
     fun match(state: MatchState, elapsedSeconds: Long = 0L, durationSeconds: Long = 0L) =

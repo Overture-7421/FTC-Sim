@@ -3,6 +3,7 @@ package dev.ftcsim.ui.robot
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.ftcsim.contracts.hardware.UnmappedDevice
@@ -47,6 +48,8 @@ data class MappingForm(
     val cameraOnTurret: Boolean = false,
     /** The names of the positional servos of the hood, the stopper and the colibri arms, empty for none; by [RobotMapping.ServoRole]. */
     val mechanismServos: Map<RobotMapping.ServoRole, String> = emptyMap(),
+    /** Motor turns to one turn of a drive wheel, as typed: a number or a fraction such as 43/30; empty is 1. */
+    val driveRatio: String = "",
 )
 
 /**
@@ -63,6 +66,9 @@ data class MappingForm(
 class MappingModel(projectName: String, val motors: List<MotorChoice>, val turret: Boolean) {
     private val mutableFound = mutableStateListOf<String>()
     private val placed = mutableStateListOf<MotorMapping>()
+
+    /** The ratio of each motor that is not a wheel, as typed; a wheel's is [MappingForm.driveRatio]. */
+    private val ratioTexts = mutableStateMapOf<String, String>()
     private var loaded: RobotMapping? = null
 
     private val defaults = RobotMapping.empty(projectName.ifBlank { "My robot" })
@@ -104,7 +110,9 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
     fun load(mapping: RobotMapping) {
         selected = null
         placed.clear()
-        placed += mapping.motors().filter { turret || it.slot() != Slot.TURRET }
+        placed += mapping.motors().filter { turret || it.slot() != Slot.TURRET }.map { it.withRatio(0.0) }
+        ratioTexts.clear()
+        mapping.motors().filter { !it.slot().wheel() && it.ratio() != 0.0 }.forEach { ratioTexts[it.name()] = text(it.ratio()) }
         // The motors the file maps come first, in the file's order; the others stay in the order found.
         val inFile = mapping.motors().map { it.name() }
         mutableFound.removeAll(inFile)
@@ -146,12 +154,31 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
     /** Takes the motor [name] off the robot and back to the list. */
     fun remove(name: String) {
         placed.removeAll { it.name() == name }
+        ratioTexts.remove(name)
+    }
+
+    /** The ratio typed for [name], motor turns to one turn of what it drives; on a wheel it is the one of all four. */
+    fun ratio(name: String): String {
+        val motor = placed.firstOrNull { it.name() == name } ?: return ""
+        return if (motor.slot().wheel()) form.driveRatio else ratioTexts[name].orEmpty()
+    }
+
+    fun setRatio(name: String, text: String) {
+        val motor = placed.firstOrNull { it.name() == name } ?: return
+        if (motor.slot().wheel()) edit { it.copy(driveRatio = text) } else ratioTexts[name] = text
+    }
+
+    /** What is wrong with the ratio typed for [name], or null when it is a ratio or empty. */
+    fun ratioError(name: String): String? {
+        val value = parseRatio(ratio(name)) ?: return "A number or a fraction, like 43/30"
+        return if (value == 0.0 || value in RobotMapping.MIN_RATIO..RobotMapping.MAX_RATIO) null
+        else "${RobotMapping.MIN_RATIO} to ${RobotMapping.MAX_RATIO}"
     }
 
     /** The id of the catalogue motor on [name]; on a wheel it is the one that turns all four. */
     fun model(name: String): String {
         val motor = placed.firstOrNull { it.name() == name } ?: return driveMotor
-        return if (motor.slot().wheel()) driveMotor else motor.model().ifEmpty { RobotMapping.usualModel(motor.slot()) }
+        return if (motor.slot().wheel()) driveMotor else motor.model().ifEmpty { RobotMapping.USUAL_MOTOR }
     }
 
     /** Chooses the model of [name]; on a wheel it changes all four, and the part's usual model is stored as none. */
@@ -160,7 +187,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         if (motor.slot().wheel()) {
             driveMotor = id
         } else {
-            replace(motor, id.takeUnless { it == RobotMapping.usualModel(motor.slot()) }.orEmpty(), motor.mirrored())
+            replace(motor, id.takeUnless { it == RobotMapping.USUAL_MOTOR }.orEmpty(), motor.mirrored())
         }
     }
 
@@ -177,12 +204,17 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         if (at >= 0) placed[at] = MotorMapping(motor.name(), motor.slot(), model, mirrored)
     }
 
+    /** The motors as the page has them, each with the ratio typed for it. */
+    private fun motorsWithRatios(): List<MotorMapping> =
+        placed.map { if (it.slot().wheel()) it else it.withRatio(parseRatio(ratioTexts[it.name()].orEmpty()) ?: Double.NaN) }
+
     /** What is wrong with the page, by the key of the field: [NAME], [MASS], [WHEEL_DIAMETER], [TURRET_RATIO], [HUB] and [camera], and [MOTORS] for the rest. */
     fun problems(): Map<String, String> {
         val errors = linkedMapOf<String, String>()
         for (problem in draft().problems(turret)) {
             errors.putIfAbsent(keyOf(problem), problem)
         }
+        if (parseRatio(form.driveRatio) == null) errors.putIfAbsent(MOTORS, "Drive ratio is a number or a fraction")
         form.camera.forEachIndexed { index, text ->
             if (SetupValidation.number(text) == null) errors[camera(index)] = "A number"
         }
@@ -202,7 +234,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         val camera = form.camera.map { SetupValidation.number(it) ?: Double.NaN }
         return RobotMapping(
             form.name.trim(),
-            placed.toList(),
+            motorsWithRatios(),
             number(form.massKg),
             number(form.wheelDiameterMm),
             driveMotor,
@@ -211,6 +243,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
             form.hubUsb,
             CameraMount(camera[0], camera[1], camera[2], camera[3], camera[4], camera[5]),
             turretParts(),
+            parseRatio(form.driveRatio) ?: Double.NaN,
         )
     }
 
@@ -260,6 +293,20 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         /** Whether the robot of the game on [fieldId] has a turret. */
         fun hasTurret(fieldId: String): Boolean = fieldId == TURRET_FIELD
 
+        /**
+         * A ratio as a person writes it: a number, or a fraction such as 43/30. Empty is 0, which the simulator takes as 1 to 1; null when
+         * it is neither.
+         */
+        fun parseRatio(text: String): Double? {
+            val trimmed = text.trim()
+            if (trimmed.isEmpty()) return 0.0
+            val parts = trimmed.split('/')
+            if (parts.size > 2) return null
+            val numbers = parts.map { SetupValidation.number(it.trim()) ?: return null }
+            if (numbers.size == 1) return numbers[0]
+            return if (numbers[1] == 0.0) null else numbers[0] / numbers[1]
+        }
+
         /** The key of the Limelight mount's [index]th number ([CAMERA_LABELS] names them). */
         fun camera(index: Int): String = "camera.$index"
 
@@ -279,6 +326,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
                 mapping.turretParts().servo()?.mirrored() ?: false,
                 mapping.turretParts().cameraOnTurret(),
                 RobotMapping.ServoRole.entries.mapNotNull { role -> mapping.turretParts().servoFor(role)?.let { role to it.name() } }.toMap(),
+                if (mapping.driveRatio() != 0.0) text(mapping.driveRatio()) else "",
             )
         }
 

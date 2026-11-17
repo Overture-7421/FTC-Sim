@@ -38,6 +38,8 @@ class MechanismsSessionTest {
     // Piece kinds of the DECODE field: purple and green artifacts.
     private static final int PURPLE = 101;
     private static final int GREEN = 102;
+    /** The 13.7:1 of a 435 rpm Yellow Jacket, which these rigs have always had on the rollers. */
+    private static final double GEARED = 13.7;
     private static final double TURRET_RATIO = 3.0;
     private static final double SERVO_TURRET_RATIO = 2.75;
 
@@ -47,8 +49,8 @@ class MechanismsSessionTest {
             new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
             new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
             new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-            new MotorMapping("intake", Slot.INTAKE, "", false),
-            new MotorMapping("up", Slot.CONVEYOR, "", false),
+            new MotorMapping("intake", Slot.INTAKE, "", false, GEARED),
+            new MotorMapping("up", Slot.CONVEYOR, "", false, GEARED),
             new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
             new MotorMapping("shooterRight", Slot.SHOOTER, "", false)));
 

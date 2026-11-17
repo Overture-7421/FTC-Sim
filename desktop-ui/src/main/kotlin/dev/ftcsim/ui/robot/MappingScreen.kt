@@ -280,7 +280,12 @@ private fun SlotRow(slot: Slot, model: MappingModel, drag: DragState) {
     }
 }
 
-/** What a motor is and which way it is mounted. The four wheels share the drive motor, so changing it on one changes it on all. */
+private val RATIO_FIELD_WIDTH = 150.dp
+
+/**
+ * What a motor is, the reduction between it and what it drives, and which way it is mounted. The four wheels share the drive
+ * motor and its ratio, so changing either on one changes it on all.
+ */
 @Composable
 private fun MotorControls(name: String, model: MappingModel) {
     val current = model.model(name)
@@ -297,6 +302,10 @@ private fun MotorControls(name: String, model: MappingModel) {
         )
         Text("Mirrored", style = MaterialTheme.typography.bodyMedium)
     }
+    FormTextField(
+        model.ratio(name), { text -> model.setRatio(name, text) }, "Ratio", model.ratioError(name), "motor : mechanism, 1 if empty",
+        Modifier.width(RATIO_FIELD_WIDTH).semantics { contentDescription = "Gear ratio of $name, motor turns to one turn of what it drives" },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)

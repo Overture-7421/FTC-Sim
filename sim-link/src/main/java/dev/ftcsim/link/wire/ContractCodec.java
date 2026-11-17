@@ -85,10 +85,12 @@ final class ContractCodec {
             w.unsignedByte(code(motor.slot()));
             w.string(motor.model());
             w.bool(motor.mirrored());
+            w.doubleBits(motor.ratio());
         }
         w.doubleBits(mapping.massKg());
         w.doubleBits(mapping.wheelDiameterMm());
         w.string(mapping.driveMotor());
+        w.doubleBits(mapping.driveRatio());
         w.doubleBits(mapping.turretRatio());
         w.string(mapping.hubLogo());
         w.string(mapping.hubUsb());
@@ -128,16 +130,17 @@ final class ContractCodec {
 
     private static RobotMapping readMapping(WireReader r) throws WireException {
         String name = r.string("the robot name");
-        int count = r.count(2 * STRING_BYTES + 2, "the mapped motors");
+        int count = r.count(2 * STRING_BYTES + 2 + 8, "the mapped motors");
         List<MotorMapping> motors = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             String motorName = r.string("a mapped motor name");
             Slot slot = slot(r.unsignedByte());
-            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool()));
+            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool(), r.doubleBits()));
         }
         double massKg = r.doubleBits();
         double wheelDiameterMm = r.doubleBits();
         String driveMotor = r.string("the drive motor");
+        double driveRatio = r.doubleBits();
         double turretRatio = r.doubleBits();
         String hubLogo = r.string("the hub logo direction");
         String hubUsb = r.string("the hub USB direction");
@@ -166,7 +169,7 @@ final class ContractCodec {
                     roles[role], new ServoMapping(r.string("a mechanism servo name"), r.string("a mechanism servo model"), r.bool())));
         }
         TurretParts parts = new TurretParts(servo, encoders, axisX, axisY, cameraOnTurret, mechanisms);
-        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts);
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts, driveRatio);
     }
 
     static void writeInfo(WireWriter w, SessionInfo info) {

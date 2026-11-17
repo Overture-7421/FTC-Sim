@@ -57,11 +57,11 @@ class RobotMappingTest {
     @Test
     void theNumbersAndTheHubMountingAreChecked() {
         RobotMapping.CameraMount camera = RobotMapping.empty("x").camera();
-        RobotMapping heavy = new RobotMapping("Team", List.of(), 90, 96, "goBILDA-5203-435", 1, "UP", "FORWARD", camera);
+        RobotMapping heavy = new RobotMapping("Team", List.of(), 90, 96, "goBILDA-bare-6000", 1, "UP", "FORWARD", camera);
         assertEquals(List.of("Mass is 1 to 40 kg"), heavy.problems(false));
-        RobotMapping flat = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-5203-435", 1, "UP", "DOWN", camera);
+        RobotMapping flat = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-bare-6000", 1, "UP", "DOWN", camera);
         assertEquals(List.of("Hub logo and USB face at right angles"), flat.problems(false));
-        RobotMapping ratio = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-5203-435", 0, "UP", "FORWARD", camera);
+        RobotMapping ratio = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-bare-6000", 0, "UP", "FORWARD", camera);
         assertEquals(List.of("Turret ratio is above 0"), ratio.problems(true));
     }
 

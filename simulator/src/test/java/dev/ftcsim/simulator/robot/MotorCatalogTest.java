@@ -11,8 +11,28 @@ import org.junit.jupiter.api.Test;
 class MotorCatalogTest {
 
     @Test
+    void theBaseMotorsHaveTheirPublishedNumbersAndAReductionPutsThemBehindAGearbox() {
+        DcMotor hdHex = MotorCatalog.motor(MotorCatalog.REV_HD_HEX);
+        assertEquals(0.105, hdHex.stallTorqueNm(), 1e-9);
+        assertEquals(6000.0 * 2.0 * Math.PI / 60.0, hdHex.freeSpeedRadPerSec(), 1e-9);
+        assertEquals(8.5, hdHex.stallCurrentA(), 1e-9);
+
+        DcMotor coreHex = MotorCatalog.motor(MotorCatalog.REV_CORE_HEX);
+        assertEquals(125.0 * 2.0 * Math.PI / 60.0, coreHex.freeSpeedRadPerSec(), 1e-9, "the output of its built-in 72:1");
+        assertEquals(288.0, coreHex.encoderTicksPerRevolution(), 1e-9);
+        assertEquals(72.0, coreHex.gearRatio(), 1e-9);
+
+        DcMotor spike = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE);
+        DcMotor behind = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 3.0);
+        assertEquals(spike.stallTorqueNm() * 3.0, behind.stallTorqueNm(), 1e-12, "torque goes up with the reduction");
+        assertEquals(spike.freeSpeedRadPerSec() / 3.0, behind.freeSpeedRadPerSec(), 1e-12, "and speed comes down");
+        assertEquals(spike.encoderTicksPerRevolution() * 3.0, behind.encoderTicksPerRevolution(), 1e-12);
+        assertEquals(spike, MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 1.0), "one to one is the motor");
+    }
+
+    @Test
     void theSwyftSpikeBehindItsDriveReductionHasThePublishedCoreScaledBy12Point7() {
-        DcMotor spike = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE_12_7);
+        DcMotor spike = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 12.7);
 
         assertEquals(1.47 * 0.0980665 * 12.7, spike.stallTorqueNm(), 1e-9, "1.47 kg cm at the rotor");
         assertEquals(6000.0 * 2.0 * Math.PI / 60.0 / 12.7, spike.freeSpeedRadPerSec(), 1e-9, "6000 rpm at the rotor");
@@ -22,51 +42,29 @@ class MotorCatalogTest {
     }
 
     @Test
-    void everyChoiceNamesACatalogueMotorTheDefaultComesFirstAndNoneRepeats() {
+    void theWindowOffersEachBaseMotorOnceAndEveryOneIsInTheCatalogue() {
         List<dev.ftcsim.contracts.session.MotorChoice> choices = MotorCatalog.choices();
 
-        assertEquals(MotorCatalog.GOBILDA_435, choices.get(0).id());
-        assertEquals(12, choices.size());
-        assertEquals(12, choices.stream().map(dev.ftcsim.contracts.session.MotorChoice::id).distinct().count());
+        assertEquals(6, choices.size());
+        assertEquals(choices.size(), choices.stream().map(dev.ftcsim.contracts.session.MotorChoice::id).distinct().count());
         for (dev.ftcsim.contracts.session.MotorChoice choice : choices) {
             assertTrue(MotorCatalog.motor(choice.id()) != null && !choice.displayName().isBlank(), choice.toString());
         }
     }
 
     @Test
-    void everyYellowJacketTurnsAtItsNominalSpeedWithinSixPercent() {
-        for (int rpm : new int[] {1620, 1150, 435, 312, 223, 117, 84, 60, 43, 30}) {
-            DcMotor motor = MotorCatalog.motor("goBILDA-5203-" + rpm);
-            double actualRpm = motor.freeSpeedRadPerSec() * 60.0 / (2 * Math.PI);
-            assertEquals(rpm, actualRpm, rpm * 0.06, "goBILDA-5203-" + rpm);
-        }
-    }
-
-    @Test
-    void aGearboxTradesSpeedForTorqueAtTheSameCurrentAndThePowerOfTheSameMotor() {
-        DcMotor fast = MotorCatalog.motor("goBILDA-5203-1150");
-        DcMotor slow = MotorCatalog.motor("goBILDA-5203-60");
-
-        assertEquals(
-                fast.stallTorqueNm() * fast.freeSpeedRadPerSec(),
-                slow.stallTorqueNm() * slow.freeSpeedRadPerSec(),
-                1e-9,
-                "the winding is the same, so the mechanical power at the corner of its curve is");
-        assertEquals(fast.stallCurrentA(), slow.stallCurrentA());
-        assertTrue(slow.stallTorqueNm() > 15 * fast.stallTorqueNm(), "19 times the reduction, 19 times the torque");
-        assertEquals(28.0 * slow.gearRatio(), slow.encoderTicksPerRevolution(), 1e-9);
-    }
-
-    @Test
-    void theMotorsThatWereThereBeforeAreUntouched() {
+    void theYellowJacketIsTheWindingOfTheMeasured435RpmOneWithNoGearbox() {
         DcMotor measured = DcMotor.goBilda435();
 
-        assertEquals(measured, MotorCatalog.motor(MotorCatalog.GOBILDA_435));
         DcMotor bare = MotorCatalog.motor(MotorCatalog.GOBILDA_BARE);
         assertEquals(measured.stallTorqueNm() / measured.gearRatio(), bare.stallTorqueNm());
         assertEquals(measured.freeSpeedRadPerSec() * measured.gearRatio(), bare.freeSpeedRadPerSec());
         assertEquals(28.0, bare.encoderTicksPerRevolution());
         assertEquals(1.0, bare.gearRatio());
+        DcMotor behind = MotorCatalog.motor(MotorCatalog.GOBILDA_BARE, 13.7);
+        assertEquals(measured.stallTorqueNm(), behind.stallTorqueNm(), 1e-9, "at 13.7:1 it is the 435 rpm motor");
+        assertEquals(measured.freeSpeedRadPerSec(), behind.freeSpeedRadPerSec(), 1e-9);
+        assertEquals(measured.rotorInertiaKgM2(), behind.rotorInertiaKgM2(), 1e-12);
     }
 
     @Test
@@ -74,6 +72,6 @@ class MotorCatalogTest {
         IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> MotorCatalog.motor("REV-HD-Hex"));
 
         assertTrue(refused.getMessage().contains("REV-HD-Hex"), refused.getMessage());
-        assertTrue(refused.getMessage().contains("goBILDA-5203-312"), refused.getMessage());
+        assertTrue(refused.getMessage().contains("swyft-spike-6000"), refused.getMessage());
     }
 }

@@ -47,12 +47,12 @@ class ProjectMappingsImplTest {
                         new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
                         new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
                         new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-                        new MotorMapping("shooter", Slot.SHOOTER, "goBILDA-5203-1150", false),
+                        new MotorMapping("shooter", Slot.SHOOTER, "swyft-spike-6000", false),
                         new MotorMapping("belt", Slot.CONVEYOR, "", true),
                         new MotorMapping("aim", Slot.TURRET, "", false)),
                 10.5,
                 104,
-                "goBILDA-5203-312",
+                "rev-hd-hex-6000",
                 3.5,
                 "LEFT",
                 "UP",
@@ -80,10 +80,10 @@ class ProjectMappingsImplTest {
         assertEquals("Team robot", json.get("name").asText());
         assertEquals("FRONT_LEFT", json.at("/motors/frontLeft/slot").asText());
         assertTrue(json.at("/motors/frontLeft/mirrored").asBoolean());
-        assertEquals("goBILDA-5203-1150", json.at("/motors/shooter/model").asText());
+        assertEquals("swyft-spike-6000", json.at("/motors/shooter/model").asText());
         assertEquals(10.5, json.get("massKg").asDouble());
         assertEquals(104, json.get("wheelDiameterMm").asDouble());
-        assertEquals("goBILDA-5203-312", json.get("driveMotor").asText());
+        assertEquals("rev-hd-hex-6000", json.get("driveMotor").asText());
         assertEquals(3.5, json.get("turretRatio").asDouble());
         assertEquals("LEFT", json.at("/hub/logo").asText());
         assertEquals("UP", json.at("/hub/usb").asText());
@@ -98,6 +98,31 @@ class ProjectMappingsImplTest {
         assertTrue(found.usable());
         assertNull(found.problem());
         assertEquals(RunDefaults.NONE, found.run());
+    }
+
+    @Test
+    void aGearRatioIsANumberOrAFractionPerMotorAndForTheDriveAndIsWrittenOnlyWhenItIsGiven() throws IOException {
+        write("{\"schema\":2,\"driveMotor\":\"swyft-spike-6000\",\"driveRatio\":12.7,\"motors\":{"
+                + "\"intake\":{\"slot\":\"INTAKE\",\"ratio\":2},\"fly\":{\"slot\":\"SHOOTER\",\"ratio\":\" 43 / 30 \"},\"belt\":{\"slot\":\"CONVEYOR\"}}}");
+
+        RobotMapping mapping = mappings.find(project).orElseThrow().mapping();
+
+        assertEquals(12.7, mapping.driveRatio());
+        assertEquals(2.0, mapping.in(Slot.INTAKE).get(0).ratio());
+        assertEquals(43.0 / 30.0, mapping.in(Slot.SHOOTER).get(0).ratio(), 1e-12, "a fraction as a team writes it");
+        assertEquals(0.0, mapping.in(Slot.CONVEYOR).get(0).ratio(), "none given is none");
+
+        mappings.save(project, mapping);
+        JsonNode json = read(project.resolve("ftcsim.json"));
+        assertEquals(12.7, json.get("driveRatio").asDouble());
+        assertEquals(2.0, json.at("/motors/intake/ratio").asDouble());
+        assertFalse(json.at("/motors/belt").has("ratio"));
+        assertEquals(mapping, mappings.find(project).orElseThrow().mapping(), "and it reads back the same");
+
+        write("{\"schema\":2,\"motors\":{\"fly\":{\"slot\":\"SHOOTER\",\"ratio\":\"two to one\"}}}");
+        ProjectMappings.Found bad = mappings.find(project).orElseThrow();
+        assertFalse(bad.usable());
+        assertTrue(bad.problem().contains("ratio 'two to one' is not a number or a fraction"), bad.problem());
     }
 
     @Test
@@ -314,7 +339,7 @@ class ProjectMappingsImplTest {
     @Test
     void aNumberThatIsNotFiniteIsNotWritten() {
         RobotMapping broken = new RobotMapping(
-                "x", List.of(), Double.NaN, 96, "goBILDA-5203-435", 1, "UP", "FORWARD", RobotMapping.empty("x").camera());
+                "x", List.of(), Double.NaN, 96, "goBILDA-bare-6000", 1, "UP", "FORWARD", RobotMapping.empty("x").camera());
 
         assertThrows(IOException.class, () -> mappings.save(project, broken));
         assertFalse(Files.exists(project.resolve("ftcsim.json")));

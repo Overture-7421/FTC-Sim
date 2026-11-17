@@ -151,7 +151,7 @@ class PracticeSessionTest {
         assertNull(session.catalogue.value)
 
         link.listener!!.catalogue(Fixtures.catalogue())
-        assertEquals(listOf("goBILDA-5203-435", "goBILDA-5203-312"), session.catalogue.value!!.motors().map { it.id() })
+        assertEquals(listOf("goBILDA-bare-6000", "rev-hd-hex-6000"), session.catalogue.value!!.motors().map { it.id() })
 
         session.detach()
         session.attach(StubLink())

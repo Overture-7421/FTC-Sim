@@ -91,6 +91,7 @@
  *       and the robot info of {@code Opened} ends with the id of the model the window draws the robot with
  *   <li>9: the turret parts end with the positional servos of the hood, the stopper and the colibri arms (a count, then a
  *       role, a name, a model and a mirrored flag each)
+ *   <li>10: each mapped motor ends with its gear ratio (64 bits), and the mapping carries the drive ratio, after the drive motor
  * </ul>
  */
 package dev.ftcsim.link.wire;

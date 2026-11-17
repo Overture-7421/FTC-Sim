@@ -491,9 +491,9 @@ public final class RobotRig {
             values[RobotJoint.WHEEL_REAR_RIGHT.ordinal()] = current.wheelAngleRadians(WheelPosition.REAR_RIGHT);
         }
         RobotSpec.Joints joints = spec.joints();
-        values[RobotJoint.INTAKE.ordinal()] = shaftTurns(joints.intake(), joints.intakeSign(), RobotDesign.INTAKE_RATIO);
-        values[RobotJoint.CONVEYOR.ordinal()] = shaftTurns(joints.conveyor(), joints.conveyorSign(), RobotDesign.CONVEYOR_RATIO);
-        values[RobotJoint.FLYWHEEL.ordinal()] = shaftTurns(joints.flywheel(), joints.flywheelSign(), RobotDesign.FLYWHEEL_RATIO);
+        values[RobotJoint.INTAKE.ordinal()] = shaftTurns(joints.intake(), joints.intakeSign(), joints.intakeRatio());
+        values[RobotJoint.CONVEYOR.ordinal()] = shaftTurns(joints.conveyor(), joints.conveyorSign(), joints.conveyorRatio());
+        values[RobotJoint.FLYWHEEL.ordinal()] = shaftTurns(joints.flywheel(), joints.flywheelSign(), joints.flywheelRatio());
         values[RobotJoint.HOOD.ordinal()] = RobotDesign.HOOD_REST_RADIANS;
         for (RobotSpec.ServoJoint servoJoint : joints.servos()) {
             ServoPlant servo = servoPlants.get(servoJoint.servo());

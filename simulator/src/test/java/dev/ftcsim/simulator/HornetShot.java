@@ -238,7 +238,7 @@ final class HornetShot {
         void spinUp(LaunchSpec launcher, double ticksPerSecond) {
             for (LaunchSpec.Wheel wheel : launcher.wheels()) {
                 RobotSpec.Motor motor = robot.motors().get(wheel.motor());
-                String name = motor.model() == null ? MotorCatalog.GOBILDA_435 : motor.model();
+                String name = motor.model() == null ? MotorCatalog.GOBILDA_BARE : motor.model();
                 double radPerSec = ticksPerSecond * 2 * Math.PI / MotorCatalog.motor(name).encoderTicksPerRevolution();
                 speeds.put(wheel.motor(), wheel.sign() * radPerSec);
             }

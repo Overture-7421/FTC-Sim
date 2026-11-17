@@ -16,6 +16,7 @@ import java.util.Set;
  * @param massKg      the robot's mass, in kilograms
  * @param wheelDiameterMm the drive wheels' diameter, in millimetres
  * @param driveMotor  the id of the catalogue motor on all four drive wheels
+ * @param driveRatio  motor turns to one turn of a drive wheel, the same for all four; 0 is 1:1
  * @param turretRatio motor revolutions for one turn of the turret (BIOBUZZ's robot); above 0
  * @param hubLogo     which way the Control Hub's logo faces on the robot, one of {@link #DIRECTIONS}
  * @param hubUsb      which way its USB ports face; at right angles to the logo
@@ -33,7 +34,8 @@ public record RobotMapping(
         String hubLogo,
         String hubUsb,
         CameraMount camera,
-        TurretParts turretParts) {
+        TurretParts turretParts,
+        double driveRatio) {
 
     /** The two hubs have four motor ports each. */
     public static final int MAX_MOTORS = 8;
@@ -47,12 +49,18 @@ public record RobotMapping(
     /** The directions a hub's logo and USB ports may face. */
     public static final List<String> DIRECTIONS = List.of("UP", "DOWN", "FORWARD", "BACKWARD", "LEFT", "RIGHT");
 
+    /** The smallest and largest reduction between a motor and what it turns. */
+    public static final double MIN_RATIO = 0.05;
+    public static final double MAX_RATIO = 1000.0;
+
     public static final double DEFAULT_MASS_KG = 11.3;
     public static final double DEFAULT_WHEEL_DIAMETER_MM = 96;
-    public static final String DEFAULT_DRIVE_MOTOR = "goBILDA-5203-435";
+    /** The motor a mapping has when it names none, and the one a new robot's wheels have: the goBILDA Yellow Jacket. */
+    public static final String USUAL_MOTOR = "goBILDA-bare-6000";
+    public static final String DEFAULT_DRIVE_MOTOR = USUAL_MOTOR;
 
-    /** The goBILDA motor with no gearbox, which the flywheels usually turn on. */
-    public static final String BARE_MOTOR = "goBILDA-bare-6000";
+    /** The reduction a new robot's wheels start with, the Yellow Jacket's 13.7:1 (435 rpm). Only the first value on the Robot page. */
+    public static final double DEFAULT_DRIVE_RATIO = 13.7;
 
     /** The parts of the robot a motor can be. A wheel holds one motor; the others hold any number. */
     public enum Slot {
@@ -81,15 +89,32 @@ public record RobotMapping(
      *
      * @param name     the name the code asks the hardware map for
      * @param slot     the part it turns
-     * @param model    the id of its catalogue motor; empty for the part's usual one (a wheel takes the drive motor)
+     * @param model    the id of its catalogue motor; empty for {@link RobotMapping#USUAL_MOTOR} (a wheel takes the drive motor)
      * @param mirrored whether it is mounted the other way round, so that positive power turns its part backwards
+     * @param ratio    motor turns to one turn of what it drives (the reduction between them: 2 for a 2:1, 43/30 for a belt); 0 for
+     *                 the robot's usual. A wheel's is {@link RobotMapping#driveRatio()}, not this
      */
-    public record MotorMapping(String name, Slot slot, String model, boolean mirrored) {
+    public record MotorMapping(String name, Slot slot, String model, boolean mirrored, double ratio) {
 
         public MotorMapping {
             Objects.requireNonNull(name, "name");
             Objects.requireNonNull(slot, "slot");
             model = model == null ? "" : model;
+        }
+
+        /** A motor with the robot's usual reduction. */
+        public MotorMapping(String name, Slot slot, String model, boolean mirrored) {
+            this(name, slot, model, mirrored, 0.0);
+        }
+
+        /** A copy with another model. */
+        public MotorMapping withModel(String changed) {
+            return new MotorMapping(name, slot, changed, mirrored, ratio);
+        }
+
+        /** A copy with another reduction. */
+        public MotorMapping withRatio(double changed) {
+            return new MotorMapping(name, slot, model, mirrored, changed);
         }
     }
 
@@ -207,6 +232,13 @@ public record RobotMapping(
         Objects.requireNonNull(turretParts, "turretParts");
     }
 
+    /** A mapping with the robot's usual drive reduction. */
+    public RobotMapping(
+            String name, List<MotorMapping> motors, double massKg, double wheelDiameterMm, String driveMotor, double turretRatio,
+            String hubLogo, String hubUsb, CameraMount camera, TurretParts turretParts) {
+        this(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, turretParts, DEFAULT_DRIVE_RATIO);
+    }
+
     /** A mapping with nothing on the turret but its motors. */
     public RobotMapping(
             String name, List<MotorMapping> motors, double massKg, double wheelDiameterMm, String driveMotor, double turretRatio,
@@ -218,25 +250,25 @@ public record RobotMapping(
     public static RobotMapping empty(String name) {
         return new RobotMapping(
                 name, List.of(), DEFAULT_MASS_KG, DEFAULT_WHEEL_DIAMETER_MM, DEFAULT_DRIVE_MOTOR, 1.0, "UP", "FORWARD",
-                DEFAULT_CAMERA);
+                DEFAULT_CAMERA, TurretParts.NONE, DEFAULT_DRIVE_RATIO);
     }
 
     /** The camera mount of a mapping that gives none. BIOBUZZ's robot replaces it with the one measured on its CAD. */
     public static final CameraMount DEFAULT_CAMERA = new CameraMount(0.16, 0.0, 0.25, 0.0, 20.0, 0.0);
 
-    /** The catalogue motor a part has when a mapping names none: the flywheels turn on the bare motor, everything else on the 435 rpm one. */
-    public static String usualModel(Slot slot) {
-        return slot == Slot.SHOOTER ? BARE_MOTOR : DEFAULT_DRIVE_MOTOR;
-    }
-
     /** A copy with these motors. */
     public RobotMapping withMotors(List<MotorMapping> changed) {
-        return new RobotMapping(name, changed, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, turretParts);
+        return new RobotMapping(name, changed, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, turretParts, driveRatio);
     }
 
     /** A copy with this on the turret. */
     public RobotMapping withTurretParts(TurretParts changed) {
-        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, changed);
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, changed, driveRatio);
+    }
+
+    /** A copy with this drive motor and reduction. */
+    public RobotMapping withDrive(String changedMotor, double changedRatio) {
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, changedMotor, turretRatio, hubLogo, hubUsb, camera, turretParts, changedRatio);
     }
 
     /** The motors in [slot], in the order they were mapped. */
@@ -272,6 +304,9 @@ public record RobotMapping(
             if (motor.slot() == Slot.TURRET && !turret) {
                 problems.add(motor.name() + ": this game's robot has no turret");
             }
+            if (!ratioIsUsual(motor.ratio())) {
+                problems.add(motor.name() + ": ratio is " + MIN_RATIO + " to " + MAX_RATIO + ", or empty for the usual");
+            }
         }
         int wheels = 0;
         for (Slot slot : Slot.values()) {
@@ -295,6 +330,9 @@ public record RobotMapping(
         }
         if (!(turretRatio > 0)) {
             problems.add("Turret ratio is above 0");
+        }
+        if (!ratioIsUsual(driveRatio)) {
+            problems.add("Drive ratio is " + MIN_RATIO + " to " + MAX_RATIO + ", or empty for the usual");
         }
         turretProblems(turret, names, problems);
         if (!DIRECTIONS.contains(hubLogo) || !DIRECTIONS.contains(hubUsb) || axis(hubLogo).equals(axis(hubUsb))) {
@@ -362,6 +400,11 @@ public record RobotMapping(
                 problems.add(name + " is the servo of two parts");
             }
         }
+    }
+
+    /** Whether a ratio is 0, which stands for the usual, or a reduction the simulator accepts. */
+    private static boolean ratioIsUsual(double ratio) {
+        return ratio == 0.0 || (ratio >= MIN_RATIO && ratio <= MAX_RATIO);
     }
 
     private static String axis(String direction) {

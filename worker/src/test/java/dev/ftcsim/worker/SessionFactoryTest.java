@@ -123,7 +123,7 @@ class SessionFactoryTest {
                         new FieldChoice("fake", "Fake", List.of(new StartPose("origin", 0, 0, 0)), List.of(new HumanAction("feed", "Feed")))),
                 catalogue.fields());
         assertEquals(MotorCatalog.choices(), catalogue.motors());
-        assertEquals("goBILDA-5203-435", catalogue.motors().get(0).id(), "the default drivetrain motor comes first");
+        assertEquals("goBILDA-bare-6000", catalogue.motors().get(0).id(), "the base motors, the Yellow Jacket first");
     }
 
     @Test

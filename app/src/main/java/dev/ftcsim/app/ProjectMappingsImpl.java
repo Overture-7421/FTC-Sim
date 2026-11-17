@@ -57,9 +57,9 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             Separators.createDefaultInstance().withObjectFieldValueSpacing(Separators.Spacing.AFTER));
 
     private static final Set<String> TOP_KEYS = Set.of(
-            "schema", "name", "motors", "massKg", "wheelDiameterMm", "driveMotor", "turretRatio", "hub", "camera", "turret", "run",
+            "schema", "name", "motors", "massKg", "wheelDiameterMm", "driveMotor", "driveRatio", "turretRatio", "hub", "camera", "turret", "run",
             "startPositions");
-    private static final Set<String> MOTOR_KEYS = Set.of("slot", "model", "mirrored");
+    private static final Set<String> MOTOR_KEYS = Set.of("slot", "model", "mirrored", "ratio");
     private static final Set<String> HUB_KEYS = Set.of("logo", "usb");
     private static final Set<String> CAMERA_KEYS = Set.of("x", "y", "z", "yawDegrees", "pitchDegrees", "rollDegrees");
     private static final Set<String> TURRET_KEYS = Set.of(
@@ -213,7 +213,8 @@ public final class ProjectMappingsImpl implements ProjectMappings {
                                 number(camera, "x", at.x()), number(camera, "y", at.y()), number(camera, "z", at.z()),
                                 number(camera, "yawDegrees", at.yawDegrees()), number(camera, "pitchDegrees", at.pitchDegrees()),
                                 number(camera, "rollDegrees", at.rollDegrees())),
-                turretPartsOf(root.get("turret")));
+                turretPartsOf(root.get("turret")),
+                ratio(root, "driveRatio", "the robot", defaults.driveRatio()));
     }
 
     private static TurretParts turretPartsOf(JsonNode turret) {
@@ -301,6 +302,7 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             throw new IllegalArgumentException("motor " + name + " is not an object");
         }
         noOtherKeys(node, MOTOR_KEYS, "motor " + name);
+        double ratio = ratio(node, "ratio", "motor " + name, 0.0);
         String slot = text(node, "slot", null);
         if (slot == null) {
             throw new IllegalArgumentException("motor " + name + " has no slot");
@@ -310,10 +312,31 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             throw new IllegalArgumentException("motor " + name + ": mirrored is not true or false");
         }
         try {
-            return new MotorMapping(name, Slot.valueOf(slot), text(node, "model", ""), mirrored != null && mirrored.asBoolean());
+            return new MotorMapping(name, Slot.valueOf(slot), text(node, "model", ""), mirrored != null && mirrored.asBoolean(), ratio);
         } catch (IllegalArgumentException unknownSlot) {
             throw new IllegalArgumentException("motor " + name + " has the unknown slot " + slot);
         }
+    }
+
+    /** The ratio of a motor or of the drive: a number, or a text such as "43/30" as a team writes it; 0 when the file gives none. */
+    private static double ratio(JsonNode parent, String key, String where, double absent) {
+        JsonNode node = parent.get(key);
+        if (node == null || node.isNull()) {
+            return absent;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        if (node.isTextual()) {
+            String text = node.asText().trim();
+            try {
+                int slash = text.indexOf('/');
+                return slash < 0 ? Double.parseDouble(text) : Double.parseDouble(text.substring(0, slash).trim()) / Double.parseDouble(text.substring(slash + 1).trim());
+            } catch (NumberFormatException notANumber) {
+                throw new IllegalArgumentException(where + ": " + key + " '" + text + "' is not a number or a fraction such as 43/30");
+            }
+        }
+        throw new IllegalArgumentException(where + ": " + key + " is not a number");
     }
 
     private static JsonNode object(JsonNode parent, String key, Set<String> keys) {
@@ -434,12 +457,18 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             entry.put("slot", motor.slot().name());
             entry.put("model", motor.model());
             entry.put("mirrored", motor.mirrored());
+            if (motor.ratio() != 0.0) {
+                entry.put("ratio", finite(motor.ratio()));
+            }
             motors.put(motor.name(), entry);
         }
         root.put("motors", motors);
         root.put("massKg", finite(mapping.massKg()));
         root.put("wheelDiameterMm", finite(mapping.wheelDiameterMm()));
         root.put("driveMotor", mapping.driveMotor());
+        if (mapping.driveRatio() != 0.0) {
+            root.put("driveRatio", finite(mapping.driveRatio()));
+        }
         root.put("turretRatio", finite(mapping.turretRatio()));
         root.put("hub", Map.of("logo", mapping.hubLogo(), "usb", mapping.hubUsb()));
         CameraMount camera = mapping.camera();

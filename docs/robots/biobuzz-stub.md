@@ -26,15 +26,15 @@ There is no BIOBUZZ robot program yet. `BiobuzzStubTeleOp` (`acceptance-tests\sr
 3. Put an `ftcsim.json` at the project root, or map the motors, the turret servo, the four mechanism servos and the camera on the **Robot** screen ([fixed-robots.md](fixed-robots.md)). The names are the stub's. The turret's encoders and axis are not on the screen: they are in the file, and the screen keeps them when it saves:
 
 ```json
-{ "schema": 2, "name": "BIOBUZZ stub", "turretRatio": 2.75, "wheelDiameterMm": 112, "driveMotor": "swyft-spike-12.7",
+{ "schema": 2, "name": "BIOBUZZ stub", "turretRatio": 2.75, "wheelDiameterMm": 112, "driveMotor": "swyft-spike-6000", "driveRatio": 12.7,
   "motors": { "frontLeft":  { "slot": "FRONT_LEFT",  "model": "", "mirrored": true },
               "backLeft":   { "slot": "REAR_LEFT",   "model": "", "mirrored": true },
               "frontRight": { "slot": "FRONT_RIGHT", "model": "", "mirrored": false },
               "backRight":  { "slot": "REAR_RIGHT",  "model": "", "mirrored": false },
-              "intake":       { "slot": "INTAKE",   "model": "", "mirrored": false },
-              "up":           { "slot": "CONVEYOR", "model": "", "mirrored": false },
-              "shooterLeft":  { "slot": "SHOOTER",  "model": "", "mirrored": false },
-              "shooterRight": { "slot": "SHOOTER",  "model": "", "mirrored": false } },
+              "intake":       { "slot": "INTAKE",   "model": "goBILDA-bare-6000", "ratio": 2, "mirrored": false },
+              "up":           { "slot": "CONVEYOR", "model": "goBILDA-bare-6000", "ratio": 2, "mirrored": false },
+              "shooterLeft":  { "slot": "SHOOTER",  "model": "goBILDA-bare-6000", "ratio": "43/30", "mirrored": false },
+              "shooterRight": { "slot": "SHOOTER",  "model": "goBILDA-bare-6000", "ratio": "43/30", "mirrored": false } },
   "turret": { "servo": { "name": "turretServo" },
               "encoders": [ { "channel": 0, "turnsPerTurretTurn": 5.5 },
                             { "channel": 1, "turnsPerTurretTurn": 6.285714285714286 } ],

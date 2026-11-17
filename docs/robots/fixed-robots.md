@@ -2,7 +2,7 @@
 
 This page says which robot FTC-Sim simulates and what a team writes in `ftcsim.json` to connect its code to it.
 
-**The robot designs are fixed, and sensors are fixed and ideal.** A team supplies only a mapping: which motor of its code is which part, the motor model, Mirrored, a few body numbers, the hub mounting and the Limelight mount. There are no editable zones, mechanisms or sensor settings. `dev.ftcsim.simulator.robot.RobotDesign` holds the designs (numbers from the robot the simulator was fitted to: [hornet-fit.md](hornet-fit.md)); `dev.ftcsim.contracts.session.RobotMapping` is the mapping. The worker never reads `ftcsim.json`: it gets the mapping inline in the session request ([link](../architecture/link.md), protocol 9) and builds the robot with `RobotDesign.spec(mapping)`.
+**The robot designs are fixed, and sensors are fixed and ideal.** A team supplies only a mapping: which motor of its code is which part, the motor model, Mirrored, a few body numbers, the hub mounting and the Limelight mount. There are no editable zones, mechanisms or sensor settings. `dev.ftcsim.simulator.robot.RobotDesign` holds the designs (numbers from the robot the simulator was fitted to: [hornet-fit.md](hornet-fit.md)); `dev.ftcsim.contracts.session.RobotMapping` is the mapping. The worker never reads `ftcsim.json`: it gets the mapping inline in the session request ([link](../architecture/link.md), protocol 10) and builds the robot with `RobotDesign.spec(mapping)`.
 
 ## The designs
 
@@ -34,7 +34,8 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 | `motors` | Each motor by the name the code gives it: slot, model, Mirrored. At most 8. | none |
 | `massKg` | Mass, 1 to 40 kg. | 11.3 |
 | `wheelDiameterMm` | Drive wheel diameter, 40 to 200 mm. | 96 (BIOBUZZ: the CAD's 112 when left at 96) |
-| `driveMotor` | Catalogue motor on all four wheels, behind the reduction to the wheel (`MotorCatalog`, `Catalogue.motors()`). | `goBILDA-5203-435` (BIOBUZZ: `swyft-spike-12.7`, the SWYFT Spike 550 motor at 12.7:1 to the wheel, when left at the default) |
+| `driveMotor` | Catalogue motor on all four wheels (`MotorCatalog`, `Catalogue.motors()`). | `goBILDA-bare-6000` |
+| `driveRatio` | Motor turns to one turn of a drive wheel, the same for all four: a number (`12.7`) or a text fraction (`"43/30"`). Empty or 0 is 1:1; a file without the key has 13.7 (a 435 rpm Yellow Jacket). | 13.7 |
 | `turretRatio` | BIOBUZZ only: motor (or servo) turns per turret turn, above 0. | 1 |
 | `turret` | BIOBUZZ only, see below: the servo, the encoders, the axis and whether the Limelight turns with the turret. | none |
 | `hubLogo`, `hubUsb` | Which way the Control Hub's logo and USB ports face (`UP`, `DOWN`, `FORWARD`, `BACKWARD`, `LEFT`, `RIGHT`), at right angles. | `UP`, `FORWARD` |
@@ -43,7 +44,8 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 | Motor rule | Detail |
 |---|---|
 | Slots | `FRONT_LEFT`, `FRONT_RIGHT`, `REAR_LEFT`, `REAR_RIGHT` (one motor each; all four or none), `INTAKE` (the roller), `CONVEYOR`, `SHOOTER` (a flywheel; Hornet has two), `TURRET` (BIOBUZZ only). A motor has one slot; intake, conveyor and shooter take any number. |
-| Model | A catalogue motor id. Empty means the part's usual motor (`RobotMapping.usualModel`): the bare motor (`goBILDA-bare-6000`) for flywheels, the 435 rpm one otherwise. Wheels use `driveMotor`; their own model stays empty. |
+| Model | A catalogue motor id. Empty means the part's usual motor (`RobotMapping.USUAL_MOTOR`): the goBILDA Yellow Jacket (`goBILDA-bare-6000`). Wheels use `driveMotor`; their own model stays empty. The catalogue is the base motors, each once, and a ratio is given on top (goBILDA Yellow Jacket 6000 rpm, SWYFT Spike 550, REV HD Hex motor, REV Core Hex, AndyMark NeveRest 40 and TETRIX TorqueNADO, the last three sold with their gearbox on, so a ratio is on top of it); a 435 rpm Yellow Jacket is the 6000 rpm one with ratio 13.7. Hornet's fitted 435 rpm motor is the Yellow Jacket with ratio 13.7, and a roller's inertia and friction scale with that ratio. Published numbers at 12 V (free speed, stall torque, stall current, encoder counts); the rotor's inertia is an estimate. |
+| Ratio | `ratio` of a motor: motor turns to one turn of the part it drives (the reduction between them; 2 for 2:1, `"43/30"` for a belt). Empty or 0 is 1:1, and the number is all the simulator knows of the gearing: a roller's surface speed is the motor's speed times its radius over the ratio, a flywheel's rim the same, and the window turns the picture's rollers by it. The encoder counts the motor's turns, as a real one does. A wheel's is `driveRatio` (the motor's torque goes up and its speed down by it, and the encoder counts it times as many for a turn of the wheel). 0.05 to 1000. A turret's is `turretRatio`. On the Robot screen each motor has a Ratio field next to its motor, and the four wheels share theirs. |
 | Mirrored | The motor is mounted the other way round, so positive power turns its part backwards. Set it as the code does: Hornet inverts `frontLeft`, `backLeft` (Pedro's `REVERSE`) and `upMotor` (`setInverted(true)`) and nothing else. On a wheel it is the motor's direction. An unmirrored conveyor feeds the shooter turning forward, a mirrored one backward (Hornet's belt is mirrored). A mirrored intake roller takes pieces in turning backward. Shooter wheels that get the same power are all unmirrored; if one is mirrored and the other not, one spins against the other, the shot falls short and the session reports a problem. |
 | Ports | Two hubs of four ports, so a ninth motor is a problem. Wheels take Control Hub ports 0 to 3 (front left 0, rear left 1, front right 2, rear right 3); the others take the Expansion Hub first, then the Control Hub's free ports. Code finds motors by name, so ports are never asked. |
 | Turret | Ratio 3.5 means 3.5 motor turns per turret turn; no mechanical limit; zero is forward at session start. The launch direction turns about the robot's Z axis (positive left) by `sign * shaftAngle / ratio` (`PlantView.shaftAngleRad`, radians since the session began; `sign` -1 if mirrored). The first mapped turret motor aims. On DECODE's generic path only the direction turns and the piece leaves from the end of the path; on BIOBUZZ's the stretch of the path inside the turret and the opening the shot leaves from turn with it ([biobuzz-cad](biobuzz-cad.md)). |
@@ -56,9 +58,9 @@ From the team's table of its mechanisms (the part is the simulator's model of it
 
 | Mechanism | Motor or servo | Ratio | In the simulator |
 |---|---|---|---|
-| Intake and indexer (2) | goBILDA Yellow Jacket | 2:1 | `goBILDA-5203-435` (the table gives no rpm, so the usual 13.7:1 one), roller turns at motor / 2 (`INTAKE_RATIO`, `CONVEYOR_RATIO`) |
-| Shooter (2) | goBILDA Yellow Jacket, bare | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`; a ball leaves at 0.49 of the rim speed of a 3 in wheel, which is the motor's speed times 0.0381 m / 1.4333 (`BIOBUZZ_FLYWHEEL_RADIUS_M`, `FLYWHEEL_RATIO`) |
-| Chassis (4) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-12.7`: 6000 rpm, 1.47 kg cm and 9.2 A at stall behind 12.7:1, 112 mm wheels; its encoder counts 28 per motor turn |
+| Intake and indexer (2) | goBILDA Yellow Jacket, 6000 rpm | 2:1 | `goBILDA-bare-6000`, ratio 2 |
+| Shooter (2) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio `"43/30"`; a ball leaves at 0.49 of the rim speed of a 3 in wheel on BIOBUZZ's robot (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
+| Chassis (4) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; the wheels are 112 mm (BIOBUZZ's robot takes that when `wheelDiameterMm` is left at 96). Nothing here is a default: the mapping gives it |
 | Colibri arms (2) | goBILDA Torque servo | 40/30 servo to shaft | `gobilda-2000-torque`, `COLIBRI_RATIO` |
 | Hood | goBILDA Torque servo | 730/24 = 30.4167 servo to hood | `gobilda-2000-torque`, `HOOD_RATIO` |
 | Turret | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V) |
@@ -116,8 +118,8 @@ The application reads and writes the file whole (`ProjectMappingsImpl`). Every k
 ```json
 { "schema": 2, "name": "Hornet 2026",
   "motors": { "frontLeft": { "slot": "FRONT_LEFT", "model": "", "mirrored": true },
-              "shooterLeft": { "slot": "SHOOTER", "model": "goBILDA-5203-1150", "mirrored": false } },
-  "massKg": 11.3, "wheelDiameterMm": 96, "driveMotor": "goBILDA-5203-435", "turretRatio": 1,
+              "shooterLeft": { "slot": "SHOOTER", "model": "rev-hd-hex-6000", "mirrored": false } },
+  "massKg": 11.3, "wheelDiameterMm": 96, "driveMotor": "goBILDA-bare-6000", "turretRatio": 1,
   "hub": { "logo": "UP", "usb": "FORWARD" },
   "camera": { "x": 0.16, "y": 0, "z": 0.25, "yawDegrees": 0, "pitchDegrees": 20, "rollDegrees": 0 },
   "turret": { "servo": { "name": "turretServo", "model": "axon-mini-plus", "mirrored": false },

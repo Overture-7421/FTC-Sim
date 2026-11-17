@@ -108,7 +108,7 @@ class ProjectMappingsAcceptanceTest {
             RobotSpec profile = opened(RobotDesign.decode(), stored(mapping));
 
             assertEquals(choice.id(), profile.motors().get("flywheel").model());
-            assertEquals(MotorCatalog.motor(choice.id()), profile.chassis().motor(), "the wheels turn on the drive motor");
+            assertEquals(MotorCatalog.motor(choice.id(), RobotMapping.DEFAULT_DRIVE_RATIO), profile.chassis().motor(), "the wheels turn on the drive motor");
         }
     }
 
@@ -122,7 +122,7 @@ class ProjectMappingsAcceptanceTest {
                         new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
                         new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
                         new MotorMapping("aim", Slot.TURRET, "", false)),
-                11.3, 96, "goBILDA-5203-435", 3.5, "UP", "FORWARD", RobotMapping.empty("x").camera());
+                11.3, 96, "goBILDA-bare-6000", 3.5, "UP", "FORWARD", RobotMapping.empty("x").camera());
 
         RobotSpec profile = opened(RobotDesign.forField("biobuzz"), stored(mapping));
 
