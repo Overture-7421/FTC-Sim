@@ -8,12 +8,12 @@ The simulator bundles no FTC SDK. The importer packs the SDK jars the team's pro
 
 | Check | 11.0.0 | 11.1.0 | 11.2.0 | 11.2.1 | 12.0.0 |
 |---|:-:|:-:|:-:|:-:|:-:|
-| Fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, IMU, unmapped pins, Pinpoint, colour sensor, sensors by driver class, Limelight, mechanisms, the turret fixture, sessions and matches | 169 pass | 169 pass | 169 pass | 169 pass | 169 pass |
-| Hornet (12 OpModes, autos, teleop, tuners, both fields) | | 19 pass | | | 9 pass, rehearsal below (2026-11-15, not re-run) |
+| Fixture suite (`:acceptance-tests:test -PftcSdk=<version>`): SDK boot, OpMode lifecycle, runaway OpModes, hub and bulk caching, motors and servos, IMU, unmapped pins, Pinpoint, colour sensor, sensors by driver class, Limelight, mechanisms, the turret fixture, sessions and matches | 176 pass | 176 pass | 176 pass | 176 pass | 176 pass |
+| Hornet (12 OpModes, autos, teleop, tuners, both fields) | | 18 pass in `acceptance-tests` (2026-11-17; `HornetImportTest` not re-run) | | | 9 pass, rehearsal below (2026-11-15, not re-run) |
 
-Everything else ran on 2026-11-16. 11.1.0 is the build's default.
+Everything else ran on 2026-11-17 (the fixture suite includes the BIOBUZZ stub, which reads the OctoQuad through each release's `OctoQuadImpl`). 11.1.0 is the build's default.
 
-- The acceptance suite has 187 tests. 18 need a prepared Hornet program (and `HornetImportTest` in `project-import` needs a checkout); they skip without one, leaving the 169.
+- The acceptance suite has 194 tests. 18 need a prepared Hornet program (and `HornetImportTest` in `project-import` needs a checkout); they skip without one, leaving the 176.
 - The 19 Hornet tests are all those needing the checkout, run with it on 11.1.0. The 9 on 12.0.0 are the rehearsal.
 - To run the matrix: `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (quote it in PowerShell: `'-PftcSdk=12.0.0'`). The build accepts every `ftcSdk*` version of `gradle/libs.versions.toml` and refuses any other, so a new release needs one catalog line ([development.md](development.md), recipes).
 - SDK 12 moved the AprilTag singleton fields to `AprilTagSingleDetection`. That touches the vision portal, which the simulator does not run, not the Limelight, which speaks REST.

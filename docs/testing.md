@@ -2,7 +2,7 @@
 
 What is tested where, how to run it and how to write a test that earns its place; for anyone who changes or reviews code. Commands and hazards are in [development.md](development.md).
 
-Last full run (2026-11-16): `gradlew check` with the Hornet properties ran 1,790 tests, none failed or skipped. Without them 19 are skipped (18 in `acceptance-tests`, 1 in `project-import`). Counts change with every test: run the build for today's.
+Last full run (2026-11-17): `gradlew check` without the Hornet properties ran 1,836 tests, none failed, 19 skipped (18 in `acceptance-tests`, 1 in `project-import`). `:acceptance-tests:test` with the Hornet properties ran its 194, none failed or skipped. Counts change with every test: run the build for today's.
 
 ## The layers
 
