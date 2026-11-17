@@ -28,9 +28,11 @@ public final class RobotModel {
     /**
      * A run of at most 65536 vertices. {@code positions} holds 3 shorts per vertex that map linearly onto {@code min}
      * to {@code max}, {@code colours} 3 bytes and {@code indices} 3 unsigned shorts per triangle; all are little-endian
-     * direct buffers positioned at their start.
+     * direct buffers positioned at their start. {@code alpha} below 1 is a translucent sheet (lexan).
      */
-    public record Chunk(int vertices, int triangles, float[] min, float[] max, ByteBuffer positions, ByteBuffer colours, ByteBuffer indices) {}
+    public record Chunk(
+            int vertices, int triangles, float alpha, float[] min, float[] max, ByteBuffer positions, ByteBuffer colours,
+            ByteBuffer indices) {}
 
     /**
      * @param parent the index of the parent group, -1 for the root
@@ -59,6 +61,11 @@ public final class RobotModel {
         return groups;
     }
 
+    /** Whether any chunk of the model is translucent. */
+    public boolean hasTranslucent() {
+        return groups.stream().anyMatch(group -> group.chunks().stream().anyMatch(chunk -> chunk.alpha() < 1f));
+    }
+
     /** Triangles of the whole model. */
     public int triangles() {
         return groups.stream().mapToInt(Group::triangles).sum();
@@ -84,12 +91,12 @@ public final class RobotModel {
             throw new IOException("not a robot model");
         }
         int version = heap.getInt();
-        if (version != 1) {
+        if (version != 2) {
             throw new IOException("robot model version " + version + " is not known");
         }
         int count = heap.getInt();
         record Header(String name, String parent, String joint, float sign, float rest, float[] pivot, float[] axis, List<int[]> counts,
-                List<float[]> boxes) {}
+                List<float[]> boxes, List<Float> alphas) {}
         List<Header> headers = new ArrayList<>();
         for (int g = 0; g < count; g++) {
             String name = text(heap);
@@ -102,11 +109,13 @@ public final class RobotModel {
             int chunks = heap.get() & 0xFF;
             List<int[]> counts = new ArrayList<>();
             List<float[]> boxes = new ArrayList<>();
+            List<Float> alphas = new ArrayList<>();
             for (int c = 0; c < chunks; c++) {
                 counts.add(new int[] {heap.getInt(), heap.getInt()});
+                alphas.add(heap.getFloat());
                 boxes.add(floats(heap, 6));
             }
-            headers.add(new Header(name, parent, joint, sign, rest, pivot, axis, counts, boxes));
+            headers.add(new Header(name, parent, joint, sign, rest, pivot, axis, counts, boxes, alphas));
         }
         List<Group> groups = new ArrayList<>();
         for (Header header : headers) {
@@ -128,8 +137,8 @@ public final class RobotModel {
                 ByteBuffer colours = direct(heap, vertices * 3);
                 ByteBuffer indices = direct(heap, triangles * 6);
                 chunks.add(new Chunk(
-                        vertices, triangles, new float[] {box[0], box[1], box[2]}, new float[] {box[3], box[4], box[5]}, positions,
-                        colours, indices));
+                        vertices, triangles, header.alphas().get(c), new float[] {box[0], box[1], box[2]},
+                        new float[] {box[3], box[4], box[5]}, positions, colours, indices));
             }
             RobotJoint joint = RobotJoint.named(header.joint());
             if (joint == null && !header.joint().isEmpty() && !header.joint().equals(TURRET_JOINT)) {

@@ -7,12 +7,12 @@ How the window's picture of the BIOBUZZ robot is made from the team's Onshape CA
 | Step | What | Where |
 |---|---|---|
 | Export | The whole robot as glTF from Onshape (Draco compressed, 24 million unique triangles, 47 million with instances). It is not in the repository | the team's Onshape |
-| Convert | `tools\cad\convert_biobuzz.py <robot.gltf> <biobuzz.model> [triangle budget]` leaves out fasteners and parts under 16 mm, merges the thousands of tiny pieces some parts are made of, simplifies curved parts to a size-based triangle count, **keeps thin plates exactly** (any reduction, even a lossless one, tears them), splits the robot into rigid groups and writes each as 16-bit quantised positions with a colour per vertex | `tools\cad` |
-| Ship | `biobuzz.model` (gzip, about 9.5 MB, 1.6 million triangles) is a resource of `desktop-ui` | `dev\ftcsim\ui\model\biobuzz.model` |
+| Convert | `tools\cad\convert_biobuzz.py <robot.gltf> <biobuzz.model> [triangle budget]` leaves out fasteners and parts under a size limit, and **rebuilds the robot from simple shapes**: a cylinder, ring or box for each round or blocky part (gears, sprockets, wheels, motors, standoffs), a flat sheet with the outline and the larger holes of the CAD for each plate (extruded, so the purple lattice plates stay lattice), a lightly reduced mesh for belts and chains, and a heavily reduced one for anything else. The four drive wheels are not the CAD's: they are drawn from scratch as 112 mm by 35 mm mecanum wheels (two side discs, an axle and ten angled rollers). Lexan parts (the colibri plates and the number holders) get a translucent material. A Limelight box is added to the turret. It splits the robot into rigid groups and writes each as 16-bit quantised positions with a colour and an opacity per chunk | `tools\cad` |
+| Ship | `biobuzz.model` (gzip, about 170 KB, 28 thousand triangles; the budget is 30 thousand) is a resource of `desktop-ui` | `dev\ftcsim\ui\model\biobuzz.model` |
 | Read | `RobotModel` reads it into groups; `ModelPoser` finds where each group is from the snapshot | `dev.ftcsim.ui.model` |
-| Draw | `ModelRenderer` uploads every chunk to the GPU once and draws a group with one call per chunk (about 40 calls, no per-frame upload), flat shaded from screen derivatives, with the same light and shadow as the rest of the scene | `dev.ftcsim.ui.render` |
+| Draw | `ModelRenderer` uploads every chunk to the GPU once and draws a group with one call per chunk (no per-frame upload), flat shaded from screen derivatives, with the same light and shadow as the rest of the scene. Opaque chunks first, with face culling off (plates are single sheets); translucent chunks after, blended, without depth writes and casting no shadow | `dev.ftcsim.ui.render` |
 
-Measured on an RTX 5080: 0.7 ms a frame for the robot with its shadow (`RobotModelRenderTest`, which also writes `build\screens\biobuzz-cad-*.png`). Not measured on an integrated GPU. To make the model lighter, run the converter with a smaller budget; curved parts follow it, plates do not.
+Measured on an RTX 5080: 0.15 ms a frame for the robot with its shadow (`RobotModelRenderTest`, which also writes `build\screens\biobuzz-cad-*.png`). Not measured on an integrated GPU. To make the model lighter or heavier, change the budget or the tolerances at the top of the converter (`PLATE_TOLERANCE`, `MIN_HOLE_AREA`, `MIN_SIZE`, `FASTENER`).
 
 A build without the model resource draws the robot as boxes, as before.
 
@@ -47,15 +47,15 @@ The signs of the rollers are the direction that moves pieces the way the robot t
 
 ## What the CAD does not have
 
-- **The Limelight.** It is not modelled (the BOM and the parts have no camera). Its mount is the default of `camera` in the mapping, 0.16 m ahead, 0.25 m up, pitched 20 degrees, given with the turret facing forward: an estimate to be measured on the robot.
+- **The Limelight.** It is not in the CAD (the BOM and the parts have no camera); the picture draws a box where the owner mounts it, and the simulation puts the camera there: on the 45 degree panel beside the shooter wheels (the plane through the two black standoffs ahead of the flywheel), 20.5 mm off the panel. With the turret facing forward that is 0.217 m ahead of the wheels' centre, 0.0035 m left, 0.256 m above the body's centre height, facing forward and 45 degrees up (`RobotDesign.BIOBUZZ_CAMERA`). It rides on the turret. A `camera` in `ftcsim.json` that differs from the generic default overrides it. The panel's orientation is inferred from the two standoffs and the box size (64 by 54 by 36 mm) is a guess: to be measured on the robot.
 - **The colibri arms' travel and the stopper's open position.** The mates have no limits. The simulation opens the stopper at 60 degrees of servo (position 0.2) and the arms are drawn for the whole servo range.
 - **The pivot of the stopper.** Approximated by the switch's own centre.
 - **The hood's launch geometry.** The hood sets the launch elevation as 44 degrees plus its angle (45 degrees at the bottom of its range, 54.9 at the top): an estimate, the team's real shot table replaces it.
 
 ## Making the model again
 
-1. Export the Main assembly as glTF from Onshape and `pip install DracoPy numpy fast-simplification`.
-2. `python tools\cad\convert_biobuzz.py "<robot>.gltf" desktop-ui\src\main\resources\dev\ftcsim\ui\model\biobuzz.model 200000`. It takes a few minutes and a few GB of memory.
+1. Export the Main assembly as glTF from Onshape and `pip install DracoPy numpy fast-simplification shapely mapbox-earcut`.
+2. `python tools\cad\convert_biobuzz.py "<robot>.gltf" desktop-ui\src\main\resources\dev\ftcsim\ui\model\biobuzz.model 30000`. It takes a few minutes and a few GB of memory, and prints the triangles per kind and per group.
 3. Run `:desktop-ui:test --tests "*RobotModelRenderTest*"` and look at `desktop-ui\build\screens\biobuzz-cad-*.png`.
 
 A part that moves differently in a new CAD changes the rules at the top of the script (`GROUPS` and `assign`), which hold every pivot and axis with the mate it came from.

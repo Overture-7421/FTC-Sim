@@ -180,7 +180,7 @@ class RobotModelRenderTest {
         assertTrue(differing(front, turned) > 2000, "turning the turret changes the picture");
         assertTrue(differing(front, arms) > 1500, "raising the colibri arms and the hood changes the picture");
         FieldRenderer.FrameStats stats = renderer.lastFrame();
-        assertTrue(stats.triangles() > 100_000, "the CAD is drawn in full: " + stats);
+        assertTrue(stats.triangles() > 10_000 && stats.triangles() <= 60_000, "the model is drawn in full, lightly: " + stats);
         assertTrue(stats.drawCalls() < 400, "in a few dozen calls, not one per part: " + stats);
         assertEquals(1, stats.fixedInstances() > 0 ? 1 : 0);
     }

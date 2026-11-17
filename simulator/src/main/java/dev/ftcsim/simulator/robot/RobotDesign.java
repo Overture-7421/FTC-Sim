@@ -124,8 +124,19 @@ public final class RobotDesign {
                 mapping.name(), hubs(), chassis(mapping), motors, servos(mapping), turret, storages, captures, launches,
                 new RobotSpec.ImuMount(mapping.hubLogo(), mapping.hubUsb()),
                 new RobotSpec.ColorSensor(-0.12, 0.09, 0.26, -90.0),
-                new RobotSpec.Limelight(mapping.camera(), "field", "1280x960", mapping.turretParts().cameraOnTurret()),
+                new RobotSpec.Limelight(camera(mapping), "field", "1280x960", mapping.turretParts().cameraOnTurret()),
                 joints(mapping));
+    }
+
+    /**
+     * Where BIOBUZZ's Limelight sits, with the turret facing forward: on the 45 degree panel beside the shooter wheels (the owner
+     * placed it; the CAD has no camera). It faces forward and 45 degrees up.
+     */
+    public static final RobotMapping.CameraMount BIOBUZZ_CAMERA = new RobotMapping.CameraMount(0.217, 0.0035, 0.256, 0.0, 45.0, 0.0);
+
+    private RobotMapping.CameraMount camera(RobotMapping mapping) {
+        boolean usual = mapping.camera().equals(RobotMapping.DEFAULT_CAMERA);
+        return game == Game.BIOBUZZ && usual ? BIOBUZZ_CAMERA : mapping.camera();
     }
 
     /** Motor turns to one turn of the intake roller (the Yellow Jacket motors of the CAD's intake and indexer drive at 2:1). */

@@ -34,7 +34,9 @@ class RobotModelTest {
     @Test
     void theBiobuzzModelIsInTheBuildWithEveryJointAGroupTurnsAboutAndParentsBeforeChildren() {
         assertNotNull(MODEL, "the build carries the model");
-        assertTrue(MODEL.triangles() > 100_000, "the CAD is there in full: " + MODEL.triangles());
+        assertTrue(MODEL.triangles() > 10_000, "the robot is there in full: " + MODEL.triangles());
+        assertTrue(MODEL.triangles() <= 30_000, "and light: " + MODEL.triangles());
+        assertTrue(MODEL.hasTranslucent(), "the lexan sheets are translucent");
         Set<String> seen = new HashSet<>();
         Set<RobotJoint> joints = new HashSet<>();
         for (RobotModel.Group group : MODEL.groups()) {

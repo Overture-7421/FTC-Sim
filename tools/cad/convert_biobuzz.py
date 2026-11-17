@@ -3,31 +3,47 @@ Converts the Onshape glTF export of the BIOBUZZ robot (23619-26-A-0000 Main) int
 
     python convert_biobuzz.py <robot.gltf> <out biobuzz.model> [triangle budget]
 
-The export is Draco-compressed, 24 million unique triangles, so the converter decodes it, leaves out the fasteners and
-other parts too small to see, simplifies every part to a size-based triangle count, splits the robot into the rigid
-groups that move (wheels, turret, hood, flywheel, rollers, colibri arms, stopper, encoder gears) and writes each group
-as quantised vertices with a colour per vertex. Coordinates leave in the simulator's frame: X forward, Y left, Z up, the
-origin at the centre of the four wheels, on the chassis body's height. The CAD faces -Y with +X to its left.
+The export is Draco-compressed, 24 million unique triangles. The model has to be tiny, so nothing of the CAD's own triangles
+is kept for the round parts and the plates. Instead every part is replaced by a simple shape of the same size and place:
 
-Needs: pip install DracoPy numpy fast-simplification
+  * wheels, gears, pulleys, bearings, rollers, shafts, motors: a cylinder, or a ring when the part is hollow, fitted to the
+    part's axis, radius and length;
+  * plates (the purple lattice of the chassis, the shooter and the indexer): the outline of the plate with its large holes,
+    simplified and extruded, so the lattice stays and the bolt holes go;
+  * the four mecanum wheels: built from scratch (two side discs, an axle and ten angled rollers) at the CAD's diameter and width;
+  * anything else: the CAD's mesh decimated to a few dozen triangles, or a box;
+  * the lexan sheets (colibri plates, number holders) are marked translucent;
+  * the Limelight, which the CAD does not have, is a box and a lens on the 45 degree panel between the two black standoffs.
+
+The robot is split into rigid groups that move (wheels, turret, hood, flywheel, rollers, colibri arms, stopper, encoder
+gears). Coordinates leave in the simulator's frame: X forward, Y left, Z up, the origin at the centre of the four wheels at
+the chassis body's height. The CAD faces -Y with +X to its left.
+
+Needs: pip install DracoPy numpy fast-simplification shapely mapbox-earcut
 """
 import base64, collections, gzip, json, math, re, struct, sys
 import numpy as np
 import DracoPy
 import fast_simplification
+import shapely
+import mapbox_earcut
 
 CAD_CENTRE_Y = 0.0385            # the middle of the wheels' Y positions in the CAD
-BODY_ORIGIN_Z = 0.1264           # the chassis body's centre above the CAD's wheel-axle height (0.1824 - 0.056)
-MIN_SIZE = 0.016                 # parts whose largest side is under this are left out, unless they are in KEEP_SMALL
-PLATE_TRIANGLES = 100000         # a plate with no more triangles than this is kept as the CAD has it
-FASTENER = re.compile(r'(?i)bolt|screw|\bnut\b|washer|rivet|standoff|spacer|insert|bhcs|shcs|set screw|retaining|e-clip|button m|hex m|socket m|lock ?nut|\bpin\b')
-KEEP_SMALL = re.compile(r'(?i)servo|encoder|sprocket|gear|pulley|bearing|roller|wheel|chain|sensor|octoquad|pinpoint|hub|switch|motor')
+BODY_ORIGIN_Z = 0.1264           # the chassis body's centre above the CAD's wheel-axle height
+MIN_SIZE = 0.020                 # parts whose largest side is under this are left out, unless they are in KEEP_SMALL
+FASTENER = re.compile(r'(?i)bolt|screw|\bnut\b|washer|rivet|standoff|spacer|insert|bhcs|shcs|set screw|retaining|e-clip|button m|hex m|socket m|lock ?nut|\bpin\b|button head|flat head|\bbar\b|housing|mount\b')
+KEEP_SMALL = re.compile(r'(?i)servo|encoder|octoquad|pinpoint|hub|switch|sensor|battery')
+LEXAN = re.compile(r'(?i)placa colibr|number holder')
+BELT = re.compile(r'(?i)chain|banda|belt')
+LEXAN_RGB = (0.80, 0.90, 1.00)
+LEXAN_ALPHA = 0.28
+PLATE_TOLERANCE = 0.0015         # metres: how closely the outline of a plate follows the CAD's
+MIN_HOLE_AREA = 3.5e-5           # holes smaller than this (about 6.7 mm across) are not drawn
 
 WHEEL_AXES = {  # name: (CAD x of the axle centre, CAD y)
     'wheel.fl': (0.177, -0.083), 'wheel.fr': (-0.177, -0.083), 'wheel.rl': (0.177, 0.160), 'wheel.rr': (-0.177, 0.160)}
 X = (1.0, 0.0, 0.0)              # CAD axes
 Z = (0.0, 0.0, 1.0)
-# name: (parent, joint, CAD pivot, CAD axis, sign). The sign makes a positive joint value turn the way the sim defines it.
 GROUPS = collections.OrderedDict([
     ('base', (None, '', (0, CAD_CENTRE_Y, BODY_ORIGIN_Z), Z, 1)),
     ('wheel.fl', ('base', 'wheel.fl', (0.177, -0.083, 0), X, 1)),
@@ -45,7 +61,7 @@ GROUPS = collections.OrderedDict([
     ('encoder.a', ('base', 'encoder.a', (0.0470, -0.1190, 0.2800), Z, 1)),
     ('encoder.b', ('base', 'encoder.b', (-0.0470, -0.1190, 0.2800), Z, 1)),
 ])
-HOOD_REST_RADIANS = math.radians(1.9)   # the hood stands this far from level in the CAD
+HOOD_REST_RADIANS = math.radians(1.9)
 
 HOOD_NAMES = ('Placa Hood', '14t Steel Spur Gear', '28t Aluminum Spur Gear')
 FEEDER_NAMES = ('Sushi Roller', '3/8" Rounded Hex (3.758" L')
@@ -55,13 +71,19 @@ INTAKE_NAMES = ('WCP-0353-001', 'WCP-0354-001', '2" Compliant Wheel', 'Part 1', 
 AXLE_NAMES = ('48mm Gecko Wheel', '2" Compliant Wheel', '8t Press Fit Sprocket', 'AluminumShaft',
               '3/8" Rounded Hex (5.04" L', '3/8" Rounded Hex (5.669" L', '20t Slip Fit Gear', '40t Slip Fit Gear')
 
+# The Limelight sits on the 45 degree panel between the two black standoffs ahead of the flywheel (CAD y -0.146, z 0.386 and
+# y -0.182, z 0.350), facing forward and up. Its centre, in CAD coordinates, and the 63 x 54 x 36 mm body's axes.
+PANEL_CENTRE = np.array([0.0035, -0.164, 0.368])
+PANEL_NORMAL = np.array([0.0, -1.0, 1.0]) / math.sqrt(2.0)
+PANEL_UP = np.array([0.0, 1.0, 1.0]) / math.sqrt(2.0)
+LIMELIGHT_CENTRE = PANEL_CENTRE + 0.0205 * PANEL_NORMAL
+
 
 def mat(node):
     return np.array(node['matrix'], dtype=float).reshape(4, 4).T if 'matrix' in node else np.eye(4)
 
 
 def material_colour(material):
-    """The material's base colour, or, when it has none, the colour its name spells out ("r_g_b_..." in 0 to 1)."""
     factor = material.get('pbrMetallicRoughness', {}).get('baseColorFactor')
     if factor:
         return factor
@@ -96,25 +118,220 @@ def weld(points, faces):
     return welded, f[good]
 
 
-def simplify(points, faces, target, plate):
+# ---- shapes made from scratch ---------------------------------------------------------------------------------------
+
+def segments_for(radius):
+    return 8 if radius < 0.008 else 12 if radius < 0.02 else 16 if radius < 0.04 else 24
+
+
+def perpendicular(axis):
+    helper = np.array([1.0, 0.0, 0.0]) if abs(axis[0]) < 0.9 else np.array([0.0, 1.0, 0.0])
+    e1 = np.cross(axis, helper)
+    e1 /= np.linalg.norm(e1)
+    return e1, np.cross(axis, e1)
+
+
+def cylinder(centre, axis, e1, e2, radius, half_length, inner=None, segs=None):
+    """A cylinder of the radius about the axis, or a ring when `inner` is a radius; (points, triangles)."""
+    n = segs or segments_for(radius)
+    angles = np.arange(n) * (2.0 * math.pi / n)
+    ring = np.cos(angles)[:, None] * e1 + np.sin(angles)[:, None] * e2
+    lo, hi = centre - axis * half_length, centre + axis * half_length
+    pts = [lo + ring * radius, hi + ring * radius]
+    idx = np.arange(n)
+    nxt = (idx + 1) % n
+    tris = [np.c_[idx, nxt, n + idx], np.c_[nxt, n + nxt, n + idx]]
+    if inner is None:
+        pts += [lo[None, :], hi[None, :]]
+        tris += [np.c_[np.full(n, 2 * n), nxt, idx], np.c_[np.full(n, 2 * n + 1), n + idx, n + nxt]]
+    else:
+        pts += [lo + ring * inner, hi + ring * inner]
+        i_lo, i_hi = 2 * n, 3 * n
+        tris += [np.c_[i_lo + idx, i_lo + nxt, idx], np.c_[nxt, idx, i_lo + nxt]]
+        tris += [np.c_[i_hi + idx, n + idx, i_hi + nxt], np.c_[n + nxt, i_hi + nxt, n + idx]]
+        tris += [np.c_[i_lo + idx, i_hi + idx, i_lo + nxt], np.c_[i_hi + idx, i_hi + nxt, i_lo + nxt]]
+    return np.concatenate(pts), np.concatenate(tris).astype(np.int32)
+
+
+def box(centre, axes, half):
+    """An oriented box; axes are three unit vectors."""
+    corners = np.array([[sx, sy, sz] for sx in (-1, 1) for sy in (-1, 1) for sz in (-1, 1)], dtype=float)
+    pts = centre + (corners * half) @ np.asarray(axes)
+    quads = [(0, 1, 3, 2), (4, 6, 7, 5), (0, 4, 5, 1), (2, 3, 7, 6), (0, 2, 6, 4), (1, 5, 7, 3)]
+    tris = []
+    for a, b, c, d in quads:
+        tris += [(a, b, c), (a, c, d)]
+    return pts, np.array(tris, dtype=np.int32)
+
+
+def mecanum_wheel(cx, cy, flip):
+    """A mecanum wheel of the CAD's size (112 mm across, 35 mm wide), axle along the CAD's X; list of (points, tris, rgb)."""
+    centre = np.array([cx, cy, 0.0])
+    ax = np.array([1.0, 0.0, 0.0])
+    e1, e2 = np.array([0.0, 1.0, 0.0]), np.array([0.0, 0.0, 1.0])
+    out = []
+    for side in (-1.0, 1.0):
+        p, t = cylinder(centre + ax * side * 0.0165, ax, e1, e2, 0.040, 0.0015, segs=20)
+        out.append((p, t, (0.62, 0.62, 0.64)))
+    p, t = cylinder(centre, ax, e1, e2, 0.011, 0.0225, segs=10)
+    out.append((p, t, (0.35, 0.35, 0.37)))
+    count = 10
+    for k in range(count):
+        theta = 2.0 * math.pi * k / count
+        radial = np.array([0.0, math.cos(theta), math.sin(theta)])
+        tangent = np.array([0.0, -math.sin(theta), math.cos(theta)])
+        axis = (ax + flip * tangent) / math.sqrt(2.0)
+        r1, r2 = perpendicular(axis)
+        p, t = cylinder(centre + radial * 0.0455, axis, r1, r2, 0.0112, 0.0185, segs=8)
+        out.append((p, t, (0.10, 0.10, 0.11) if k % 2 == 0 else (0.16, 0.16, 0.17)))
+    return out
+
+
+def limelight():
+    """The Limelight 3A on its panel: a box and its lens; list of (points, tris, rgb)."""
+    across = np.array([1.0, 0.0, 0.0])
+    p, t = box(LIMELIGHT_CENTRE, [across, PANEL_UP, PANEL_NORMAL], [0.032, 0.027, 0.018])
+    out = [(p, t, (0.10, 0.10, 0.12))]
+    e1, e2 = perpendicular(PANEL_NORMAL)
+    p, t = cylinder(LIMELIGHT_CENTRE + PANEL_NORMAL * 0.0195, PANEL_NORMAL, e1, e2, 0.0085, 0.0025, segs=12)
+    out.append((p, t, (0.05, 0.12, 0.22)))
+    return out
+
+
+# ---- fitting shapes to a part --------------------------------------------------------------------------------------
+
+def frame_of(points):
+    mean = points.mean(axis=0)
+    _, axes = np.linalg.eigh(np.cov((points - mean).T))
+    q = (points - mean) @ axes
+    return mean, axes, q, q.min(axis=0), q.max(axis=0)
+
+
+def fit_cylinder(mean, axes, q, qmin, qmax):
+    ext = qmax - qmin
+    centre_q = (qmin + qmax) / 2.0
+    best = None
+    for a in range(3):
+        o = [i for i in range(3) if i != a]
+        e1, e2 = ext[o[0]], ext[o[1]]
+        if max(e1, e2) < 1e-6 or abs(e1 - e2) > 0.12 * max(e1, e2):
+            continue
+        r = np.hypot(q[:, o[0]] - centre_q[o[0]], q[:, o[1]] - centre_q[o[1]])
+        radius = r.max()
+        if radius > 1.1 * max(e1, e2) / 2.0:
+            continue
+        rim = float((r > 0.9 * radius).mean())
+        if rim < 0.12:
+            continue
+        if best is None or rim > best[0]:
+            best = (rim, a, o, radius, r)
+    if best is None:
+        return None
+    _, a, o, radius, r = best
+    centre = mean + axes @ centre_q
+    inner = float(r.min())
+    ring = inner if inner > 0.45 * radius and ext[a] < 2.5 * radius else None
+    return cylinder(centre, axes[:, a], axes[:, o[0]], axes[:, o[1]], radius, ext[a] / 2.0, ring)
+
+
+def fit_plate(mean, axes, q, qmin, qmax, faces):
+    """The outline of a flat part with its large holes, simplified, as a sheet with walls round its rim."""
+    ext = qmax - qmin
+    n = int(np.argmin(ext))
+    u, v = [i for i in range(3) if i != n]
+    corners = q[faces]
+    normals = np.cross(corners[:, 1] - corners[:, 0], corners[:, 2] - corners[:, 0])
+    length = np.linalg.norm(normals, axis=1)
+    ok = length > 1e-14
+    flat = ok & (np.abs(normals[:, n]) > 0.98 * np.where(ok, length, 1.0))
+    mid = (qmin[n] + qmax[n]) / 2.0
+    top = flat & (corners[:, :, n].mean(axis=1) > mid)
+    if top.sum() < 2:
+        return None
+    ring = corners[top][:, :, [u, v]]
+    ring = np.concatenate([ring, ring[:, :1]], axis=1)
+    polygons = shapely.polygons(np.round(ring, 7))
+    polygons = polygons[shapely.area(polygons) > 1e-12]
+    union = shapely.union_all(polygons).simplify(PLATE_TOLERANCE, preserve_topology=True)
+    geoms = list(union.geoms) if hasattr(union, 'geoms') else [union]
+    out_pts, out_tris = [], []
+    half = max(ext[n], 0.002) / 2.0
+    base = 0
+    for poly in geoms:
+        if poly.is_empty or poly.geom_type != 'Polygon':
+            continue
+        exterior = np.asarray(poly.exterior.coords)[:-1]
+        rings = [exterior]
+        for hole in poly.interiors:
+            if shapely.area(shapely.Polygon(hole)) >= MIN_HOLE_AREA:
+                rings.append(np.asarray(hole.coords)[:-1])
+        flat2 = np.concatenate(rings)
+        ends = np.cumsum([len(r) for r in rings]).astype(np.uint32)
+        tri = np.asarray(mapbox_earcut.triangulate_float64(flat2, ends), dtype=np.int64).reshape(-1, 3)
+        sheet = np.zeros((len(flat2), 3))
+        sheet[:, u], sheet[:, v], sheet[:, n] = flat2[:, 0], flat2[:, 1], mid
+        out_pts.append(sheet)
+        out_tris.append(tri + base)
+        base += len(flat2)
+        # walls round the outer rim only: they give the plate its edge seen from above and from the side
+        m = len(exterior)
+        lo_, hi_ = sheet[:m].copy(), sheet[:m].copy()
+        lo_[:, n] -= half
+        hi_[:, n] += half
+        out_pts += [lo_, hi_]
+        i = np.arange(m)
+        j = (i + 1) % m
+        out_tris += [np.c_[base + i, base + j, base + m + i], np.c_[base + j, base + m + j, base + m + i]]
+        base += 2 * m
+    if not out_pts:
+        return None
+    local = np.concatenate(out_pts)
+    return mean + local @ axes.T, np.concatenate(out_tris).astype(np.int32)
+
+
+def fit_box(mean, axes, q, qmin, qmax):
+    centre = mean + axes @ ((qmin + qmax) / 2.0)
+    return box(centre, axes.T, (qmax - qmin) / 2.0)
+
+
+def fit_shape(points, faces, name):
+    """A simple shape standing for the part, in the part's own coordinates: (points, triangles, kind)."""
     points, faces = weld(points.astype(np.float64), faces.astype(np.int64))
-    points, faces = points.astype(np.float32), faces.astype(np.int32)
-    if len(faces) <= target or (plate and len(faces) <= PLATE_TRIANGLES):
-        # Thin plates with holes tear under any reduction (even a lossless one), so they stay as the CAD has them.
-        return points, faces
-    for agg in (5, 7, 9):
-        points, faces = fast_simplification.simplify(points, faces, target_count=int(target), agg=agg)
-        if len(faces) <= target * 2:
-            break
-    return points, faces
+    if len(faces) == 0:
+        return None
+    mean, axes, q, qmin, qmax = frame_of(points)
+    ext = qmax - qmin
+    if BELT.search(name):
+        if len(faces) > 260:
+            p, f = fast_simplification.simplify(points.astype(np.float32), faces.astype(np.int32), target_count=240, agg=5)
+            return p.astype(np.float64), f, 'belt'
+        return points, faces.astype(np.int32), 'belt'
+    cyl = fit_cylinder(mean, axes, q, qmin, qmax)
+    if cyl is not None:
+        return cyl[0], cyl[1], 'cylinder'
+    order = np.sort(ext)
+    if order[0] < 0.007 and order[1] > 0.03 and order[0] < 0.15 * order[1]:
+        plate = fit_plate(mean, axes, q, qmin, qmax, faces)
+        if plate is not None:
+            return plate[0], plate[1], 'plate'
+    target = int(np.clip(30 + 1500 * ext.max() ** 1.6, 30, 220))
+    if len(faces) <= target:
+        return points, faces.astype(np.int32), 'kept'
+    try:
+        p, f = fast_simplification.simplify(points.astype(np.float32), faces.astype(np.int32), target_count=target, agg=7)
+        if 8 <= len(f) <= 3 * target:
+            return p.astype(np.float64), f, 'decimated'
+    except Exception:
+        pass
+    b = fit_box(mean, axes, q, qmin, qmax)
+    return b[0], b[1], 'box'
 
 
 def main():
     src, dst = sys.argv[1], sys.argv[2]
-    budget = int(sys.argv[3]) if len(sys.argv) > 3 else 330000
+    budget = int(sys.argv[3]) if len(sys.argv) > 3 else 30000
     g = json.load(open(src, 'r', encoding='utf-8'))
-    uri = g['buffers'][0]['uri']
-    blob = base64.b64decode(uri.split(',', 1)[1])
+    blob = base64.b64decode(g['buffers'][0]['uri'].split(',', 1)[1])
     nodes, meshes, acc, views = g['nodes'], g['meshes'], g['accessors'], g['bufferViews']
     materials = g['materials']
     parent = {}
@@ -142,7 +359,7 @@ def main():
             lo = np.minimum(lo, a['min']); hi = np.maximum(hi, a['max'])
         return lo, hi
 
-    keep = []  # (node index, mesh index, name, top, world centre, world size)
+    keep = []
     for i, n in enumerate(nodes):
         if 'mesh' not in n:
             continue
@@ -152,12 +369,10 @@ def main():
         w = (world[i] @ corners.T).T[:, :3]
         wlo, whi = w.min(0), w.max(0)
         size, centre = whi - wlo, (wlo + whi) / 2
-        big = size.max() >= MIN_SIZE
-        if FASTENER.search(name) and size.max() < 0.05:
+        keepsmall = bool(KEEP_SMALL.search(name))
+        if FASTENER.search(name) and size.max() < 0.06 and not keepsmall:
             continue
-        if not big and not KEEP_SMALL.search(name):
-            continue
-        if size.max() < 0.006:
+        if size.max() < (0.012 if keepsmall else MIN_SIZE):
             continue
         keep.append((i, n['mesh'], name, top(i), centre, size))
     print('kept', len(keep), 'of', sum(1 for n in nodes if 'mesh' in n), 'mesh nodes')
@@ -202,7 +417,6 @@ def main():
                 return 'colibri.left' if c[0] > 0 else 'colibri.right'
         return 'base'
 
-    # the indexer's axles: one group per shaft, found by where the wheels and sprockets sit
     axles = {}
     assigned = []
     for (i, mi, name, topname, c, s) in keep:
@@ -218,38 +432,20 @@ def main():
         c = np.mean(centres, axis=0)
         groups['axle%d_%d' % key] = ('base', 'conveyor', (0.0, float(c[1]), float(c[2])), X, 1)
 
-    # triangle budget per unique mesh: a size based share, scaled to the budget
-    counts = collections.Counter()
+    # fit a shape to every mesh the robot uses, once, in the mesh's own coordinates
+    wanted = collections.OrderedDict()
     for (i, mi, name, topname, c, s), gname in zip(keep, assigned):
-        counts[mi] += 1
-    dims = {}
-    orig = {}
-    for mi in counts:
-        lo, hi = mesh_box(mi)
-        dims[mi] = float((hi - lo).max())
-        orig[mi] = sum(acc[p['indices']]['count'] // 3 for p in meshes[mi]['primitives'])
-
-    def wanted(mi, k):
-        return int(min(orig[mi], max(48, k * (dims[mi] / 0.05) ** 0.8)))
-    lo_k, hi_k = 100.0, 20000.0
-    for _ in range(40):
-        k = math.sqrt(lo_k * hi_k)
-        total = sum(wanted(mi, k) * n for mi, n in counts.items())
-        if total > budget:
-            hi_k = k
-        else:
-            lo_k = k
-    k = lo_k
-    print('size factor', round(k), 'estimated triangles', sum(wanted(mi, k) * n for mi, n in counts.items()))
-
-    decoded = {}
-    for n_done, mi in enumerate(sorted(counts)):
-        # A mesh may be thousands of small primitives of one material (a wheel's rollers): simplify them together.
+        if gname.startswith('wheel.'):
+            continue
+        wanted.setdefault(mi, name)
+    shapes = {}
+    kinds = collections.Counter()
+    tri_by_kind = collections.Counter()
+    for n_done, (mi, name) in enumerate(wanted.items()):
         by_material = collections.OrderedDict()
         for p in meshes[mi]['primitives']:
             view = views[p['extensions']['KHR_draco_mesh_compression']['bufferView']]
-            raw = blob[view['byteOffset']:view['byteOffset'] + view['byteLength']]
-            d = DracoPy.decode(raw)
+            d = DracoPy.decode(blob[view['byteOffset']:view['byteOffset'] + view['byteLength']])
             pts = np.asarray(d.points, dtype=np.float64).reshape(-1, 3)
             fcs = np.asarray(d.faces, dtype=np.int64).reshape(-1, 3)
             by_material.setdefault(p['material'], []).append((pts, fcs))
@@ -261,52 +457,65 @@ def main():
                 all_fcs.append(fcs + offset)
                 offset += len(pts)
             pts, fcs = np.concatenate(all_pts), np.concatenate(all_fcs)
-            if len(pts) == 0 or len(fcs) == 0:
+            if len(pts) < 3 or len(fcs) == 0:
                 continue
-            rgb = np.clip(np.round(np.array(material_colour(materials[material])[:3]) * 255), 0, 255).astype(np.uint8)
-            share = max(1, int(wanted(mi, k) * len(fcs) / max(1, orig[mi])))
-            dims_sorted = sorted(float(v) for v in (pts.max(axis=0) - pts.min(axis=0)))
-            plate = dims_sorted[0] < 0.012 and dims_sorted[2] > 0.06
-            sp, sf = simplify(pts, fcs, share, plate)
-            if len(sf) == 0:
+            fit = fit_shape(pts, fcs, name)
+            if fit is None:
                 continue
-            parts.append((sp, sf, rgb))
-        decoded[mi] = parts
-        if sum(len(p[1]) for p in parts) > 20000:
-            print('  heavy mesh', mi, 'originally', orig[mi], 'now', sum(len(p[1]) for p in parts), 'used', counts[mi], 'x', flush=True)
-        if n_done % 25 == 0:
-            print('decoded', n_done + 1, '/', len(counts), flush=True)
+            rgb = material_colour(materials[material])[:3]
+            alpha = 1.0
+            if LEXAN.search(name):
+                rgb, alpha = LEXAN_RGB, LEXAN_ALPHA
+            parts.append((fit[0], fit[1], tuple(rgb), alpha))
+            kinds[fit[2]] += 1
+            tri_by_kind[fit[2]] += len(fit[1])
+        shapes[mi] = parts
+        if n_done % 40 == 0:
+            print('fitted', n_done + 1, '/', len(wanted), flush=True)
+    print('shapes', dict(kinds), 'triangles per kind (one instance each)', dict(tri_by_kind))
 
-    per_group = collections.defaultdict(lambda: {'pos': [], 'rgb': [], 'idx': [], 'count': 0})
+    per_group = collections.defaultdict(list)   # group -> list of (sim points, tris, rgb, alpha)
+
+    def add(gname, cad_points, tris, rgb, alpha=1.0):
+        per_group[gname].append((to_sim(cad_points), tris, rgb, alpha))
+
+    kind_total = collections.Counter()
     for (i, mi, name, topname, c, s), gname in zip(keep, assigned):
+        if gname.startswith('wheel.'):
+            continue
         w = world[i]
-        for (sp, sf, rgb) in decoded[mi]:
-            wp = (w @ np.c_[sp.astype(np.float64), np.ones(len(sp))].T).T[:, :3]
-            sim = to_sim(wp)
-            buf = per_group[gname]
-            base = buf['count']
-            buf['pos'].append(sim)
-            buf['rgb'].append(np.tile(rgb, (len(sim), 1)))
-            buf['idx'].append(sf + base)
-            buf['count'] += len(sim)
+        for (sp, sf, rgb, alpha) in shapes.get(mi, []):
+            wp = (w @ np.c_[sp, np.ones(len(sp))].T).T[:, :3]
+            add(gname, wp, sf, rgb, alpha)
+    for gname, (ax, ay) in WHEEL_AXES.items():
+        for (p, t, rgb) in mecanum_wheel(ax, ay, 1.0 if gname in ('wheel.fl', 'wheel.rr') else -1.0):
+            add(gname, p, t, rgb)
+    for (p, t, rgb) in limelight():
+        add('turret', p, t, rgb)
 
-    header = {'version': 1, 'groups': []}
-    blobs = []
+    def total(parts):
+        return sum(len(t) for _, t, _, _ in parts)
+    print('triangles', {k: total(v) for k, v in per_group.items()})
+    print('total', sum(total(v) for v in per_group.values()), 'budget', budget)
+
+    blobs, entries = [], []
     for gname, (par, joint, pivot, axis, sign) in groups.items():
-        buf = per_group.get(gname)
         pivot_sim = point_to_sim(pivot)
         entry = {'name': gname, 'parent': par or '', 'joint': joint, 'sign': sign,
                  'rest': HOOD_REST_RADIANS if gname == 'hood' else 0.0,
                  'pivot': [round(v, 6) for v in pivot_sim], 'axis': [round(v, 6) for v in dir_to_sim(axis)], 'chunks': []}
-        if buf and buf['count']:
-            pos = np.concatenate(buf['pos']) - np.array(pivot_sim)
-            rgb = np.concatenate(buf['rgb'])
-            idx = np.concatenate(buf['idx']).astype(np.int64)
-            order = np.argsort(idx.min(axis=1), kind='stable')
-            idx = idx[order]
+        parts = per_group.get(gname, [])
+        for alpha in sorted({a for _, _, _, a in parts}, reverse=True):
+            subset = [p for p in parts if p[3] == alpha]
+            pos_list, rgb_list, idx_list, count = [], [], [], 0
+            for pts, tris, rgb, _ in subset:
+                pos_list.append(pts - np.array(pivot_sim))
+                rgb_list.append(np.tile(np.clip(np.round(np.array(rgb) * 255), 0, 255).astype(np.uint8), (len(pts), 1)))
+                idx_list.append(tris + count)
+                count += len(pts)
+            pos, rgb, idx = np.concatenate(pos_list), np.concatenate(rgb_list), np.concatenate(idx_list).astype(np.int64)
             start = 0
             while start < len(idx):
-                # At most 20000 triangles name at most 60000 vertices, which a 16-bit index reaches.
                 end = min(len(idx), start + 20000)
                 tri = idx[start:end]
                 used, inverse = np.unique(tri.ravel(), return_inverse=True)
@@ -314,29 +523,27 @@ def main():
                 mn, mx = cp.min(axis=0), cp.max(axis=0)
                 span = np.maximum(mx - mn, 1e-9)
                 q = np.round((cp - mn) / span * 65535 - 32768).astype(np.int16)
-                entry['chunks'].append({'vertices': len(used), 'triangles': len(tri), 'min': [float(v) for v in mn], 'max': [float(v) for v in mx]})
+                entry['chunks'].append({'vertices': len(used), 'triangles': len(tri), 'alpha': alpha,
+                                        'min': [float(v) for v in mn], 'max': [float(v) for v in mx]})
                 blobs += [q.tobytes(), cc.astype(np.uint8).tobytes(), inverse.reshape(-1, 3).astype(np.uint16).tobytes()]
                 start = end
-        header['groups'].append(entry)
-    total_tris = sum(c['triangles'] for e in header['groups'] for c in e['chunks'])
-    header['triangles'] = total_tris
-    print('groups', len(header['groups']), 'triangles', total_tris,
-          {e['name']: sum(c['triangles'] for c in e['chunks']) for e in header['groups'] if e['chunks']})
+        entries.append(entry)
 
     def text(s):
         b = s.encode('utf-8')
         return struct.pack('<B', len(b)) + b
-    head = bytearray(b'FTCM') + struct.pack('<II', 1, len(header['groups']))
-    for e in header['groups']:
+    head = bytearray(b'FTCM') + struct.pack('<II', 2, len(entries))
+    for e in entries:
         head += text(e['name']) + text(e['parent']) + text(e['joint'])
         head += struct.pack('<ff', e['sign'], e['rest']) + struct.pack('<3f', *e['pivot']) + struct.pack('<3f', *e['axis'])
         head += struct.pack('<B', len(e['chunks']))
         for c in e['chunks']:
-            head += struct.pack('<II', c['vertices'], c['triangles']) + struct.pack('<3f', *c['min']) + struct.pack('<3f', *c['max'])
+            head += struct.pack('<IIf', c['vertices'], c['triangles'], c['alpha']) + struct.pack('<3f', *c['min']) + struct.pack('<3f', *c['max'])
     with gzip.open(dst, 'wb', compresslevel=9) as out:
         out.write(bytes(head))
         for b in blobs:
             out.write(b)
+    print('limelight centre (sim)', [round(v, 4) for v in point_to_sim(LIMELIGHT_CENTRE)], 'pitch up 45 degrees')
     print('wrote', dst)
 
 

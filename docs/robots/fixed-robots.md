@@ -38,7 +38,7 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 | `turretRatio` | BIOBUZZ only: motor (or servo) turns per turret turn, above 0. | 1 |
 | `turret` | BIOBUZZ only, see below: the servo, the encoders, the axis and whether the Limelight turns with the turret. | none |
 | `hubLogo`, `hubUsb` | Which way the Control Hub's logo and USB ports face (`UP`, `DOWN`, `FORWARD`, `BACKWARD`, `LEFT`, `RIGHT`), at right angles. | `UP`, `FORWARD` |
-| `camera` | Limelight position (X forward, Y left, Z up, metres from the robot's centre) and yaw, pitch, roll in degrees. | 0.16, 0, 0.25; 0, 20, 0 |
+| `camera` | Limelight position (X forward, Y left, Z up, metres from the robot's centre) and yaw, pitch, roll in degrees. | 0.16, 0, 0.25; 0, 20, 0 (BIOBUZZ: 0.217, 0.0035, 0.256; 0, 45, 0, on its 45 degree panel, when `camera` is left at this default) |
 
 | Motor rule | Detail |
 |---|---|

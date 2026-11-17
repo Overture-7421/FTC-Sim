@@ -200,6 +200,12 @@ class RobotDesignTest {
         assertTrue(spec.limelight().onTurret());
         assertNull(RobotDesign.biobuzz().spec(base).turret().shaft(), "nothing turns a turret that has no motor and no servo");
         assertNull(RobotDesign.decode().spec(base).turret(), "DECODE's robot has no turret");
+        assertEquals(RobotDesign.BIOBUZZ_CAMERA, spec.limelight().mount(), "BIOBUZZ's Limelight is on the 45 degree panel unless the mapping moves it");
+        assertEquals(RobotMapping.DEFAULT_CAMERA, RobotDesign.decode().spec(base).limelight().mount());
+        RobotMapping moved = new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
+                new CameraMount(0.1, 0.0, 0.2, 0.0, 10.0, 0.0));
+        assertEquals(new CameraMount(0.1, 0.0, 0.2, 0.0, 10.0, 0.0), RobotDesign.biobuzz().spec(moved).limelight().mount());
     }
 
     @Test

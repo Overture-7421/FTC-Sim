@@ -1,7 +1,11 @@
 package dev.ftcsim.ui.render;
 
 import static org.lwjgl.opengl.GL33C.GL_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL33C.GL_BLEND;
+import static org.lwjgl.opengl.GL33C.GL_CULL_FACE;
 import static org.lwjgl.opengl.GL33C.GL_ELEMENT_ARRAY_BUFFER;
+import static org.lwjgl.opengl.GL33C.GL_ONE_MINUS_SRC_ALPHA;
+import static org.lwjgl.opengl.GL33C.GL_SRC_ALPHA;
 import static org.lwjgl.opengl.GL33C.GL_SHORT;
 import static org.lwjgl.opengl.GL33C.GL_STATIC_DRAW;
 import static org.lwjgl.opengl.GL33C.GL_TRIANGLES;
@@ -9,10 +13,14 @@ import static org.lwjgl.opengl.GL33C.GL_UNSIGNED_BYTE;
 import static org.lwjgl.opengl.GL33C.GL_UNSIGNED_SHORT;
 import static org.lwjgl.opengl.GL33C.glBindBuffer;
 import static org.lwjgl.opengl.GL33C.glBindVertexArray;
+import static org.lwjgl.opengl.GL33C.glBlendFunc;
 import static org.lwjgl.opengl.GL33C.glBufferData;
 import static org.lwjgl.opengl.GL33C.glDeleteBuffers;
 import static org.lwjgl.opengl.GL33C.glDeleteVertexArrays;
+import static org.lwjgl.opengl.GL33C.glDepthMask;
+import static org.lwjgl.opengl.GL33C.glDisable;
 import static org.lwjgl.opengl.GL33C.glDrawElements;
+import static org.lwjgl.opengl.GL33C.glEnable;
 import static org.lwjgl.opengl.GL33C.glEnableVertexAttribArray;
 import static org.lwjgl.opengl.GL33C.glGenBuffers;
 import static org.lwjgl.opengl.GL33C.glGenVertexArrays;
@@ -70,6 +78,7 @@ final class ModelRenderer implements AutoCloseable {
             uniform vec3 uEye;
             uniform int uPass;
             uniform float uFieldHalf;
+            uniform float uAlpha;
             out vec4 fragColor;
 
             vec3 ambientLight(vec3 n) {
@@ -89,11 +98,13 @@ final class ModelRenderer implements AutoCloseable {
                 vec3 halfway = normalize(uLight + normalize(uEye - vWorld));
                 float specular = pow(max(dot(n, halfway), 0.0), 32.0) * 0.12;
                 vec3 lit = vColor * (ambientLight(n) + vec3(1.0, 0.97, 0.90) * diffuse * 0.85) + vec3(specular);
-                fragColor = vec4(lit, 1.0);
+                fragColor = vec4(lit, uAlpha);
             }
             """;
 
-    private record Mesh(int groupIndex, int vertexArray, int positions, int colours, int indices, int triangles, float[] min, float[] span) {}
+    private record Mesh(
+            int groupIndex, int vertexArray, int positions, int colours, int indices, int triangles, float alpha, float[] min,
+            float[] span) {}
 
     private final RobotModel model;
     private final ModelPoser poser;
@@ -107,6 +118,7 @@ final class ModelRenderer implements AutoCloseable {
     private final int uEye;
     private final int uPass;
     private final int uFieldHalf;
+    private final int uAlpha;
     private final float[] chassis = new float[7];
     private final float[] turret = new float[7];
     private final float[] joints = new float[RobotJoint.values().length];
@@ -128,6 +140,7 @@ final class ModelRenderer implements AutoCloseable {
         uEye = program.uniform("uEye");
         uPass = program.uniform("uPass");
         uFieldHalf = program.uniform("uFieldHalf");
+        uAlpha = program.uniform("uAlpha");
         for (int g = 0; g < model.groups().size(); g++) {
             for (RobotModel.Chunk chunk : model.groups().get(g).chunks()) {
                 int vao = glGenVertexArrays();
@@ -147,7 +160,7 @@ final class ModelRenderer implements AutoCloseable {
                 glBufferData(GL_ELEMENT_ARRAY_BUFFER, chunk.indices(), GL_STATIC_DRAW);
                 glBindVertexArray(0);
                 float[] span = {chunk.max()[0] - chunk.min()[0], chunk.max()[1] - chunk.min()[1], chunk.max()[2] - chunk.min()[2]};
-                meshes.add(new Mesh(g, vao, positions, colours, indices, chunk.triangles(), chunk.min(), span));
+                meshes.add(new Mesh(g, vao, positions, colours, indices, chunk.triangles(), chunk.alpha(), chunk.min(), span));
             }
         }
     }
@@ -182,21 +195,45 @@ final class ModelRenderer implements AutoCloseable {
         drawnTriangles = 0;
     }
 
-    /** Draws every chunk; {@code pass} is 0 for the lit robot and 1 for its shadow. */
+    /** Draws every chunk; {@code pass} is 0 for the lit robot and 1 for its shadow. Translucent chunks (lexan) come last and cast no shadow. */
     void draw(int pass) {
         program.use();
         glUniform1i(uPass, pass);
+        if (pass == 0) {
+            glDisable(GL_CULL_FACE);
+        }
+        glUniform1f(uAlpha, 1f);
         for (Mesh mesh : meshes) {
-            System.arraycopy(matrices, 16 * mesh.groupIndex(), model16, 0, 16);
-            glUniformMatrix4fv(uModel, false, model16);
-            glUniform3f(uMin, mesh.min()[0], mesh.min()[1], mesh.min()[2]);
-            glUniform3f(uSpan, mesh.span()[0], mesh.span()[1], mesh.span()[2]);
-            glBindVertexArray(mesh.vertexArray());
-            glDrawElements(GL_TRIANGLES, mesh.triangles() * 3, GL_UNSIGNED_SHORT, 0L);
-            drawCalls++;
-            drawnTriangles += mesh.triangles();
+            if (mesh.alpha() >= 1f) {
+                drawMesh(mesh);
+            }
+        }
+        if (pass == 0) {
+            glEnable(GL_BLEND);
+            glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+            glDepthMask(false);
+            for (Mesh mesh : meshes) {
+                if (mesh.alpha() < 1f) {
+                    glUniform1f(uAlpha, mesh.alpha());
+                    drawMesh(mesh);
+                }
+            }
+            glDepthMask(true);
+            glDisable(GL_BLEND);
+            glEnable(GL_CULL_FACE);
         }
         glBindVertexArray(0);
+    }
+
+    private void drawMesh(Mesh mesh) {
+        System.arraycopy(matrices, 16 * mesh.groupIndex(), model16, 0, 16);
+        glUniformMatrix4fv(uModel, false, model16);
+        glUniform3f(uMin, mesh.min()[0], mesh.min()[1], mesh.min()[2]);
+        glUniform3f(uSpan, mesh.span()[0], mesh.span()[1], mesh.span()[2]);
+        glBindVertexArray(mesh.vertexArray());
+        glDrawElements(GL_TRIANGLES, mesh.triangles() * 3, GL_UNSIGNED_SHORT, 0L);
+        drawCalls++;
+        drawnTriangles += mesh.triangles();
     }
 
     int drawCalls() {

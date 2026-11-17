@@ -218,8 +218,11 @@ public record RobotMapping(
     public static RobotMapping empty(String name) {
         return new RobotMapping(
                 name, List.of(), DEFAULT_MASS_KG, DEFAULT_WHEEL_DIAMETER_MM, DEFAULT_DRIVE_MOTOR, 1.0, "UP", "FORWARD",
-                new CameraMount(0.16, 0.0, 0.25, 0.0, 20.0, 0.0));
+                DEFAULT_CAMERA);
     }
+
+    /** The camera mount of a mapping that gives none. BIOBUZZ's robot replaces it with the one measured on its CAD. */
+    public static final CameraMount DEFAULT_CAMERA = new CameraMount(0.16, 0.0, 0.25, 0.0, 20.0, 0.0);
 
     /** The catalogue motor a part has when a mapping names none: the flywheels turn on the bare motor, everything else on the 435 rpm one. */
     public static String usualModel(Slot slot) {

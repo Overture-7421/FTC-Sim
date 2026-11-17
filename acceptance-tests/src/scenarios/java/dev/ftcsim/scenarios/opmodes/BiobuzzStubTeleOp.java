@@ -29,7 +29,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * difference of their turns tells which turn of the first the turret is on. The left trigger runs the intake, the right
  * trigger the flywheels and B the indexer; X opens the stopper, Y raises the colibri arms and the D-pad's up and down
  * raise and lower the hood. The hardware names are the ones the robot's configuration uses; the pod offsets are the
- * CAD's, and the Limelight's mount is an estimate, as the CAD has no Limelight.
+ * CAD's, and the Limelight sits on the 45 degree panel beside the shooter wheels, where the owner mounts it.
  */
 @TeleOp(name = "BIOBUZZ Stub", group = "Stub")
 public final class BiobuzzStubTeleOp extends OpMode {

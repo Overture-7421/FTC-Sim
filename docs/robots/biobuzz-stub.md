@@ -39,7 +39,7 @@ There is no BIOBUZZ robot program yet. `BiobuzzStubTeleOp` (`acceptance-tests\sr
               "colibriLeft": { "name": "colibriLeft" }, "colibriRight": { "name": "colibriRight" } } }
 ```
 
-Without the `turret` object the stub's lookup of the OctoQuad fails (the robot has none), and the servos are unmapped: they accept commands and do nothing, and the session lists them. The Limelight's mount (`camera`) is given with the turret facing forward; the CAD has no Limelight, so the defaults are an estimate to be measured on the robot.
+Without the `turret` object the stub's lookup of the OctoQuad fails (the robot has none), and the servos are unmapped: they accept commands and do nothing, and the session lists them. The Limelight's mount (`camera`) is given with the turret facing forward. Left out, it is the place on the robot's 45 degree panel (see [biobuzz-cad](biobuzz-cad.md)), which the owner chose; the CAD has no Limelight.
 
 A ready-made project, FIRST's `FtcRobotController` for the SDK of your choice with the stub and this file added, is the quickest way to try it: BIOBUZZ is an SDK 12 game, so use the `v12.0` tag.
 
