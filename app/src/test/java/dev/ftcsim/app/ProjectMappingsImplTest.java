@@ -145,6 +145,49 @@ class ProjectMappingsImplTest {
     }
 
     @Test
+    void theTurretsServoEncodersAxisAndCameraRoundTripAndAFileWithoutThemHasNone() throws IOException {
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("turretServo", "axon-mini-plus", true),
+                List.of(
+                        new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.5, false),
+                        new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, -3.0, true)),
+                0.05, -0.02, true);
+        RobotMapping withParts = robot().withTurretParts(parts);
+
+        ProjectMappings.Saved saved = mappings.save(project, withParts);
+
+        JsonNode json = read(saved.file());
+        assertEquals("turretServo", json.at("/turret/servo/name").asText());
+        assertTrue(json.at("/turret/servo/mirrored").asBoolean());
+        assertEquals(1, json.at("/turret/encoders/1/channel").asInt());
+        assertEquals(5.5, json.at("/turret/encoders/0/turnsPerTurretTurn").asDouble());
+        assertEquals(-0.02, json.at("/turret/axis/y").asDouble());
+        assertTrue(json.at("/turret/cameraOnTurret").asBoolean());
+        assertEquals(withParts, mappings.find(project).orElseThrow().mapping());
+
+        mappings.save(project, robot());
+        assertFalse(read(saved.file()).has("turret"), "a robot with nothing on its turret writes no turret key");
+        assertEquals(RobotMapping.TurretParts.NONE, mappings.find(project).orElseThrow().mapping().turretParts());
+    }
+
+    @Test
+    void aTurretKeyThatIsNotPartOfTheFileOrANonsenseEncoderIsAProblem() throws IOException {
+        for (String text : List.of(
+                "{\"schema\":2,\"turret\":{\"gears\":3}}",
+                "{\"schema\":2,\"turret\":{\"servo\":{\"model\":\"axon-mini-plus\"}}}",
+                "{\"schema\":2,\"turret\":{\"encoders\":[{\"channel\":0}]}}",
+                "{\"schema\":2,\"turret\":{\"encoders\":[{\"channel\":0.5,\"turnsPerTurretTurn\":5}]}}",
+                "{\"schema\":2,\"turret\":{\"cameraOnTurret\":\"yes\"}}")) {
+            write(text);
+
+            ProjectMappings.Found found = mappings.find(project).orElseThrow();
+
+            assertFalse(found.usable(), text);
+            assertTrue(found.problem().startsWith("ftcsim.json cannot be read: "), found.problem());
+        }
+    }
+
+    @Test
     void aSchemaOneFileIsFoundAsAnOlderVersionAndSavingKeepsItAsFtcsimOldJson() throws IOException {
         String old = "{\"schema\":1,\"name\":\"Hornet\",\"motors\":{\"frontLeft\":{\"port\":0}},\"run\":{\"field\":\"decode\"}}";
         write(old);
