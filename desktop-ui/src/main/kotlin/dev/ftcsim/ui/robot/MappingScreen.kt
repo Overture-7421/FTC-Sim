@@ -305,6 +305,26 @@ private fun RobotForm(model: MappingModel) {
         FormTextField(form.wheelDiameterMm, { text -> model.edit { it.copy(wheelDiameterMm = text) } }, "Wheel diameter (mm)", problems[MappingModel.WHEEL_DIAMETER], null, width)
         if (model.turret) {
             FormTextField(form.turretRatio, { text -> model.edit { it.copy(turretRatio = text) } }, "Turret ratio", problems[MappingModel.TURRET_RATIO], null, width)
+            FormTextField(
+                form.turretServo, { text -> model.edit { it.copy(turretServo = text) } }, "Turret servo (name in code)",
+                problems[MappingModel.SERVO], "Empty when a motor turns the turret", Modifier.width(240.dp),
+            )
+        }
+    }
+    if (model.turret) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(
+                checked = form.servoMirrored,
+                onCheckedChange = { checked -> model.edit { it.copy(servoMirrored = checked) } },
+                modifier = Modifier.semantics { contentDescription = "Turret servo is mounted mirrored" },
+            )
+            Text("Servo mirrored", style = MaterialTheme.typography.bodyMedium)
+            Switch(
+                checked = form.cameraOnTurret,
+                onCheckedChange = { checked -> model.edit { it.copy(cameraOnTurret = checked) } },
+                modifier = Modifier.semantics { contentDescription = "Limelight turns with the turret" },
+            )
+            Text("Limelight turns with the turret", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

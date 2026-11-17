@@ -71,6 +71,33 @@ class MappingModelTest {
     }
 
     @Test
+    fun theTurretServoAndTheCameraAreOnThePageAndTheEncodersAndTheAxisOfTheFileSurviveASave() {
+        val encoders = listOf(RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.0, false), RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0.0, true))
+        val file = hornet().withMotors(hornet().motors().take(4)).withTurretParts(
+            RobotMapping.TurretParts(RobotMapping.ServoMapping("turretServo", "axon-max", false), encoders, 0.02, -0.01, true),
+        )
+        val model = model(turret = true)
+        model.load(file)
+
+        assertEquals("turretServo", model.form.turretServo)
+        assertTrue(model.form.cameraOnTurret)
+        assertFalse(model.edited)
+        assertEquals(file, model.mapping(), "the encoders, the axis and the servo's model come back as they were")
+
+        model.edit { it.copy(servoMirrored = true, cameraOnTurret = false) }
+        val saved = model.mapping()!!.turretParts()
+
+        assertTrue(model.edited)
+        assertEquals(RobotMapping.ServoMapping("turretServo", "axon-max", true), saved.servo())
+        assertEquals(encoders, saved.encoders())
+        assertEquals(0.02, saved.axisX())
+        assertFalse(saved.cameraOnTurret())
+
+        model.edit { it.copy(turretServo = "") }
+        assertNull(model.mapping()!!.turretParts().servo(), "an empty name means a motor turns the turret")
+    }
+
+    @Test
     fun anyChangeToWhatWasLoadedCanBeSavedAndChangingItBackCannot() {
         val model = model()
         model.load(hornet())

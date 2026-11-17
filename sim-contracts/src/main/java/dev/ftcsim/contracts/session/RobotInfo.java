@@ -15,6 +15,9 @@ public record RobotInfo(
         String name, double lengthM, double widthM, double heightM, List<String> motors, List<String> servos, List<String> devices,
         String model) {
 
+    /** The picture of the BIOBUZZ robot: a chassis with a turret on it, which is a body of its own in the snapshot. */
+    public static final String BIOBUZZ_MODEL = "biobuzz";
+
     public RobotInfo {
         motors = List.copyOf(motors);
         servos = List.copyOf(servos);

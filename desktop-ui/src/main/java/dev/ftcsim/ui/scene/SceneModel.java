@@ -31,6 +31,9 @@ public final class SceneModel {
     private static final float SMALL_SPHERE_BELOW = 0.04f;
     private static final float MEDIUM_SPHERE_BELOW = 0.09f;
     private static final int ROBOT_FRONT_RGB = 0xFFC107;
+    private static final int TURRET_RING_RGB = 0x4A4F57;
+    private static final int LIMELIGHT_RGB = 0x202020;
+    private static final float TURRET_RING_RADIUS = 0.115f;
     private static final Part[] NO_PARTS = new Part[0];
     // A box this wide and flat whose top lies in the floor plane is the floor, which the renderer draws with tile seams.
     private static final float FLOOR_MIN_HALF = 0.9f;
@@ -189,6 +192,9 @@ public final class SceneModel {
         }
         if (robot != null) {
             kinds.put(BodyKinds.CHASSIS, robotParts(robot, robotRgb));
+            if (RobotInfo.BIOBUZZ_MODEL.equals(robot.model())) {
+                kinds.put(BodyKinds.TURRET, turretParts(robot, robotRgb));
+            }
         }
         int[] ids = kinds.keySet().stream().mapToInt(Integer::intValue).toArray();
         int[] hostIds = hosted.keySet().stream().mapToInt(Integer::intValue).toArray();
@@ -234,6 +240,26 @@ public final class SceneModel {
         return new Part[] {
             box(0f, 0f, 0f, halfLength, halfWidth, halfHeight, bodyRgb),
             box(halfLength - stripe, 0f, halfHeight, stripe, halfWidth * 0.8f, 0.004f, ROBOT_FRONT_RGB),
+        };
+    }
+
+    /**
+     * The turret of the BIOBUZZ robot relative to the turret's axis, facing +X: a ring on the chassis, the launcher
+     * (flywheels and their feed) on the ring with a stripe at its muzzle, and the Limelight on the launcher's side.
+     * Placeholder solids until the robot's CAD is drawn.
+     */
+    private static Part[] turretParts(RobotInfo robot, int bodyRgb) {
+        float top = (float) robot.heightM() / 2f;
+        float ring = 0.03f;
+        float launcher = 0.055f;
+        float ringZ = top + ring;
+        float launcherZ = top + 2f * ring + launcher;
+        return new Part[] {
+            new Part(Mesh.CYLINDER, 0f, 0f, ringZ, 0f, 0f, 0f, 1f, TURRET_RING_RADIUS, TURRET_RING_RADIUS, ring,
+                    red(TURRET_RING_RGB), green(TURRET_RING_RGB), blue(TURRET_RING_RGB), false),
+            box(0.02f, 0f, launcherZ, 0.12f, 0.075f, launcher, bodyRgb),
+            box(0.14f, 0f, launcherZ, 0.01f, 0.06f, launcher * 0.6f, ROBOT_FRONT_RGB),
+            box(0.0f, -0.09f, launcherZ + launcher + 0.02f, 0.03f, 0.02f, 0.02f, LIMELIGHT_RGB),
         };
     }
 

@@ -6,9 +6,12 @@ import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.robot.RobotEnvironment;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
+import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.BodyView;
 import dev.ftcsim.contracts.world.RayView;
+import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.hardware.camera.CameraRack;
 import dev.ftcsim.hardware.camera.CameraModels;
 import dev.ftcsim.hardware.device.DeviceHost;
@@ -434,6 +437,25 @@ public final class RobotRig {
             return 0.0;
         }
         return turret.yawRadians(plantView().shaftAngleRad(turret.shaft()));
+    }
+
+    /**
+     * The turret as a viewer draws it, or null for a robot without one: a body at the turret's axis, turned by the
+     * turret's yaw on top of the chassis's pose.
+     */
+    public BodyState turretBody(BodyPose chassis) {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null) {
+            return null;
+        }
+        Vec3 axis = chassis.pointToField(new Vec3(turret.axisX(), turret.axisY(), 0.0));
+        double half = turretYawRadians() / 2.0;
+        double tw = StrictMath.cos(half);
+        double tz = StrictMath.sin(half);
+        return new BodyState(
+                EntityIds.TURRET, BodyKinds.TURRET, (float) axis.x(), (float) axis.y(), (float) axis.z(),
+                (float) (chassis.qx() * tw + chassis.qy() * tz), (float) (chassis.qy() * tw - chassis.qx() * tz),
+                (float) (chassis.qz() * tw + chassis.qw() * tz), (float) (chassis.qw() * tw - chassis.qz() * tz));
     }
 
     /** The motors and servos as mechanisms follow them: how fast and how far each shaft turns, and what a launch costs a flywheel. */

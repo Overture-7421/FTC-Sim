@@ -30,7 +30,9 @@ val Slot.label: String
 
 /**
  * What is typed into the form below the slots: text that is not checked yet. [camera] holds the six numbers of the
- * Limelight's mount in the order of [RobotMapping.CameraMount].
+ * Limelight's mount in the order of [RobotMapping.CameraMount]. [turretServo] is the name of the continuous-rotation
+ * servo that turns the turret, or empty when a motor does ([servoMirrored] turns it the other way); [cameraOnTurret] says
+ * that the Limelight turns with the turret.
  */
 data class MappingForm(
     val name: String,
@@ -40,6 +42,9 @@ data class MappingForm(
     val hubLogo: String,
     val hubUsb: String,
     val camera: List<String>,
+    val turretServo: String = "",
+    val servoMirrored: Boolean = false,
+    val cameraOnTurret: Boolean = false,
 )
 
 /**
@@ -203,7 +208,21 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
             form.hubLogo,
             form.hubUsb,
             CameraMount(camera[0], camera[1], camera[2], camera[3], camera[4], camera[5]),
+            turretParts(),
         )
+    }
+
+    /**
+     * The servo and the camera as the page says them. The encoders and the axis are not on the page: they are the file's,
+     * and saving the page keeps them as they were.
+     */
+    private fun turretParts(): RobotMapping.TurretParts {
+        val before = loaded?.turretParts() ?: RobotMapping.TurretParts.NONE
+        if (!turret) return before
+        val servo = form.turretServo.trim().takeIf { it.isNotEmpty() }?.let {
+            RobotMapping.ServoMapping(it, before.servo()?.model().orEmpty(), form.servoMirrored)
+        }
+        return RobotMapping.TurretParts(servo, before.encoders(), before.axisX(), before.axisY(), form.cameraOnTurret)
     }
 
     private fun number(text: String): Double = SetupValidation.number(text) ?: Double.NaN
@@ -214,6 +233,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         problem.startsWith("Wheel diameter") -> WHEEL_DIAMETER
         problem.startsWith("Turret ratio") -> TURRET_RATIO
         problem.startsWith("Hub") -> HUB
+        problem.contains("turret servo") || problem.contains("Turret servo") || problem.startsWith("The turret has a motor and a servo") -> SERVO
         else -> MOTORS
     }
 
@@ -223,6 +243,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         const val WHEEL_DIAMETER = "wheelDiameter"
         const val TURRET_RATIO = "turretRatio"
         const val HUB = "hub"
+        const val SERVO = "servo"
         const val MOTORS = "motors"
 
         /** The field whose robot has a turret. */
@@ -246,6 +267,9 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
                 mapping.hubLogo(),
                 mapping.hubUsb(),
                 listOf(camera.x(), camera.y(), camera.z(), camera.yawDegrees(), camera.pitchDegrees(), camera.rollDegrees()).map(::text),
+                mapping.turretParts().servo()?.name().orEmpty(),
+                mapping.turretParts().servo()?.mirrored() ?: false,
+                mapping.turretParts().cameraOnTurret(),
             )
         }
 

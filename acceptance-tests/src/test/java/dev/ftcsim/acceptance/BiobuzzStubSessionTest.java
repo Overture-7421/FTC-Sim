@@ -13,6 +13,7 @@ import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
+import dev.ftcsim.contracts.snapshot.BodyKinds;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
@@ -262,6 +263,12 @@ class BiobuzzStubSessionTest {
             assertTrue(highest > 200, "the left bumper turned the turret to the left, past a half turn: " + highest);
             assertTrue(lowest < -150, "and the right bumper back and round to the right: " + lowest);
             assertTrue(worst < 1.0, "the decoded angle was within a degree of the true one throughout: " + worst + trace);
+
+            BodyState drawn = session.snapshot().bodies().stream().filter(body -> body.kind() == BodyKinds.TURRET).findFirst().orElseThrow();
+            double drawnYaw = Math.toDegrees(2 * Math.atan2(drawn.qz(), drawn.qw()));
+            double chassisYaw = Math.toDegrees(session.world().bodyPose(EntityIds.CHASSIS).yaw());
+            double turretYaw = Math.toDegrees(session.rig().turretYawRadians());
+            assertEquals(0.0, Math.IEEEremainder(drawnYaw - chassisYaw - turretYaw, 360.0), 0.5, "the window draws the turret turned as it is");
 
             assertEquals(List.of(), session.problems(), handle.log.toString());
         }
