@@ -27,6 +27,7 @@ Last full run (2026-11-16): `gradlew check` with the Hornet properties ran 1,790
 - **Per SDK.** `-PftcSdk=<version>` changes only the SDK jars the robot world loads. A feature the SDK sees (a device, a hook) must pass on every release of the matrix before it is done.
 - **Two processes** (`@Tag("two-process")`): `WorkerProcessTest`, `RealHostSessionTest`, `RealHostProjectTest`, `RealHostHornetTest` and `app`'s `RealHostWorkerTest` start the real worker through the real launcher and assert no process is left behind; `DistributionEndToEndTest` starts the distribution through `FTC-Sim.cmd`. `-Pftcsim.runtime=<runtime folder>` runs the test JVMs, and so the workers, on a Java runtime such as `app\build\dist\FTC-Sim\runtime`; use it with `--tests "*RealHost*Hornet*"`, because other tests need a JDK's compiler or tools.
 - `ProjectMappingsAcceptanceTest` checks the stored mapping against the fixed robot and real sessions, with no checkout. `HornetMapping` is the Hornet mapping the session-opening tests share.
+- `BiobuzzStubSessionTest` runs the whole BIOBUZZ robot (drive, Pinpoint, Limelight on the turret, servo turret, OctoQuad encoders) with the stub program ([biobuzz-stub](robots/biobuzz-stub.md)); it is also the end-to-end check of the servo, OctoQuad and camera-on-turret code. A turret test must compare while the turret is still: telemetry lags by its interval.
 
 ### The Hornet tests
 

@@ -10,7 +10,7 @@ Start with the root `README.md` (what FTC-Sim is, how to use and build it), then
 | build, run, change and hand over work | `development.md` |
 | write or run tests | `testing.md` |
 | set up VS Code | `vscode.md` |
-| add an ideal sensor, or see how a driver class is bound | `architecture/adding-a-device.md`, `devices/` (`pinpoint`, `color-sensor`, `bno055-imu`, `limelight`) |
+| add an ideal sensor, or see how a driver class is bound | `architecture/adding-a-device.md`, `devices/` (`pinpoint`, `color-sensor`, `bno055-imu`, `limelight`, `octoquad`) |
 | map a robot, or see how the fixed one was fitted | `robots/fixed-robots.md`, `robots/hornet-fit.md`, `robots/biobuzz-stub.md` (the stand-in BIOBUZZ program) |
 | know what a field models and estimates | `fields/decode.md`, `fields/biobuzz.md` |
 | change the window or its 3D view | `architecture/ui.md`, `architecture/viewport-measurements.md` |

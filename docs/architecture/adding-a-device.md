@@ -10,10 +10,11 @@ The simulator runs the team's SDK driver unchanged against a model of the device
 | `ColorRangeSensor`, `NormalizedColorSensor`, `ColorSensor`, `RevColorSensorV3` | REV Color Sensor V3 (`RevColorSensorV3Model`) | bus 2 | [color sensor](../devices/color-sensor.md) |
 | `IMU`, `BNO055IMU`, `LynxEmbeddedBNO055IMUNew`, `LynxEmbeddedIMU` | Control Hub's BNO055 (`Bno055Model`) | bus 0 | [BNO055](../devices/bno055-imu.md) |
 | `Limelight3A` | Limelight 3A (`LimelightModel`) | USB, over HTTP | [Limelight](../devices/limelight.md) |
+| `OctoQuad` (driver `OctoQuadImpl`) | Digital Chicken Labs OctoQuad (`OctoQuadModel`), only on a robot whose design puts encoders on it | bus 3 | [OctoQuad](../devices/octoquad.md) |
 
-**Everything else is unsupported** (an OctoQuad, an external IMU, a webcam, a second sensor of a kind, `BHI260IMU`): the lookup fails with the SDK's own kind of message, the device is not bound, and the session lists it among its problems (`HardwareDirectory.unsupported`, shown by `SimulationSession.problems()`).
+**Everything else is unsupported** (an external IMU, a webcam, a second sensor of a kind, `BHI260IMU`, an OctoQuad on a robot that has none): the lookup fails with the SDK's own kind of message, the device is not bound, and the session lists it among its problems (`HardwareDirectory.unsupported`, shown by `SimulationSession.problems()`). A sensor a robot may lack (the OctoQuad) is declared by the design (`WiringTable.Builder.sensor`, asked with `HardwareDirectory.hasSensor`).
 
-Servos and digital and analog pins are not sensors and are not mapped. An unmapped servo accepts commands with no effect; an unmapped pin reads idle (digital high through the hub's pull-up, analog 0 V). The name gets a free port and is listed in `SessionStatus.unmapped`.
+Digital and analog pins are not sensors and are not mapped. A servo is mapped only when the design wires it (the BIOBUZZ turret's continuous-rotation servo, [fixed-robots](../robots/fixed-robots.md)); any other servo accepts commands with no effect. An unmapped pin reads idle (digital high through the hub's pull-up, analog 0 V). The name gets a free port and is listed in `SessionStatus.unmapped`.
 
 ## How a driver class is bound
 
