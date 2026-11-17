@@ -40,6 +40,19 @@ public interface DeviceContext {
         return List.of();
     }
 
+    /** The robot's turret, for devices that ride on it or measure it; one that never turns when the robot has none. */
+    default TurretView turret() {
+        return TurretView.NONE;
+    }
+
+    /**
+     * The frame of the robot's turret as a body, which a device mounted on the turret is placed in the world by. It is the
+     * chassis's own frame when the robot has no turret.
+     */
+    default BodyView turretPlatform() {
+        return TurretPlatform.of(body(), turret());
+    }
+
     /**
      * The fixed tags of a game's official AprilTag map, by the game's id (such as {@code decode}), which is what a
      * camera whose map was made for another game believes in, wherever the robot really stands.

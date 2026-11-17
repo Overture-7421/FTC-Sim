@@ -163,6 +163,9 @@ public record RobotSpec(
             settings.put("pipeline0.type", "apriltag");
             settings.put("pipeline0.fieldMap", fieldMap);
             settings.put("pipeline0.resolution", resolution);
+            if (onTurret) {
+                settings.put("mount.on", "turret");
+            }
             return settings;
         }
     }

@@ -44,7 +44,7 @@ class DeviceModelsTest {
 
     @Test
     void theStandardRegistryHasEveryDeviceTheSimulatorModels() {
-        assertEquals(List.of("gobilda-pinpoint", "rev-color-sensor-v3", "bno055-imu"), DeviceModels.standard().typeIds());
+        assertEquals(List.of("gobilda-pinpoint", "rev-color-sensor-v3", "digitalchickenlabs-octoquad", "bno055-imu"), DeviceModels.standard().typeIds());
     }
 
     @Test

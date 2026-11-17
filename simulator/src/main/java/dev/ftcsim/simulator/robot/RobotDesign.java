@@ -5,6 +5,7 @@ import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.hardware.device.rev.ThroughBoreEncoder;
 import dev.ftcsim.mechanisms.CaptureSpec;
 import dev.ftcsim.mechanisms.Condition;
 import dev.ftcsim.mechanisms.LaunchSpec;
@@ -153,7 +154,20 @@ public final class RobotDesign {
             shaft = parts.servo().name();
             sign = parts.servo().mirrored() ? -1 : 1;
         }
-        return new RobotSpec.Turret(shaft, mapping.turretRatio(), sign, parts.axisX(), parts.axisY(), parts.cameraOnTurret(), parts.encoders());
+        return new RobotSpec.Turret(
+                shaft, mapping.turretRatio(), sign, parts.axisX(), parts.axisY(), parts.cameraOnTurret(), encoders(parts));
+    }
+
+    /** The encoders on the turret, each with the model it has spelled out; the message of the exception lists the known models. */
+    private static List<RobotMapping.TurretEncoder> encoders(RobotMapping.TurretParts parts) {
+        List<RobotMapping.TurretEncoder> encoders = new ArrayList<>();
+        for (RobotMapping.TurretEncoder encoder : parts.encoders()) {
+            String model = encoder.model().isEmpty() ? ThroughBoreEncoder.USUAL : encoder.model();
+            ThroughBoreEncoder.spec(model);
+            encoders.add(new RobotMapping.TurretEncoder(
+                    encoder.channel(), model, encoder.turnsPerTurretTurn(), encoder.zeroOffsetDegrees(), encoder.mirrored()));
+        }
+        return encoders;
     }
 
     private static int[] freePort(boolean[] used) {

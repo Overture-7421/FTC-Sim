@@ -4,6 +4,7 @@ import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.robot.RobotEnvironment;
+import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.BodyView;
@@ -12,6 +13,7 @@ import dev.ftcsim.hardware.camera.CameraRack;
 import dev.ftcsim.hardware.camera.CameraModels;
 import dev.ftcsim.hardware.device.DeviceHost;
 import dev.ftcsim.hardware.device.DeviceModels;
+import dev.ftcsim.hardware.device.TurretView;
 import dev.ftcsim.hardware.lynx.HubConfig;
 import dev.ftcsim.hardware.lynx.LynxBus;
 import dev.ftcsim.hardware.lynx.LynxHub;
@@ -136,6 +138,9 @@ public final class RobotRig {
         for (HardwareDirectory.Hub hub : spec.hubs()) {
             wiring.hub(hub.address(), hub.name(), hub.parent(), hub.embedded());
         }
+        if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
+            wiring.sensor(HardwareDirectory.Sensor.OCTOQUAD);
+        }
 
         MecanumConfig chassisConfig = spec.chassis();
         MecanumChassis chassis = chassisConfig == null
@@ -193,6 +198,7 @@ public final class RobotRig {
         DeviceHost devices = new DeviceHost(view, rays, clock);
         devices.provideFieldTags(vision.tags());
         devices.provideEntities(vision.entities());
+        devices.provideTurret(turretView(spec, shafts, servoPlants));
         CameraRack cameras = sensors(spec, parent, hubs, devices, vision.noiseSeed());
         return new RobotRig(
                 spec, bus, Collections.unmodifiableMap(hubs), wiring.build(), cameras, chassis, view, bodySource, chassisConfig,
@@ -200,9 +206,49 @@ public final class RobotRig {
                 Collections.unmodifiableMap(shafts), Collections.unmodifiableMap(servoPlants), Collections.unmodifiableMap(wheels));
     }
 
+    /** The turret as devices see it: how far the shaft that turns it has turned, and the axis it turns about. */
+    private static TurretView turretView(RobotSpec spec, Map<String, ShaftPlant> shafts, Map<String, CrServoPlant> servoPlants) {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null) {
+            return TurretView.NONE;
+        }
+        return new TurretView() {
+            @Override
+            public double yawRadians() {
+                ShaftPlant shaft = turret.shaft() == null ? null : shafts.get(turret.shaft());
+                if (shaft != null) {
+                    return turret.yawRadians(shaft.angleRadians());
+                }
+                CrServoPlant servo = turret.shaft() == null ? null : servoPlants.get(turret.shaft());
+                return servo == null ? 0.0 : turret.yawRadians(servo.angleRadians());
+            }
+
+            @Override
+            public double yawRateRadPerSec() {
+                ShaftPlant shaft = turret.shaft() == null ? null : shafts.get(turret.shaft());
+                if (shaft != null) {
+                    return turret.yawRadians(shaft.speedRadPerSec());
+                }
+                CrServoPlant servo = turret.shaft() == null ? null : servoPlants.get(turret.shaft());
+                return servo == null ? 0.0 : turret.yawRadians(servo.speedRadPerSec());
+            }
+
+            @Override
+            public double axisX() {
+                return turret.axisX();
+            }
+
+            @Override
+            public double axisY() {
+                return turret.axisY();
+            }
+        };
+    }
+
     /**
      * Attaches the robot's fixed sensors: the IMU inside every Control Hub on its bus 0, the Pinpoint and the colour
-     * sensor on the buses of the parent hub that are theirs, and plugs in the Limelight.
+     * sensor on the buses of the parent hub that are theirs, the OctoQuad with the turret's encoders if the design has
+     * them, and plugs in the Limelight.
      */
     private static CameraRack sensors(RobotSpec spec, int parent, Map<Integer, LynxHub> hubs, DeviceHost devices, long noiseSeed) {
         DeviceModels models = DeviceModels.standard();
@@ -220,11 +266,29 @@ public final class RobotRig {
             parentHub.attach(
                     HardwareDirectory.Sensor.COLOR_SENSOR.bus(),
                     models.create(DeviceModels.COLOR_SENSOR, "colour sensor", spec.colorSensor().settings(), devices));
+            if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
+                parentHub.attach(
+                        HardwareDirectory.Sensor.OCTOQUAD.bus(),
+                        models.create(DeviceModels.OCTOQUAD, "OctoQuad", octoQuadSettings(spec.turret()), devices));
+            }
             return new CameraRack().plug(
                     CameraModels.standard().create("limelight-3a", "Limelight", spec.limelight().settings(), devices, noiseSeed));
         } catch (IllegalArgumentException refused) {
             throw new RobotException("a sensor of the robot refused its settings: " + refused.getMessage(), refused);
         }
+    }
+
+    /** The OctoQuad's settings: the encoders of the turret on the ports the mapping gave them. */
+    private static Map<String, Object> octoQuadSettings(RobotSpec.Turret turret) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        for (RobotMapping.TurretEncoder encoder : turret.encoders()) {
+            String prefix = "encoder" + encoder.channel() + ".";
+            settings.put(prefix + "model", encoder.model());
+            settings.put(prefix + "turns", encoder.turnsPerTurretTurn());
+            settings.put(prefix + "zeroOffsetDegrees", encoder.zeroOffsetDegrees());
+            settings.put(prefix + "mirrored", encoder.mirrored() ? 1 : 0);
+        }
+        return settings;
     }
 
     /** A drivetrain motor as the hub's port sees it, which stays the same when the chassis is put into another world. */

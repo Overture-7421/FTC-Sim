@@ -26,6 +26,7 @@ public final class DeviceHost implements DeviceContext {
         throw new IllegalArgumentException("this host gives devices no view of entity " + id);
     };
     private List<FieldTag> fieldTags = List.of();
+    private TurretView turret = TurretView.NONE;
 
     public DeviceHost(BodyView body, RayView rays, LongSupplier clock) {
         this.body = Objects.requireNonNull(body, "body");
@@ -45,6 +46,12 @@ public final class DeviceHost implements DeviceContext {
     /** The tags of the field the robot stands on, which cameras see whether or not they know them. */
     public DeviceHost provideFieldTags(List<FieldTag> tags) {
         this.fieldTags = List.copyOf(tags);
+        return this;
+    }
+
+    /** The robot's turret, which devices that ride on it or measure it look at. */
+    public DeviceHost provideTurret(TurretView turret) {
+        this.turret = Objects.requireNonNull(turret, "turret");
         return this;
     }
 
@@ -95,6 +102,11 @@ public final class DeviceHost implements DeviceContext {
     @Override
     public List<FieldTag> fieldTags() {
         return fieldTags;
+    }
+
+    @Override
+    public TurretView turret() {
+        return turret;
     }
 
     @Override
