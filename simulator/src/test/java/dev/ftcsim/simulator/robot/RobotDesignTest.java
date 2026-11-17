@@ -214,6 +214,24 @@ class RobotDesignTest {
     }
 
     @Test
+    void theEncodersOfATurretTakeTheUsualModelWhenNoneIsNamedAndAnUnknownOneIsRefused() {
+        RobotMapping.TurretEncoder bare = new RobotMapping.TurretEncoder(0, "", 5.5, 12.0, false);
+        RobotMapping.TurretEncoder first = new RobotMapping.TurretEncoder(1, "rev-tbe-v1", 44.0 / 7.0, 0.0, true);
+        RobotMapping mapping = RobotMapping.empty("Test").withTurretParts(
+                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(bare, first), 0, 0, false));
+
+        RobotSpec spec = RobotDesign.biobuzz().spec(mapping);
+
+        assertEquals(
+                List.of(new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.0, false), first),
+                spec.turret().encoders(), "the unnamed encoder is a version 2 and the named one keeps its model");
+        RobotMapping unknown = RobotMapping.empty("Test").withTurretParts(new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("turretServo", "", false),
+                List.of(new RobotMapping.TurretEncoder(0, "nonsense", 5.5, 0, false)), 0, 0, false));
+        assertThrows(IllegalArgumentException.class, () -> RobotDesign.biobuzz().spec(unknown));
+    }
+
+    @Test
     void theIntakeOfEachGameTakesOnlyItsOwnPieces() {
         RobotMapping mapping = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("roll", Slot.INTAKE, "", false)));
 

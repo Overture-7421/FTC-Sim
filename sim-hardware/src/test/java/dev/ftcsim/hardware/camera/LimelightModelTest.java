@@ -13,6 +13,7 @@ import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.RayView;
 import dev.ftcsim.contracts.world.SurfaceHit;
 import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.hardware.device.TurretView;
 import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import java.util.ArrayList;
 import java.util.List;
@@ -117,6 +118,35 @@ class LimelightModelTest {
             assertEquals(0.0, value, "no robot pose without a place for the tag");
         }
         assertEquals(1.5 + 0.0, Json.numbers(tag.get("t6t_cs"))[2], 0.25, "but the camera knows how far away it is");
+    }
+
+    @Test
+    void aCameraOnTheTurretSeesWhereTheTurretPointsAndOneOnTheChassisSeesWhereTheChassisPoints() {
+        TurretView turnedAround = new TurretView() {
+            @Override
+            public double yawRadians() {
+                return Math.PI;
+            }
+
+            @Override
+            public double yawRateRadPerSec() {
+                return 0.0;
+            }
+        };
+        ScriptedBody body = CameraWorld.parkedFacing(CameraWorld.blueGoal(), 1.5, 0.0, Math.PI);
+        Map<String, Object> onTurret = CameraWorld.settings("decode");
+        onTurret.put("mount.on", "turret");
+
+        CameraWorld riding = new CameraWorld(body, CameraWorld.OPEN_SPACE, GOALS, onTurret, 3, Map.of(), turnedAround);
+        riding.rig.runTo(300 * MS);
+        CameraWorld fixed = new CameraWorld(body, CameraWorld.OPEN_SPACE, GOALS, CameraWorld.settings("decode"), 3, Map.of(), turnedAround);
+        fixed.rig.runTo(300 * MS);
+
+        assertEquals(1.0, number(riding.results(300 * MS), "v"), "the chassis faces away but the turret, and the camera on it, faces the tag");
+        assertEquals(0.0, number(fixed.results(300 * MS), "v"), "a camera fixed to the chassis does not turn with the turret");
+        Map<String, Object> bad = CameraWorld.settings("decode");
+        bad.put("mount.on", "elsewhere");
+        assertThrows(IllegalArgumentException.class, () -> new CameraWorld(body, CameraWorld.OPEN_SPACE, GOALS, bad, 3));
     }
 
     @Test

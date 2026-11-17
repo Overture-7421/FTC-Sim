@@ -46,13 +46,24 @@ class BiobuzzStubSessionTest {
     private static final double FOUR_BAR_POD_TICKS_PER_MM = 19.89436789;
     private static final BiobuzzField FIELD = new BiobuzzField();
 
-    /** The four wheels as the stub names them, mounted as a team mounts a mecanum robot (its left side reversed in code). */
+    /**
+     * The robot as the stub names it: four wheels mounted as a team mounts a mecanum robot (its left side reversed in
+     * code), a continuous-rotation servo that turns the turret 2.75 turns to its one, the two absolute encoders on the
+     * OctoQuad's ports 0 and 1, and the Limelight on the turret.
+     */
     private static RobotSpec robot() {
-        return RobotDesign.biobuzz().spec(RobotMapping.empty("BIOBUZZ stub").withMotors(List.of(
+        RobotMapping wheels = RobotMapping.empty("BIOBUZZ stub").withMotors(List.of(
                 new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
                 new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
                 new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-                new MotorMapping("backRight", Slot.REAR_RIGHT, "", false))));
+                new MotorMapping("backRight", Slot.REAR_RIGHT, "", false)));
+        RobotMapping.TurretParts turret = new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("turretServo", "", false),
+                List.of(new RobotMapping.TurretEncoder(0, "", 5.5, 0, false), new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0, false)),
+                0, 0, true);
+        return RobotDesign.biobuzz().spec(new RobotMapping(
+                wheels.name(), wheels.motors(), wheels.massKg(), wheels.wheelDiameterMm(), wheels.driveMotor(), 2.75,
+                wheels.hubLogo(), wheels.hubUsb(), wheels.camera(), turret));
     }
 
     private static StartPose redCentre() {
@@ -205,5 +216,89 @@ class BiobuzzStubSessionTest {
         double straight = value(ahead[1], "tx");
         double left = value(turnedLeft[1], "tx");
         assertTrue(left > straight + 6.0, String.format(Locale.ROOT, "turning the robot left moves the tag right in the image: %.1f then %.1f", straight, left));
+    }
+
+    // ---- the turret ---------------------------------------------------------------------------------------------
+
+    private static GamepadState turretPad(boolean leftBumper, boolean rightBumper, boolean a) {
+        return new GamepadState(
+                0f, 0f, 0f, 0f, 0f, 0f, false, false, false, false, a, false, false, false, leftBumper, rightBumper,
+                false, false, false, false, false);
+    }
+
+    private static double turretDegrees(SimulationSession session) {
+        return value(text(session, "Turret"), "deg");
+    }
+
+    @Test
+    void theBumpersTurnTheTurretAndTheTwoAbsoluteEncodersGiveItsAngleToAFractionOfADegreeAllTheWayRound() throws IOException {
+        StartPose start = redCentre();
+        try (TestSessions.Handle handle = open(start.x(), start.y(), start.headingRadians())) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.runFor(SECOND / 4);
+            assertEquals(0.0, turretDegrees(session), 0.5, "the turret starts pointing forward");
+
+            double worst = 0.0;
+            double highest = 0.0;
+            double lowest = 0.0;
+            StringBuilder trace = new StringBuilder();
+            // Left to about 250 degrees, then right to about -165: the range the two encoders tell apart without ambiguity.
+            for (int i = 0; i < 24; i++) {
+                boolean left = i < 9;
+                session.setGamepad(1, turretPad(left, !left, false));
+                session.runFor(SECOND / 2);
+                session.setGamepad(1, turretPad(false, false, false));
+                session.runFor(SECOND / 2);
+                double truth = Math.toDegrees(session.rig().turretYawRadians());
+                double error = Math.abs(Math.IEEEremainder(turretDegrees(session) - truth, 360.0));
+                if (error > 1.0) {
+                    trace.append(String.format(Locale.ROOT, " [%d: %s truth %.1f]", i, text(session, "Turret"), truth));
+                }
+                worst = Math.max(worst, error);
+                highest = Math.max(highest, truth);
+                lowest = Math.min(lowest, truth);
+            }
+            assertTrue(highest > 200, "the left bumper turned the turret to the left, past a half turn: " + highest);
+            assertTrue(lowest < -150, "and the right bumper back and round to the right: " + lowest);
+            assertTrue(worst < 1.0, "the decoded angle was within a degree of the true one throughout: " + worst + trace);
+
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+        }
+    }
+
+    @Test
+    void holdingATurnsTheTurretToCentreTheTagOnTheLimelightWhichRidesOnIt() throws IOException {
+        double[] spot;
+        StartPose start = redCentre();
+        try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
+            spot = standingBefore(probe.session, tag(31), 1.0);
+        }
+        // The chassis faces 20 degrees to the left of the tag, so the tag is 20 degrees to the right of the front.
+        try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(20))) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.runFor(SECOND / 2);
+            double before = value(text(session, "Target"), "tx");
+            assertTrue(before > 10, "the tag starts off to the right: " + before);
+
+            session.setGamepad(1, turretPad(false, false, true));
+            StringBuilder trace = new StringBuilder();
+            double settled = 0.0;
+            for (int i = 0; i < 16; i++) {
+                session.runFor(SECOND / 4);
+                double tx = value(text(session, "Target"), "tx");
+                trace.append(String.format(Locale.ROOT, " %.1f", tx));
+                if (i >= 8) {
+                    settled += tx / 8;
+                }
+            }
+
+            assertEquals(0.0, settled, 1.5, "the tag is centred in the image, to the Limelight's noise: " + trace);
+            double yaw = Math.toDegrees(session.rig().turretYawRadians());
+            assertEquals(-20.0, yaw, 4.0, "so the turret turned right to where the tag is, and the Limelight went with it");
+            assertEquals(yaw, turretDegrees(session), 1.0, "and the encoders agree");
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+        }
     }
 }

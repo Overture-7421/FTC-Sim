@@ -75,6 +75,18 @@ class WiringTableTest {
     }
 
     @Test
+    void theOctoQuadIsOnlyOnARobotWhoseDesignPutsOneOnItAndItsAbsenceIsAnErrorThatNamesIt() {
+        WiringTable without = controlHubAndExpansionHub().build();
+        WiringTable with = controlHubAndExpansionHub().sensor(Sensor.OCTOQUAD).build();
+
+        assertFalse(without.hasSensor(Sensor.OCTOQUAD));
+        assertTrue(without.hasSensor(Sensor.PINPOINT), "the other sensors are on every robot");
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> without.sensor("octo", Sensor.OCTOQUAD));
+        assertTrue(refused.getMessage().toLowerCase(java.util.Locale.ROOT).contains("octo"), refused.getMessage());
+        assertEquals(3, with.sensor("octo", Sensor.OCTOQUAD).bus());
+    }
+
+    @Test
     void whenTheFirstHubIsFullTheNextHubGetsTheDevice() {
         WiringTable table = controlHubAndExpansionHub().build();
 
