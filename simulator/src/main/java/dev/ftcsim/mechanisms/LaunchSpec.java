@@ -38,6 +38,11 @@ public record LaunchSpec(
                 throw new IllegalArgumentException("a turret needs a gear ratio above 0 and a sign of 1 or -1: " + motor);
             }
         }
+
+        /** The turret's yaw, counter-clockwise from the launcher facing along its direction, when its shaft has turned {@code shaftAngleRad}. */
+        public double yawRadians(double shaftAngleRad) {
+            return sign * shaftAngleRad / ratio;
+        }
     }
 
     /**

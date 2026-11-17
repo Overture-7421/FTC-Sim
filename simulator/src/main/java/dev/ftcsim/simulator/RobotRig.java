@@ -16,6 +16,7 @@ import dev.ftcsim.hardware.lynx.HubConfig;
 import dev.ftcsim.hardware.lynx.LynxBus;
 import dev.ftcsim.hardware.lynx.LynxHub;
 import dev.ftcsim.hardware.wiring.WiringTable;
+import dev.ftcsim.mechanisms.CrServoPlant;
 import dev.ftcsim.mechanisms.PlantView;
 import dev.ftcsim.mechanisms.ShaftPlant;
 import dev.ftcsim.physics.DcMotor;
@@ -27,6 +28,7 @@ import dev.ftcsim.physics.WheelPosition;
 import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotException;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.robot.ServoCatalog;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,6 +78,7 @@ public final class RobotRig {
     private final Map<String, MotorPlant> plants;
     private final Map<String, WheelPlant> wheelPlants;
     private final Map<String, ShaftPlant> shafts;
+    private final Map<String, CrServoPlant> servoPlants;
     private final Map<String, WheelRef> wheels;
 
     private RobotRig(
@@ -93,6 +96,7 @@ public final class RobotRig {
             Map<String, MotorPlant> plants,
             Map<String, WheelPlant> wheelPlants,
             Map<String, ShaftPlant> shafts,
+            Map<String, CrServoPlant> servoPlants,
             Map<String, WheelRef> wheels) {
         this.spec = spec;
         this.bus = bus;
@@ -108,6 +112,7 @@ public final class RobotRig {
         this.plants = plants;
         this.wheelPlants = wheelPlants;
         this.shafts = shafts;
+        this.servoPlants = servoPlants;
         this.wheels = wheels;
     }
 
@@ -161,6 +166,13 @@ public final class RobotRig {
             plants.put(entry.getKey(), plant);
         }
 
+        Map<String, CrServoPlant> servoPlants = new LinkedHashMap<>();
+        for (Map.Entry<String, RobotSpec.Servo> entry : spec.servos().entrySet()) {
+            RobotSpec.Servo servo = entry.getValue();
+            servoPlants.put(entry.getKey(), ServoCatalog.plant(servo.model()));
+            wiring.servo(entry.getKey(), servo.hub(), servo.port());
+        }
+
         LynxBus bus = new LynxBus(clock);
         Map<Integer, LynxHub> hubs = new LinkedHashMap<>();
         for (HardwareDirectory.Hub hub : spec.hubs()) {
@@ -185,7 +197,7 @@ public final class RobotRig {
         return new RobotRig(
                 spec, bus, Collections.unmodifiableMap(hubs), wiring.build(), cameras, chassis, view, bodySource, chassisConfig,
                 chassisEntityId, devices, Collections.unmodifiableMap(plants), Collections.unmodifiableMap(wheelPlants),
-                Collections.unmodifiableMap(shafts), Collections.unmodifiableMap(wheels));
+                Collections.unmodifiableMap(shafts), Collections.unmodifiableMap(servoPlants), Collections.unmodifiableMap(wheels));
     }
 
     /**
@@ -340,15 +352,32 @@ public final class RobotRig {
         for (ShaftPlant shaft : shafts.values()) {
             shaft.step(SECONDS_PER_TICK);
         }
+        for (Map.Entry<String, CrServoPlant> entry : servoPlants.entrySet()) {
+            RobotSpec.Servo servo = spec.servos().get(entry.getKey());
+            LynxHub hub = hubs.get(servo.hub());
+            entry.getValue().step(SECONDS_PER_TICK, hub.servoEnabled(servo.port()), hub.servoPulseWidthMicros(servo.port()));
+        }
         bus.advanceTo(nanos);
     }
 
-    /** The motors as mechanisms follow them: how fast and how far each shaft turns, and what a launch costs a flywheel. */
+    /**
+     * How far the turret has turned since the session began, counter-clockwise from facing forward, in radians; 0 for a
+     * robot without a turret, or whose turret nothing turns.
+     */
+    public double turretYawRadians() {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null || turret.shaft() == null) {
+            return 0.0;
+        }
+        return turret.yawRadians(plantView().shaftAngleRad(turret.shaft()));
+    }
+
+    /** The motors and servos as mechanisms follow them: how fast and how far each shaft turns, and what a launch costs a flywheel. */
     public PlantView plantView() {
         return new PlantView() {
             @Override
             public boolean hasShaft(String motor) {
-                return shafts.containsKey(motor) || wheels.containsKey(motor);
+                return shafts.containsKey(motor) || wheels.containsKey(motor) || servoPlants.containsKey(motor);
             }
 
             @Override
@@ -356,6 +385,10 @@ public final class RobotRig {
                 ShaftPlant shaft = shafts.get(motor);
                 if (shaft != null) {
                     return shaft.speedRadPerSec();
+                }
+                CrServoPlant servo = servoPlants.get(motor);
+                if (servo != null) {
+                    return servo.speedRadPerSec();
                 }
                 WheelRef wheel = wheels.get(motor);
                 if (wheel == null) {
@@ -367,10 +400,14 @@ public final class RobotRig {
             @Override
             public double shaftAngleRad(String motor) {
                 ShaftPlant shaft = shafts.get(motor);
-                if (shaft == null) {
+                if (shaft != null) {
+                    return shaft.angleRadians();
+                }
+                CrServoPlant servo = servoPlants.get(motor);
+                if (servo == null) {
                     throw new IllegalArgumentException("'" + motor + "' is not a shaft whose angle mechanisms can follow");
                 }
-                return shaft.angleRadians();
+                return servo.angleRadians();
             }
 
             @Override

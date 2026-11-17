@@ -39,6 +39,7 @@ class MechanismsSessionTest {
     private static final int PURPLE = 101;
     private static final int GREEN = 102;
     private static final double TURRET_RATIO = 3.0;
+    private static final double SERVO_TURRET_RATIO = 2.75;
 
     /** Hornet's robot but for the names its OpMode of the fixture uses: four wheels, the roller, the belt and two flywheels. */
     private static final RobotMapping MAPPING = RobotMapping.empty("mechanism test rig").withMotors(List.of(
@@ -200,5 +201,58 @@ class MechanismsSessionTest {
         RobotSpec mirrored = turretRobot(true);
 
         assertEquals(-45.0, launchHeadingDegrees(mirrored, 0.5f), 3.0);
+    }
+
+    /** The robot of the BIOBUZZ game whose turret a continuous-rotation servo turns, 2.75 servo turns to one of the turret's. */
+    private static RobotSpec servoTurretRobot(boolean mirrored) {
+        List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
+        RobotMapping geared = new RobotMapping(
+                "servo turret rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), SERVO_TURRET_RATIO,
+                MAPPING.hubLogo(), MAPPING.hubUsb(), MAPPING.camera(),
+                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", mirrored), List.of(), 0, 0, false));
+        return RobotDesign.biobuzz().spec(geared);
+    }
+
+    /** Turns the turret with the left stick pushed {@code stickX} for a second, then shoots; the heading the piece leaves along and the turret's yaw, in degrees. */
+    private static double[] servoLaunchHeadingDegrees(RobotSpec robot, float stickX) throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(1, session.preload("magazine", TestField.PIECE_KIND, 1));
+            int id = TestField.IN_RESERVE.get(0);
+            session.init("Turret Servo");
+            session.start();
+            session.setGamepad(1, new GamepadState(
+                    stickX, 0f, 0f, 0f, 0f, 1f, false, false, false, false, false, false, false, false, false, false, false, false,
+                    false, false, false));
+            session.runFor(SECOND);
+            session.setGamepad(1, pad(1f, false));
+            session.runFor(3 * SECOND);
+            assertFalse(inWorld(session, id), "the piece waits in the robot until the belt feeds the flywheels");
+            double yaw = Math.toDegrees(session.rig().turretYawRadians());
+
+            session.setGamepad(1, pad(1f, true));
+            for (int i = 0; i < 300 && !inWorld(session, id); i++) {
+                session.runFor(SECOND / 100);
+            }
+            assertTrue(inWorld(session, id), "the piece was launched: " + handle.log);
+            BodyPose piece = session.world().bodyPose(id);
+            assertTrue(piece.velocity().length() > 1.0, "the flywheels were up to speed: " + piece.velocity());
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+            return new double[] {Math.toDegrees(Math.atan2(piece.vy(), piece.vx())), yaw};
+        }
+    }
+
+    @Test
+    void aBiobuzzPieceLeavesAlongTheHeadingAContinuousRotationServoTurnedTheTurretTo() throws IOException {
+        // Stick 0.25 is a pulse of 1725 us: 0.225 of the Axon Mini+'s 9.8 rad/s, for about a second, over 2.75 turns of servo.
+        double nominal = Math.toDegrees(0.25 * 0.9 * 9.82 / SERVO_TURRET_RATIO);
+
+        double[] left = servoLaunchHeadingDegrees(servoTurretRobot(false), 0.25f);
+        double[] right = servoLaunchHeadingDegrees(servoTurretRobot(true), 0.25f);
+
+        assertEquals(left[1], left[0], 3.0, "the piece leaves along the turret's yaw");
+        assertEquals(nominal, left[1], 0.12 * nominal, "positive power turns the turret to the left about as far as the servo's speed says");
+        assertEquals(-left[1], right[1], 0.5, "a mirrored servo turns it as far to the right");
+        assertEquals(right[1], right[0], 3.0);
     }
 }

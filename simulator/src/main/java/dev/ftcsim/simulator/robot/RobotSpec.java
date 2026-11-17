@@ -24,6 +24,8 @@ import java.util.Map;
  * @param hubs        the REV hubs, the parent first
  * @param chassis     the drivetrain body, or null if the robot has no wheels
  * @param motors      by the name robot code uses, in the order they were mapped
+ * @param servos      the continuous-rotation servos, by the name robot code uses
+ * @param turret      the robot's turret, or null if it has none
  * @param storages    the paths pieces are carried along
  * @param captures    the intakes
  * @param launches    the launchers
@@ -36,6 +38,8 @@ public record RobotSpec(
         List<HardwareDirectory.Hub> hubs,
         MecanumConfig chassis,
         Map<String, Motor> motors,
+        Map<String, Servo> servos,
+        Turret turret,
         List<StorageSpec> storages,
         List<CaptureSpec> captures,
         List<LaunchSpec> launches,
@@ -46,6 +50,7 @@ public record RobotSpec(
     public RobotSpec {
         hubs = List.copyOf(hubs);
         motors = Collections.unmodifiableMap(new LinkedHashMap<>(motors));
+        servos = Collections.unmodifiableMap(new LinkedHashMap<>(servos));
         storages = List.copyOf(storages);
         captures = List.copyOf(captures);
         launches = List.copyOf(launches);
@@ -75,6 +80,45 @@ public record RobotSpec(
      */
     public record Shaft(double loadInertiaKgM2, double frictionNmsPerRad) {}
 
+    /**
+     * A continuous-rotation servo on a hub's servo port.
+     *
+     * @param hub   the hub address
+     * @param port  0..5
+     * @param model the catalogue id of the servo ({@link ServoCatalog})
+     */
+    public record Servo(int hub, int port, String model) {}
+
+    /**
+     * The robot's turret: what turns it, how, and what rides on it.
+     *
+     * @param shaft          the name of the motor or servo that turns it, as robot code names it
+     * @param ratio          turns of that shaft for one turn of the turret
+     * @param sign           +1 when the shaft turning forward turns the turret to the left (counter-clockwise seen from above)
+     * @param axisX          where the turret turns about, metres ahead of the chassis centre
+     * @param axisY          and metres to the left of it
+     * @param cameraOnTurret whether the Limelight turns with it
+     * @param encoders       the absolute encoders on the turret, with their models spelled out
+     */
+    public record Turret(
+            String shaft, double ratio, int sign, double axisX, double axisY, boolean cameraOnTurret,
+            List<RobotMapping.TurretEncoder> encoders) {
+
+        public Turret {
+            encoders = List.copyOf(encoders);
+        }
+
+        /** What turns the launcher, as the mechanisms know it. */
+        public LaunchSpec.Turret aim() {
+            return new LaunchSpec.Turret(shaft, ratio, sign);
+        }
+
+        /** The turret's yaw, counter-clockwise from facing forward, when its shaft has turned {@code shaftAngleRad}. */
+        public double yawRadians(double shaftAngleRad) {
+            return aim().yawRadians(shaftAngleRad);
+        }
+    }
+
     /** The directions the Control Hub's logo and USB ports face, as the SDK names them. */
     public record ImuMount(String logo, String usb) {
 
@@ -98,8 +142,14 @@ public record RobotSpec(
      *
      * @param fieldMap   the tags the pipeline believes in: {@code field} for the fixed tags of the field the robot stands on
      * @param resolution {@code 640x480} or {@code 1280x960}
+     * @param onTurret   whether the camera turns with the turret instead of staying on the chassis
      */
-    public record Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution) {
+    public record Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution, boolean onTurret) {
+
+        /** A Limelight fixed to the chassis. */
+        public Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution) {
+            this(mount, fieldMap, resolution, false);
+        }
 
         /** The settings of the camera's model. */
         public Map<String, Object> settings() {

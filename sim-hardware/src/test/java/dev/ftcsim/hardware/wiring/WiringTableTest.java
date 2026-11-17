@@ -64,6 +64,17 @@ class WiringTableTest {
     }
 
     @Test
+    void aServoTheMappingPlacedKeepsItsPortFromOtherServosAndIsNotReported() {
+        WiringTable table = controlHubAndExpansionHub().servo("turret", 173, 0).build();
+
+        assertEquals(new HardwareDirectory.ServoWiring(173, 0, true), table.servo("turret"));
+        assertEquals(new HardwareDirectory.ServoWiring(173, 1, false), table.servo("claw"), "another servo takes the next free port");
+        assertEquals(List.of(new UnmappedDevice(UnmappedDevice.Kind.SERVO, "claw")), table.unmapped());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().servo("a", 173, 0).servo("b", 173, 0).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().servo("a", 173, 6).build());
+    }
+
+    @Test
     void whenTheFirstHubIsFullTheNextHubGetsTheDevice() {
         WiringTable table = controlHubAndExpansionHub().build();
 

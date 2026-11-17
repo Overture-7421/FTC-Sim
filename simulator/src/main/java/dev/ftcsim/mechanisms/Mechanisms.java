@@ -285,7 +285,7 @@ public final class Mechanisms {
         if (turret == null) {
             return launch.direction();
         }
-        double turn = turret.sign() * plants.shaftAngleRad(turret.motor()) / turret.ratio();
+        double turn = turret.yawRadians(plants.shaftAngleRad(turret.motor()));
         double cos = StrictMath.cos(turn);
         double sin = StrictMath.sin(turn);
         Vec3 direction = launch.direction();

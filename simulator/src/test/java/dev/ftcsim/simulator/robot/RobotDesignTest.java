@@ -181,6 +181,39 @@ class RobotDesignTest {
     }
 
     @Test
+    void aTurretServoTurnsTheLauncherByItsRatioAndMirroringAndTakesThePortOfAServoNotOfAMotor() {
+        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
+                new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
+        RobotMapping servo = new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
+                base.camera(),
+                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", true), List.of(), 0.05, -0.02, true));
+
+        RobotSpec spec = RobotDesign.biobuzz().spec(servo);
+
+        assertEquals(Map.of("turretServo", new RobotSpec.Servo(173, 0, ServoCatalog.AXON_MINI_PLUS)), spec.servos());
+        assertEquals(
+                new RobotSpec.Turret("turretServo", 2.75, -1, 0.05, -0.02, true, List.of()), spec.turret(),
+                "the servo is the shaft, mirrored, at the mapped ratio, with its axis and the camera on it");
+        assertEquals(new LaunchSpec.Turret("turretServo", 2.75, -1), spec.launches().get(0).turret());
+        assertEquals(Math.toRadians(-90), spec.turret().yawRadians(Math.PI / 2 * 2.75), 1e-12, "a mirrored servo turns the turret clockwise");
+        assertTrue(spec.limelight().onTurret());
+        assertNull(RobotDesign.biobuzz().spec(base).turret().shaft(), "nothing turns a turret that has no motor and no servo");
+        assertNull(RobotDesign.decode().spec(base).turret(), "DECODE's robot has no turret");
+    }
+
+    @Test
+    void theServoCataloguePinsTheSpeedsTheDatasheetsGiveAt5VoltsAndRefusesAnUnknownServo() {
+        assertEquals(Math.toRadians(60.0) / (0.110 - 0.020 / 6.0), ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MINI_PLUS), 1e-9);
+        assertEquals(9.82, ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MINI_PLUS), 0.01);
+        assertEquals(7.71, ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MAX), 0.01);
+        assertEquals(4.36, ServoCatalog.noLoadRadPerSec(ServoCatalog.GOBILDA_TORQUE), 0.01);
+        RobotMapping unknown = RobotMapping.empty("Test").withTurretParts(
+                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("t", "nonsense", false), List.of(), 0, 0, false));
+        assertThrows(IllegalArgumentException.class, () -> RobotDesign.biobuzz().spec(unknown));
+    }
+
+    @Test
     void theIntakeOfEachGameTakesOnlyItsOwnPieces() {
         RobotMapping mapping = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("roll", Slot.INTAKE, "", false)));
 

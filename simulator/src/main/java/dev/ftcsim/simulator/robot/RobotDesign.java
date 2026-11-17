@@ -116,12 +116,44 @@ public final class RobotDesign {
         List<StorageSpec> storages = new ArrayList<>();
         List<CaptureSpec> captures = new ArrayList<>();
         List<LaunchSpec> launches = new ArrayList<>();
-        mechanisms(mapping, storages, captures, launches);
+        RobotSpec.Turret turret = turret(mapping);
+        mechanisms(mapping, turret, storages, captures, launches);
         return new RobotSpec(
-                mapping.name(), hubs(), chassis(mapping), motors, storages, captures, launches,
+                mapping.name(), hubs(), chassis(mapping), motors, servos(mapping), turret, storages, captures, launches,
                 new RobotSpec.ImuMount(mapping.hubLogo(), mapping.hubUsb()),
                 new RobotSpec.ColorSensor(-0.12, 0.09, 0.26, -90.0),
-                new RobotSpec.Limelight(mapping.camera(), "field", "1280x960"));
+                new RobotSpec.Limelight(mapping.camera(), "field", "1280x960", mapping.turretParts().cameraOnTurret()));
+    }
+
+    /** The turret servo has the first servo port of the Control Hub. */
+    private static Map<String, RobotSpec.Servo> servos(RobotMapping mapping) {
+        Map<String, RobotSpec.Servo> servos = new LinkedHashMap<>();
+        RobotMapping.ServoMapping servo = mapping.turretParts().servo();
+        if (servo != null) {
+            String model = servo.model().isEmpty() ? ServoCatalog.USUAL : servo.model();
+            ServoCatalog.noLoadRadPerSec(model);
+            servos.put(servo.name(), new RobotSpec.Servo(CONTROL_HUB, 0, model));
+        }
+        return servos;
+    }
+
+    /** The turret a BIOBUZZ robot has: turned by its motor, or by its servo, or by nothing if neither is mapped. */
+    private RobotSpec.Turret turret(RobotMapping mapping) {
+        if (!turret()) {
+            return null;
+        }
+        RobotMapping.TurretParts parts = mapping.turretParts();
+        List<MotorMapping> motors = mapping.in(Slot.TURRET);
+        String shaft = null;
+        int sign = 1;
+        if (!motors.isEmpty()) {
+            shaft = motors.get(0).name();
+            sign = sign(motors.get(0));
+        } else if (parts.servo() != null) {
+            shaft = parts.servo().name();
+            sign = parts.servo().mirrored() ? -1 : 1;
+        }
+        return new RobotSpec.Turret(shaft, mapping.turretRatio(), sign, parts.axisX(), parts.axisY(), parts.cameraOnTurret(), parts.encoders());
     }
 
     private static int[] freePort(boolean[] used) {
@@ -181,7 +213,8 @@ public final class RobotDesign {
                 : Condition.atLeast(motor.name(), radPerSec);
     }
 
-    private void mechanisms(RobotMapping mapping, List<StorageSpec> storages, List<CaptureSpec> captures, List<LaunchSpec> launches) {
+    private void mechanisms(
+            RobotMapping mapping, RobotSpec.Turret turret, List<StorageSpec> storages, List<CaptureSpec> captures, List<LaunchSpec> launches) {
         List<MotorMapping> intake = mapping.in(Slot.INTAKE);
         List<MotorMapping> conveyor = mapping.in(Slot.CONVEYOR);
         List<MotorMapping> shooter = mapping.in(Slot.SHOOTER);
@@ -206,10 +239,7 @@ public final class RobotDesign {
         if (!shooter.isEmpty()) {
             List<LaunchSpec.Wheel> wheels = shooter.stream().map(motor -> new LaunchSpec.Wheel(motor.name(), 0.05, sign(motor))).toList();
             List<Condition> feed = conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0));
-            List<MotorMapping> turret = mapping.in(Slot.TURRET);
-            LaunchSpec.Turret aim = turret.isEmpty()
-                    ? null
-                    : new LaunchSpec.Turret(turret.get(0).name(), mapping.turretRatio(), sign(turret.get(0)));
+            LaunchSpec.Turret aim = turret == null || turret.shaft() == null ? null : turret.aim();
             launches.add(new LaunchSpec(LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim));
         }
     }

@@ -211,6 +211,23 @@ public final class WiringTable implements HardwareDirectory {
             return this;
         }
 
+        public Builder servo(String name, int hub, int port) {
+            placements.add(() -> {
+                if (port < 0 || port >= SERVO_PORTS) {
+                    throw new IllegalArgumentException("servo port " + port + " does not exist; there are " + SERVO_PORTS);
+                }
+                if (hubs.stream().noneMatch(declared -> declared.address() == hub)) {
+                    throw new IllegalArgumentException("a device is wired to hub " + hub + ", which the robot does not declare");
+                }
+                if (!table.usedServoPorts.add(new Slot(hub, port))) {
+                    throw new IllegalArgumentException(
+                            "\"" + name + "\" is wired to servo port " + port + " of hub " + hub + ", which another device already uses");
+                }
+                table.servos.put(name, new ServoWiring(hub, port, true));
+            });
+            return this;
+        }
+
         public WiringTable build() {
             if (hubs.isEmpty()) {
                 throw new IllegalStateException("a robot controller has at least its Control Hub");
