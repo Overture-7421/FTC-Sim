@@ -181,6 +181,61 @@ class RobotDesignTest {
     }
 
     @Test
+    void biobuzzsRobotDrivesOnSwyftSpikesWithItsCadWheelsAndFlywheelsOnABeltUnlessTheMappingSaysOtherwise() {
+        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
+                new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true), new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
+                new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false), new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
+                new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
+        RobotMapping withStopper = new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
+                base.camera(), new RobotMapping.TurretParts(
+                        null, List.of(), 0, 0, false,
+                        List.of(new RobotMapping.MechanismServo(
+                                RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopper", "", false)))));
+
+        RobotSpec biobuzz = RobotDesign.biobuzz().spec(withStopper);
+        RobotSpec decode = RobotDesign.decode().spec(base);
+
+        assertEquals(MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE_12_7), biobuzz.chassis().motor());
+        assertEquals(0.056, biobuzz.chassis().wheelRadiusM(), 1e-9, "112 mm wheels");
+        assertEquals(MotorCatalog.motor(MotorCatalog.GOBILDA_435), decode.chassis().motor(), "DECODE's robot keeps the generic drive");
+        assertEquals(0.048, decode.chassis().wheelRadiusM(), 1e-9);
+        assertEquals(0.0381 / RobotDesign.FLYWHEEL_RATIO, biobuzz.launches().get(0).wheels().get(0).radiusM(), 1e-9,
+                "a 3 in wheel behind a 43:30 belt, per radian of the motor");
+        assertEquals(new StorageSpec.Gate(4, "stopper", Math.toRadians(60.0)), biobuzz.storages().get(0).gate(),
+                "the stopper holds the pieces at the foot of the column");
+        assertNull(decode.storages().get(0).gate());
+        RobotMapping named = new RobotMapping(
+                base.name(), base.motors(), base.massKg(), 80.0, "goBILDA-5203-312", 2.75, base.hubLogo(), base.hubUsb(), base.camera());
+        RobotSpec chosen = RobotDesign.biobuzz().spec(named);
+        assertEquals(MotorCatalog.motor("goBILDA-5203-312"), chosen.chassis().motor(), "a motor the mapping names is kept");
+        assertEquals(0.040, chosen.chassis().wheelRadiusM(), 1e-9, "and so is a wheel size");
+    }
+
+    @Test
+    void theHoodsServoHasFiveTurnsAndItsStopHoldsItAt25Degrees() {
+        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
+                new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                null, List.of(), 0, 0, false,
+                List.of(
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.COLIBRI_LEFT, new RobotMapping.ServoMapping("arm", "", false))));
+        RobotSpec spec = RobotDesign.biobuzz().spec(new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 1.0, base.hubLogo(), base.hubUsb(),
+                base.camera(), parts));
+
+        assertEquals(ServoCatalog.GOBILDA_TORQUE_5_TURN, spec.servos().get("hood").model(), "the hood's servo has five turns");
+        assertEquals(ServoCatalog.GOBILDA_TORQUE, spec.servos().get("arm").model(), "the others have the usual 300 degrees");
+        LaunchSpec.Hood hood = spec.launches().get(0).hood();
+        assertEquals(Math.toRadians(45.0), hood.elevationRadians(0.0), 1e-9, "the servo at 0: 45 degrees");
+        assertEquals(Math.toRadians(45.0 + 730.0 / (730.0 / 24.0)), hood.elevationRadians(Math.toRadians(730.0)), 1e-9,
+                "730 degrees of servo are the hood's 24 degrees, the CAD's range: 69 degrees");
+        assertEquals(hood.elevationRadians(Math.toRadians(730.0)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
+        assertEquals(Math.toRadians(24.0), spec.joints().servos().get(0).limit(), 1e-12, "and the drawn hood stops there too");
+    }
+
+    @Test
     void aTurretServoTurnsTheLauncherByItsRatioAndMirroringAndTakesThePortOfAServoNotOfAMotor() {
         RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
                 new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));

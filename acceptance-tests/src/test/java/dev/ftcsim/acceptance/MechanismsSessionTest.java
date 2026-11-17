@@ -238,7 +238,23 @@ class MechanismsSessionTest {
             BodyPose piece = session.world().bodyPose(id);
             assertTrue(piece.velocity().length() > 1.0, "the flywheels were up to speed: " + piece.velocity());
             assertEquals(List.of(), session.problems(), handle.log.toString());
-            return new double[] {Math.toDegrees(Math.atan2(piece.vy(), piece.vx())), yaw};
+            return new double[] {
+                Math.toDegrees(Math.atan2(piece.vy(), piece.vx())), yaw, piece.x(), piece.y(), piece.z(),
+                session.rig().chassisView().sample().position().z()};
+        }
+    }
+
+    @Test
+    void aShotLeavesFromTheOpeningInFrontOfTheFlywheelsAndTheOpeningTurnsWithTheTurret() throws IOException {
+        for (float stick : new float[] {0f, 0.5f, -0.5f}) {
+            double[] shot = servoLaunchHeadingDegrees(servoTurretRobot(false), stick);
+            double yaw = Math.toRadians(shot[1]);
+            // The opening is 0.20 m ahead of the robot's centre and 0.225 m above its middle, turned about the turret's axis 0.089 m ahead.
+            double expectedX = 0.089 + (0.20 - 0.089) * Math.cos(yaw);
+            double expectedY = (0.20 - 0.089) * Math.sin(yaw);
+            assertEquals(expectedX, shot[2], 0.08, "x, turret at " + shot[1] + " degrees");
+            assertEquals(expectedY, shot[3], 0.08, "y, turret at " + shot[1] + " degrees");
+            assertEquals(shot[5] + 0.225, shot[4], 0.08, "the opening is above the robot, not inside it");
         }
     }
 
@@ -289,14 +305,16 @@ class MechanismsSessionTest {
     void theStopperHoldsThePieceUntilItsServoOpensAndTheHoodSetsHowSteeplyItLeaves() throws IOException {
         double[] closed = hoodShot(-1f, false);
         double[] low = hoodShot(-1f, true);
+        double[] mid = hoodShot(-0.6f, true);
         double[] high = hoodShot(1f, true);
 
         assertEquals(0.0, closed[0], "the belt cannot push the piece out past a closed stopper");
         assertEquals(1.0, low[0], "and it leaves once the stopper is open");
         assertEquals(1.0, high[0]);
         assertEquals(45.0, low[1], 3.0, "the hood at its lowest, 1 degree, sends it up at 45 degrees (a little less by the time it is looked at)");
-        assertEquals(54.9, high[1], 3.0, "and at the end of its servo's travel, 10.9 degrees, at about 55");
-        assertEquals(9.86, high[1] - low[1], 1.0, "the travel of the servo, 300 degrees, over the hood's 30.4 to 1 gears");
+        // The hood's servo has five turns: position 0.2 is 360 degrees of servo, 11.8 degrees of hood over the 30.4 to 1 gears.
+        assertEquals(45.0 + 360.0 / (730.0 / 24.0), mid[1], 3.0, "position 0.2 raises the hood 11.8 degrees");
+        assertEquals(69.0, high[1], 3.0, "and the servo's travel is more than the hood's: its stop at 25 degrees holds it, 24 degrees up");
     }
 
     @Test

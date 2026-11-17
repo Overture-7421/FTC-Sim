@@ -497,7 +497,8 @@ public final class RobotRig {
         values[RobotJoint.HOOD.ordinal()] = RobotDesign.HOOD_REST_RADIANS;
         for (RobotSpec.ServoJoint servoJoint : joints.servos()) {
             ServoPlant servo = servoPlants.get(servoJoint.servo());
-            values[servoJoint.joint().ordinal()] = servoJoint.rest() + (servo == null ? 0.0 : servo.angleRadians() / servoJoint.ratio());
+            values[servoJoint.joint().ordinal()] = servoJoint.rest()
+                    + (servo == null ? 0.0 : Math.min(servoJoint.limit(), servo.angleRadians() / servoJoint.ratio()));
         }
         double yaw = turretYawRadians();
         for (RobotMapping.TurretEncoder encoder : turretSpec.encoders()) {

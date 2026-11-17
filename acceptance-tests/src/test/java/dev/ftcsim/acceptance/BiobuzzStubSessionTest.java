@@ -21,6 +21,7 @@ import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.biobuzz.BiobuzzField;
 import dev.ftcsim.game.biobuzz.BiobuzzIds;
+import dev.ftcsim.scenarios.opmodes.BiobuzzHive;
 import dev.ftcsim.simulator.SimulationSession;
 import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
@@ -66,7 +67,7 @@ class BiobuzzStubSessionTest {
         RobotMapping.TurretParts turret = new RobotMapping.TurretParts(
                 new RobotMapping.ServoMapping("turretServo", "", false),
                 List.of(new RobotMapping.TurretEncoder(0, "", 5.5, 0, false), new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0, false)),
-                0, 0, true,
+                0.089, 0, true,
                 List.of(
                         servo(RobotMapping.ServoRole.HOOD, "hood"), servo(RobotMapping.ServoRole.STOPPER, "stopper"),
                         servo(RobotMapping.ServoRole.COLIBRI_LEFT, "colibriLeft"), servo(RobotMapping.ServoRole.COLIBRI_RIGHT, "colibriRight")));
@@ -118,7 +119,8 @@ class BiobuzzStubSessionTest {
             session.setGamepad(1, sticks);
             session.runFor(duration);
             session.setGamepad(1, GamepadState.NEUTRAL);
-            session.runFor(SECOND / 2);
+            // The robot coasts a good way on its SWYFT Spike drive: let it stop before comparing.
+            session.runFor(SECOND * 3 / 2);
             assertEquals(RobotPhase.RUNNING, session.phase(), handle.log.toString());
             assertEquals(List.of(), session.problems());
 
@@ -245,6 +247,13 @@ class BiobuzzStubSessionTest {
         return Math.toDegrees(body.x());
     }
 
+    /** Remembers how far each joint has been from where it started. */
+    private static void note(SimulationSession session, double[] atRest, double[] moved) {
+        for (RobotJoint each : RobotJoint.values()) {
+            moved[each.ordinal()] = Math.max(moved[each.ordinal()], Math.abs(joint(session, each) - atRest[each.ordinal()]));
+        }
+    }
+
     @Test
     void everyMovingPartOfThePictureFollowsTheMotorOrServoThatMovesIt() throws IOException {
         StartPose start = redCentre();
@@ -252,6 +261,11 @@ class BiobuzzStubSessionTest {
             SimulationSession session = handle.session;
             initAndStart(session);
             session.runFor(SECOND / 2);
+            double[] atRest = new double[RobotJoint.values().length];
+            double[] moved = new double[atRest.length];
+            for (RobotJoint each : RobotJoint.values()) {
+                atRest[each.ordinal()] = joint(session, each);
+            }
 
             assertEquals(1.0, joint(session, RobotJoint.HOOD), 0.2, "the hood stands at the bottom of its range, 1 degree");
             assertEquals(0.0, joint(session, RobotJoint.STOPPER), 0.5, "the stopper is shut");
@@ -261,12 +275,14 @@ class BiobuzzStubSessionTest {
             session.setGamepad(1, GamepadState.sticks(0f, -1f, 0f, 0f));
             session.runFor(SECOND / 2);
             session.setGamepad(1, GamepadState.NEUTRAL);
+            note(session, atRest, moved);
             assertTrue(joint(session, RobotJoint.WHEEL_FRONT_LEFT) - wheel > 90, "driving ahead turns the wheels forward");
 
             session.setGamepad(1, pad(1f, 0f, false, false, false, false));
             session.runFor(SECOND);
             double intake = joint(session, RobotJoint.INTAKE);
             session.runFor(SECOND / 4);
+            note(session, atRest, moved);
             assertTrue(joint(session, RobotJoint.INTAKE) - intake > 30, "the left trigger runs the intake roller");
 
             session.setGamepad(1, pad(0f, 1f, false, true, false, false));
@@ -274,23 +290,31 @@ class BiobuzzStubSessionTest {
             double flywheel = joint(session, RobotJoint.FLYWHEEL);
             double conveyor = joint(session, RobotJoint.CONVEYOR);
             session.runFor(SECOND / 4);
+            note(session, atRest, moved);
             assertTrue(joint(session, RobotJoint.FLYWHEEL) - flywheel > 100, "the right trigger spins the flywheel");
             assertTrue(joint(session, RobotJoint.CONVEYOR) - conveyor > 30, "and B the indexer");
 
             session.setGamepad(1, pad(0f, 0f, false, false, true, true));
             session.runFor(SECOND);
+            note(session, atRest, moved);
             assertEquals(150.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.5, half of 300 degrees");
             assertEquals(0.4 * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
             assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
 
             session.setGamepad(1, pad(0f, 0f, true, false, false, false));
             session.runFor(SECOND);
+            note(session, atRest, moved);
             assertTrue(joint(session, RobotJoint.HOOD) > 3.0, "the D-pad's up raises the hood: " + joint(session, RobotJoint.HOOD));
 
             session.setGamepad(1, turretPad(true, false, false));
             session.runFor(SECOND);
             double yaw = Math.toDegrees(session.rig().turretYawRadians());
             assertEquals(-yaw * 5.5, joint(session, RobotJoint.ENCODER_A), 5.0, "the encoder gear turns 5.5 times to the turret's one, the other way");
+            assertEquals(-yaw * 44.0 / 7.0, joint(session, RobotJoint.ENCODER_B), 5.0, "and the other 44/7 times");
+            note(session, atRest, moved);
+            for (RobotJoint each : RobotJoint.values()) {
+                assertTrue(moved[each.ordinal()] > 1.0, each + " moved from where it started: " + moved[each.ordinal()]);
+            }
             assertEquals(List.of(), session.problems(), handle.log.toString());
         }
     }
@@ -350,38 +374,203 @@ class BiobuzzStubSessionTest {
         }
     }
 
+    // ---- the pose estimate and the aim ----------------------------------------------------------------------------
+
+    /** The tags the stub's map has, against the ones the field has at the start of a match, with each HIVE resting on its stop. */
     @Test
-    void holdingATurnsTheTurretToCentreTheTagOnTheLimelightWhichRidesOnIt() throws IOException {
+    void theStubsMapOfTheHiveTagsIsTheFieldsAtTheStartOfAMatch() throws IOException {
+        StartPose start = redCentre();
+        try (TestSessions.Handle handle = open(start.x(), start.y(), start.headingRadians())) {
+            List<BodyState> bodies = handle.session.snapshot().bodies();
+            for (FieldTag tag : FIELD.description().tags()) {
+                BodyState host = bodies.stream().filter(body -> body.entityId() == tag.hostEntityId()).findFirst().orElseThrow();
+                double[] at = rotate(host, tag.local().x(), tag.local().y(), tag.local().z());
+                BiobuzzHive.Tag mapped = BiobuzzHive.TAGS.get(tag.id());
+                assertEquals(host.x() + at[0], mapped.x(), 0.005, "tag " + tag.id() + " x");
+                assertEquals(host.y() + at[1], mapped.y(), 0.005, "tag " + tag.id() + " y");
+                assertEquals(host.z() + at[2], mapped.z(), 0.005, "tag " + tag.id() + " z");
+            }
+            assertEquals(16, BiobuzzHive.TAGS.size());
+        }
+    }
+
+    /** x, y, heading in degrees from the stub's "Estimate" line, or null while it says there is none. */
+    private static double[] estimate(SimulationSession session) {
+        String line = text(session, "Estimate");
+        if (line.startsWith("none")) {
+            return null;
+        }
+        return new double[] {value(line, "x"), value(line, "y"), value(line, "h"), value(line, "fixes")};
+    }
+
+    private static void assertEstimateIsTrue(SimulationSession session, String when) {
+        double[] estimate = estimate(session);
+        assertTrue(estimate != null, when + ": the stub has a pose: " + text(session, "Estimate"));
+        BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
+        // The map has the HIVEs as they start; a TIP moves their tags by up to 7 cm.
+        assertEquals(truth.x(), estimate[0], 0.05, when + ": x");
+        assertEquals(truth.y(), estimate[1], 0.05, when + ": y");
+        assertEquals(0.0, Math.IEEEremainder(Math.toDegrees(truth.yaw()) - estimate[2], 360.0), 3.0, when + ": heading");
+    }
+
+    @Test
+    void theStubFindsWhereItIsOnTheFieldFromTheTagsAndKeepsTrackOfItByTheOdometryWhenItDrivesAway() throws IOException {
         double[] spot;
         StartPose start = redCentre();
         try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
             spot = standingBefore(probe.session, tag(31), 1.0);
         }
-        // The chassis faces 20 degrees to the left of the tag, so the tag is 20 degrees to the right of the front.
+        try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(10))) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.runFor(SECOND / 4);
+            assertEstimateIsTrue(session, "after a look at the tags");
+            assertTrue(estimate(session)[3] >= 1, "the camera made a correction: " + text(session, "Estimate"));
+
+            session.setGamepad(1, GamepadState.sticks(0f, 0.6f, 0f, 0f));
+            session.runFor(SECOND);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            session.runFor(SECOND / 2);
+            assertEstimateIsTrue(session, "after driving back from the HIVE");
+
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+        }
+    }
+
+    @Test
+    void theStubHasNoPoseUntilItSeesTwoTagsTogetherAndAimsOnlyWhenItHasOne() throws IOException {
+        StartPose start = redCentre();
+        // Facing the wall, the camera sees nothing.
+        try (TestSessions.Handle handle = open(start.x(), start.y(), start.headingRadians() + Math.PI)) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.setGamepad(1, turretPad(false, false, true));
+            session.runFor(SECOND);
+
+            assertEquals("none", text(session, "Tags"), "facing the wall the camera sees no tag");
+            assertTrue(text(session, "Estimate").startsWith("none"), text(session, "Estimate"));
+            assertEquals("no pose yet", text(session, "Aim"));
+            assertEquals(0.0, Math.toDegrees(session.rig().turretYawRadians()), 0.5, "so the turret has not moved");
+        }
+    }
+
+    /** Where the blue CELL is, in the field, for a robot on the given side of the centre line: 0.41 m out, on the pivot axis, 1.04 m up. */
+    private static double[] blueCell(double side) {
+        return new double[] {side * 0.41, 0.3236, 1.0415};
+    }
+
+    /** Backs the robot away from the red HIVE, on the odometry, to where a shot at the blue CELL has the room and the way is clear. */
+    private static void backAway(SimulationSession session) {
+        session.setGamepad(1, GamepadState.sticks(0f, 0.6f, 0f, 0f));
+        session.runFor(SECOND / 2);
+        session.setGamepad(1, GamepadState.NEUTRAL);
+        session.runFor(SECOND * 3 / 2);
+    }
+
+    @Test
+    void pressingAAimsTheTurretSpinsTheFlywheelsAndShootsTheBallsHeldAtTheStopperIntoTheBlueCell() throws IOException {
+        double[] spot;
+        StartPose start = redCentre();
+        try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
+            spot = standingBefore(probe.session, tag(31), 1.0);
+        }
+        // The red HIVE is in the way of a shot at the blue one from where its tags can be seen, so the robot finds its place there
+        // and backs away on the odometry to where the way is clear.
+        try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(10))) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.runFor(SECOND / 2);
+            assertEstimateIsTrue(session, "at the HIVE");
+            backAway(session);
+            assertEstimateIsTrue(session, "after backing away");
+
+            BodyPose chassis = session.world().bodyPose(EntityIds.CHASSIS);
+            long heldAtTheStopper = session.snapshot().bodies().stream()
+                    .filter(body -> body.kind() == BiobuzzIds.KIND_POLLEN && Math.abs(body.z() - chassis.z() - 0.06) < 0.06
+                            && Math.hypot(body.x() - chassis.x() - 0.089 * Math.cos(chassis.yaw()),
+                                    body.y() - chassis.y() - 0.089 * Math.sin(chassis.yaw())) < 0.05)
+                    .count();
+            assertTrue(heldAtTheStopper >= 1, "the preloads wait low in the column against the shut stopper, not in the shooter");
+
+            double[] cell = blueCell(Math.signum(chassis.x()));
+            session.setGamepad(1, turretPad(false, false, true));
+            session.runFor(SECOND / 5);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+
+            double closest = Double.MAX_VALUE;
+            double highest = 0.0;
+            String state = "";
+            String lastAiming = "";
+            double maxFlywheel = 0.0;
+            for (int i = 0; i < 1200 && !state.startsWith("DONE") && !state.startsWith("FAILED"); i++) {
+                session.runFor(SECOND / 100);
+                state = text(session, "AutoShoot");
+                if (state.startsWith("AIMING")) {
+                    lastAiming = state;
+                }
+                maxFlywheel = Math.max(maxFlywheel, value(text(session, "Mechanisms"), "flywheels"));
+                for (BodyState body : session.snapshot().bodies()) {
+                    if (body.kind() == BiobuzzIds.KIND_POLLEN && body.z() > 0.6) {
+                        highest = Math.max(highest, body.z());
+                        closest = Math.min(closest, Math.sqrt(Math.pow(body.x() - cell[0], 2) + Math.pow(body.y() - cell[1], 2)
+                                + Math.pow(body.z() - cell[2], 2)));
+                    }
+                }
+            }
+            session.runFor(SECOND / 2);
+
+            assertTrue(state.startsWith("DONE"), "the shot ran to its end: " + state + " (last while aiming: " + lastAiming + ") " + text(session, "Estimate"));
+            assertTrue(maxFlywheel > 800, "the flywheels were spun up: " + maxFlywheel);
+            assertTrue(highest > 0.8, "balls were shot up towards the CELL: " + highest);
+            assertTrue(closest < 0.15, "a ball passed within " + closest + " m of the CELL " + java.util.Arrays.toString(cell) + " truth x="
+                    + chassis.x() + " y=" + chassis.y() + " yaw=" + Math.toDegrees(chassis.yaw()) + " turret=" + Math.toDegrees(session.rig().turretYawRadians())
+                    + " " + text(session, "Estimate"));
+            assertEquals("shut", text(session, "Mechanisms").replaceAll(".*stopper=(\\w+).*", "$1"), "the stopper is shut again");
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+        }
+    }
+
+    @Test
+    void theTurretFollowsTheBearingOfTheBlueCellWhileTheShotWaitsForEverythingToBeReady() throws IOException {
+        double[] spot;
+        StartPose start = redCentre();
+        try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
+            spot = standingBefore(probe.session, tag(31), 1.0);
+        }
         try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(20))) {
             SimulationSession session = handle.session;
             initAndStart(session);
             session.runFor(SECOND / 2);
-            double before = value(text(session, "Target"), "tx");
-            assertTrue(before > 10, "the tag starts off to the right: " + before);
+            backAway(session);
+            session.setGamepad(1, turretPad(false, false, true));
+            session.runFor(SECOND / 5);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            // Until the turret is on the bearing (it turns about 80 degrees a second), which comes before the shot is ready.
+            for (int i = 0; i < 400 && Math.abs(value(text(session, "Aim").replace("error=", "err="), "err")) > 1.5; i++) {
+                session.runFor(SECOND / 100);
+            }
+            session.runFor(SECOND / 20);
+
+            BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
+            double side = Math.signum(truth.x());
+            double axisX = truth.x() + 0.089 * Math.cos(truth.yaw());
+            double axisY = truth.y() + 0.089 * Math.sin(truth.yaw());
+            double expected = Math.toDegrees(Math.atan2(0.3236 - axisY, side * 0.41 - axisX) - truth.yaw());
+            double yaw = Math.toDegrees(session.rig().turretYawRadians());
+            assertEquals(0.0, Math.IEEEremainder(yaw - expected, 360.0), 4.0, "the turret faces the blue CELL: " + text(session, "Aim"));
+            assertEquals(0.0, Math.IEEEremainder(turretDegrees(session) - yaw, 360.0), 1.0, "and the encoders agree");
+            assertTrue(text(session, "Aim").startsWith("blue CELL"), text(session, "Aim"));
+            assertTrue(text(session, "AutoShoot").startsWith("AIMING") || text(session, "AutoShoot").startsWith("FEEDING"),
+                    text(session, "AutoShoot"));
 
             session.setGamepad(1, turretPad(false, false, true));
-            StringBuilder trace = new StringBuilder();
-            double settled = 0.0;
-            for (int i = 0; i < 16; i++) {
-                session.runFor(SECOND / 4);
-                double tx = value(text(session, "Target"), "tx");
-                trace.append(String.format(Locale.ROOT, " %.1f", tx));
-                if (i >= 8) {
-                    settled += tx / 8;
-                }
-            }
-
-            assertEquals(0.0, settled, 1.5, "the tag is centred in the image, to the Limelight's noise: " + trace);
-            double yaw = Math.toDegrees(session.rig().turretYawRadians());
-            assertEquals(-20.0, yaw, 4.0, "so the turret turned right to where the tag is, and the Limelight went with it");
-            assertEquals(yaw, turretDegrees(session), 1.0, "and the encoders agree");
+            session.runFor(SECOND / 5);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            session.runFor(SECOND / 5);
+            assertTrue(text(session, "AutoShoot").contains("cancelled"), "a second press cancels: " + text(session, "AutoShoot"));
+            assertEquals("off", text(session, "Aim"));
             assertEquals(List.of(), session.problems(), handle.log.toString());
         }
     }
 }
+

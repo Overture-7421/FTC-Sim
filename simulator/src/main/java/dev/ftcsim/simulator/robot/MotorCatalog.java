@@ -14,6 +14,14 @@ public final class MotorCatalog {
 
     public static final String GOBILDA_435 = "goBILDA-5203-435";
     public static final String GOBILDA_BARE = "goBILDA-bare-6000";
+    /** The SWYFT Spike 550-class motor behind a 12.7:1 reduction to the wheel, the BIOBUZZ robot's drive. */
+    public static final String SWYFT_SPIKE_12_7 = "swyft-spike-12.7";
+
+    /** The Spike's published numbers at 12 V, before any gearbox: 6000 rpm, 1.47 kg cm of stall torque, 9.2 A at stall, a 28 PPR encoder. */
+    private static final double SPIKE_STALL_TORQUE_NM = 1.47 * 0.0980665;
+    private static final double SPIKE_FREE_SPEED_RAD_PER_SEC = 6000.0 * 2.0 * Math.PI / 60.0;
+    private static final double SPIKE_STALL_CURRENT_A = 9.2;
+    private static final double SPIKE_DRIVE_REDUCTION = 12.7;
 
     /** The bare motor's encoder: 28 counts per turn of the rotor, before any gearbox. */
     private static final double CORE_TICKS_PER_REVOLUTION = 28.0;
@@ -37,6 +45,10 @@ public final class MotorCatalog {
         }
         // The bare motor behind the 13.7:1 Yellow Jacket: the same winding with no gearbox.
         MOTORS.put(GOBILDA_BARE, behindGearbox(measured, 1.0));
+        MOTORS.put(SWYFT_SPIKE_12_7, new DcMotor(
+                SPIKE_STALL_TORQUE_NM * SPIKE_DRIVE_REDUCTION, SPIKE_FREE_SPEED_RAD_PER_SEC / SPIKE_DRIVE_REDUCTION,
+                measured.nominalVolts(), SPIKE_STALL_CURRENT_A, measured.rotorInertiaKgM2(), SPIKE_DRIVE_REDUCTION,
+                CORE_TICKS_PER_REVOLUTION * SPIKE_DRIVE_REDUCTION));
     }
 
     private MotorCatalog() {}
@@ -55,6 +67,7 @@ public final class MotorCatalog {
             choices.add(new MotorChoice("goBILDA-5203-" + rpm, "goBILDA 5203 Yellow Jacket, " + rpm + " rpm"));
         }
         choices.add(new MotorChoice(GOBILDA_BARE, "goBILDA bare motor, no gearbox"));
+        choices.add(new MotorChoice(SWYFT_SPIKE_12_7, "SWYFT Spike 550 motor, 12.7:1 to the wheel"));
         return List.copyOf(choices);
     }
 

@@ -105,6 +105,8 @@ dependencies {
     testImplementation(project(":app"))
     testImplementation(project(":desktop-ui"))
     testImplementation(project(":games"))
+    // The pose estimator and the HIVE map of the stub are plain Java; their maths is tested here, outside the robot class loader.
+    testImplementation(scenarios.output)
 }
 
 tasks.named<JavaCompile>("compileTestJava") {

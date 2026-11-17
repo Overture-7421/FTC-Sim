@@ -11,12 +11,23 @@ import org.junit.jupiter.api.Test;
 class MotorCatalogTest {
 
     @Test
+    void theSwyftSpikeBehindItsDriveReductionHasThePublishedCoreScaledBy12Point7() {
+        DcMotor spike = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE_12_7);
+
+        assertEquals(1.47 * 0.0980665 * 12.7, spike.stallTorqueNm(), 1e-9, "1.47 kg cm at the rotor");
+        assertEquals(6000.0 * 2.0 * Math.PI / 60.0 / 12.7, spike.freeSpeedRadPerSec(), 1e-9, "6000 rpm at the rotor");
+        assertEquals(9.2, spike.stallCurrentA(), 1e-9);
+        assertEquals(12.7, spike.gearRatio(), 1e-9);
+        assertEquals(28.0 * 12.7, spike.encoderTicksPerRevolution(), 1e-9, "28 counts per rotor turn");
+    }
+
+    @Test
     void everyChoiceNamesACatalogueMotorTheDefaultComesFirstAndNoneRepeats() {
         List<dev.ftcsim.contracts.session.MotorChoice> choices = MotorCatalog.choices();
 
         assertEquals(MotorCatalog.GOBILDA_435, choices.get(0).id());
-        assertEquals(11, choices.size());
-        assertEquals(11, choices.stream().map(dev.ftcsim.contracts.session.MotorChoice::id).distinct().count());
+        assertEquals(12, choices.size());
+        assertEquals(12, choices.stream().map(dev.ftcsim.contracts.session.MotorChoice::id).distinct().count());
         for (dev.ftcsim.contracts.session.MotorChoice choice : choices) {
             assertTrue(MotorCatalog.motor(choice.id()) != null && !choice.displayName().isBlank(), choice.toString());
         }

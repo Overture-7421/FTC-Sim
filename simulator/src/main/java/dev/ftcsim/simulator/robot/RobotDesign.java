@@ -160,8 +160,11 @@ public final class RobotDesign {
     /** The hood's angle above level with its servo's shaft at 0: the lower limit of its range in the CAD. */
     public static final double HOOD_REST_RADIANS = Math.toRadians(1.0);
 
-    /** How high a piece leaves, above the hood's angle: with the hood at 1 degree it leaves at 45 degrees. Estimated. */
-    public static final double HOOD_BASE_ELEVATION_RADIANS = Math.toRadians(44.0);
+    /** How high a piece leaves with the servo's shaft at 0, the hood at its 1 degree: 45 degrees, and the hood's angle adds to it. Estimated. */
+    public static final double HOOD_BASE_ELEVATION_RADIANS = Math.toRadians(45.0);
+
+    /** How far the hood turns from its rest to its stop: the CAD allows 1 to 25 degrees. The servo (5 turns) can turn it further, but the stop holds it. */
+    public static final double HOOD_RANGE_RADIANS = Math.toRadians(24.0);
 
     /** How far the stopper's servo must have turned for pieces to pass, 60 degrees. Estimated. */
     public static final double STOPPER_OPEN_RADIANS = Math.toRadians(60.0);
@@ -176,7 +179,9 @@ public final class RobotDesign {
             servos.put(servo.name(), new RobotSpec.Servo(CONTROL_HUB, 0, model));
         }
         for (RobotMapping.MechanismServo mechanism : mapping.turretParts().mechanisms()) {
-            String model = mechanism.servo().model().isEmpty() ? ServoCatalog.USUAL_POSITIONAL : mechanism.servo().model();
+            String model = mechanism.servo().model().isEmpty()
+                    ? (mechanism.role() == RobotMapping.ServoRole.HOOD ? ServoCatalog.GOBILDA_TORQUE_5_TURN : ServoCatalog.USUAL_POSITIONAL)
+                    : mechanism.servo().model();
             ServoCatalog.noLoadRadPerSec(model);
             servos.put(
                     mechanism.servo().name(),
@@ -191,7 +196,7 @@ public final class RobotDesign {
         for (RobotMapping.MechanismServo mechanism : mapping.turretParts().mechanisms()) {
             String name = mechanism.servo().name();
             servos.add(switch (mechanism.role()) {
-                case HOOD -> new RobotSpec.ServoJoint(RobotJoint.HOOD, name, HOOD_RATIO, HOOD_REST_RADIANS);
+                case HOOD -> new RobotSpec.ServoJoint(RobotJoint.HOOD, name, HOOD_RATIO, HOOD_REST_RADIANS, HOOD_RANGE_RADIANS);
                 case STOPPER -> new RobotSpec.ServoJoint(RobotJoint.STOPPER, name, STOPPER_RATIO, 0.0);
                 case COLIBRI_LEFT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_LEFT, name, COLIBRI_RATIO, 0.0);
                 case COLIBRI_RIGHT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_RIGHT, name, COLIBRI_RATIO, 0.0);
@@ -261,15 +266,24 @@ public final class RobotDesign {
                 new HardwareDirectory.Hub(EXPANSION_HUB, "Expansion Hub " + EXPANSION_HUB, false, false));
     }
 
-    private static MecanumConfig chassis(RobotMapping mapping) {
+    /** The drive wheel diameter of BIOBUZZ's robot in the CAD (the mecanum wheels are 112 mm across), used when the mapping leaves the generic 96 mm. */
+    public static final double BIOBUZZ_WHEEL_DIAMETER_MM = 112.0;
+
+    private MecanumConfig chassis(RobotMapping mapping) {
         if (!mapping.drives()) {
             return null;
         }
         MecanumConfig generic = MecanumConfig.generic18Inch();
+        // BIOBUZZ's robot drives on SWYFT Spike motors, 12.7:1 to its 112 mm wheels, unless the mapping names others.
+        boolean biobuzz = game == Game.BIOBUZZ;
+        String driveMotor = biobuzz && mapping.driveMotor().equals(RobotMapping.DEFAULT_DRIVE_MOTOR)
+                ? MotorCatalog.SWYFT_SPIKE_12_7 : mapping.driveMotor();
+        double wheelDiameterMm = biobuzz && mapping.wheelDiameterMm() == RobotMapping.DEFAULT_WHEEL_DIAMETER_MM
+                ? BIOBUZZ_WHEEL_DIAMETER_MM : mapping.wheelDiameterMm();
         return new MecanumConfig(
                 mapping.massKg(), generic.lengthM(), generic.widthM(), generic.heightM(), generic.groundClearanceM(),
-                generic.comHeightM(), mapping.wheelDiameterMm() / 2000.0, generic.wheelbaseM(), generic.trackM(),
-                MotorCatalog.motor(mapping.driveMotor()), generic.wheelInertiaKgM2(), 0.0034, generic.tireStiffnessNPerM(),
+                generic.comHeightM(), wheelDiameterMm / 2000.0, generic.wheelbaseM(), generic.trackM(),
+                MotorCatalog.motor(driveMotor), generic.wheelInertiaKgM2(), 0.0034, generic.tireStiffnessNPerM(),
                 generic.tireDampingNsPerM(), generic.tractionFriction(), generic.slipStiffnessNsPerM(), 0.5, 2.2, 0.12, 0.053);
     }
 
@@ -300,6 +314,32 @@ public final class RobotDesign {
                 : Condition.atLeast(motor.name(), radPerSec);
     }
 
+    /** The radius of BIOBUZZ's flywheels: 3 in Stealth wheels. */
+    public static final double BIOBUZZ_FLYWHEEL_RADIUS_M = 0.0381;
+
+    /** DECODE's path: in at the front, up and back to a fixed launcher over the rear. */
+    private static final List<Vec3> DECODE_PATH = List.of(new Vec3(0.27, 0.0, -0.10), new Vec3(0.05, 0.0, 0.0), new Vec3(-0.12, 0.0, 0.26));
+
+    /** The turret's axis in the CAD, ahead of the wheels' centre; the column the pieces climb is on it. */
+    public static final double BIOBUZZ_TURRET_AXIS_X = 0.089;
+
+    /**
+     * BIOBUZZ's path in the CAD, for the centre of a POLLEN (robot frame, metres): in at the intake roller, back and up the
+     * curve of compliant wheels between the front wheels, up the column between the three cross shafts (x 0.042 and 0.137, under
+     * the turret's axis) and through the turret, then forward between the two flywheels. The last two points are inside the turret
+     * and turn with it, and the piece waits for the shot between the wheels. The coordinates come from the CAD's rollers, shafts
+     * and the flywheel.
+     */
+    private static final List<Vec3> BIOBUZZ_PATH = List.of(
+            new Vec3(0.27, 0.0, -0.14), new Vec3(0.15, 0.0, -0.10), new Vec3(0.115, 0.0, -0.05), new Vec3(0.098, 0.0, 0.0),
+            new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.06), new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.215), new Vec3(0.162, 0.0, 0.215));
+    private static final int BIOBUZZ_TURNED_FROM_POINT = 5;
+    /** The stopper holds the pieces at the foot of the column, path point 4. */
+    private static final int BIOBUZZ_GATE_POINT = 4;
+
+    /** The opening in front of the flywheels, in the CAD, where a shot leaves with the turret facing forward. */
+    private static final Vec3 BIOBUZZ_MUZZLE = new Vec3(0.20, 0.0, 0.225);
+
     private void mechanisms(
             RobotMapping mapping, RobotSpec.Turret turret, List<StorageSpec> storages, List<CaptureSpec> captures, List<LaunchSpec> launches) {
         List<MotorMapping> intake = mapping.in(Slot.INTAKE);
@@ -308,7 +348,8 @@ public final class RobotDesign {
         if (intake.isEmpty() && conveyor.isEmpty() && shooter.isEmpty()) {
             return;
         }
-        List<Vec3> path = List.of(new Vec3(0.27, 0.0, -0.10), new Vec3(0.05, 0.0, 0.0), new Vec3(-0.12, 0.0, 0.26));
+        boolean cad = game.turret;
+        List<Vec3> path = cad ? BIOBUZZ_PATH : DECODE_PATH;
         double length = new StorageSpec(STORAGE, 3, path, List.of()).lengthMeters();
         List<StorageSpec.Drive> drives = new ArrayList<>();
         for (MotorMapping motor : intake) {
@@ -317,23 +358,28 @@ public final class RobotDesign {
         for (MotorMapping motor : conveyor) {
             drives.add(new StorageSpec.Drive(motor.name(), 0.02, sign(motor), 0.15, length));
         }
-        storages.add(new StorageSpec(STORAGE, 3, path, drives));
+        StorageSpec.Turned turned = cad ? new StorageSpec.Turned(BIOBUZZ_TURNED_FROM_POINT, BIOBUZZ_TURRET_AXIS_X, 0.0) : null;
+        RobotMapping.ServoMapping stopper = mapping.turretParts().servoFor(RobotMapping.ServoRole.STOPPER);
+        // The stopper holds the pieces at the foot of the column, so the preloads wait there until it opens.
+        StorageSpec.Gate gate = cad && stopper != null
+                ? new StorageSpec.Gate(BIOBUZZ_GATE_POINT, stopper.name(), STOPPER_OPEN_RADIANS) : null;
+        storages.add(new StorageSpec(STORAGE, 3, path, drives, turned, gate));
         if (!intake.isEmpty()) {
             captures.add(new CaptureSpec(
                     INTAKE, STORAGE, new Volume(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),
                     intake.stream().map(motor -> turning(motor, 10.0)).toList(), game.minPieceM, game.maxPieceM));
         }
         if (!shooter.isEmpty()) {
-            List<LaunchSpec.Wheel> wheels = shooter.stream().map(motor -> new LaunchSpec.Wheel(motor.name(), 0.05, sign(motor))).toList();
+            // BIOBUZZ's flywheels are 3 in Stealth wheels turned by the motor through a 43:30 belt: the rim moves at the motor's
+            // speed times the wheel's radius over the ratio. DECODE's fit (Hornet, no belt) treats the motor as the wheel.
+            double wheelRadius = cad ? BIOBUZZ_FLYWHEEL_RADIUS_M / FLYWHEEL_RATIO : 0.05;
+            List<LaunchSpec.Wheel> wheels = shooter.stream().map(motor -> new LaunchSpec.Wheel(motor.name(), wheelRadius, sign(motor))).toList();
             List<Condition> feed = new ArrayList<>(conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0)));
-            RobotMapping.ServoMapping stopper = mapping.turretParts().servoFor(RobotMapping.ServoRole.STOPPER);
-            if (stopper != null && !feed.isEmpty()) {
-                feed.add(Condition.angleAtLeast(stopper.name(), STOPPER_OPEN_RADIANS));
-            }
             RobotMapping.ServoMapping hood = mapping.turretParts().servoFor(RobotMapping.ServoRole.HOOD);
-            LaunchSpec.Hood tilt = hood == null ? null : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS);
+            LaunchSpec.Hood tilt = hood == null ? null : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS, HOOD_RANGE_RADIANS);
             LaunchSpec.Turret aim = turret == null || turret.shaft() == null ? null : turret.aim();
-            launches.add(new LaunchSpec(LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim, tilt));
+            launches.add(new LaunchSpec(
+                    LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim, tilt, cad ? BIOBUZZ_MUZZLE : null));
         }
     }
 }

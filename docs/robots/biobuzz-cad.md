@@ -28,7 +28,7 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 |---|---|---|
 | Four wheels | the chassis's wheel angles | direct; positive rolls the robot forward |
 | Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, `turret.axis` of the mapping (the CAD's is x 0.089, y 0) |
-| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 30.42 (730:24 gears, from the team's actuator table); the CAD allows 1 to 25 degrees, the servo's 300 degrees reaches 10.9 |
+| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 30.42 (730:24 gears, from the team's actuator table); the CAD allows 1 to 25 degrees: the hood's servo is a 5-turn one (1800 degrees), 730 degrees of it (position 0.41) take the hood to its stop at 25 degrees and the stop holds it there for any position above |
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2 |
@@ -44,6 +44,21 @@ The signs of the rollers are the direction that moves pieces the way the robot t
 - **Turret axis.** (0, -0.0505) in the CAD, which is x 0.089 ahead of the wheels' centre.
 - **Gear ratios.** The 2.75:1 turret, the encoders' 5.5 and 44/7, and the ratios in the table above, all as the CAD and the team's table say.
 - **Hood limits.** 1 to 25 degrees, from the revolute mate.
+
+## The path of the pieces
+
+The pieces the robot carries are drawn where the simulation has them, so their path (`RobotDesign.BIOBUZZ_PATH`, the centre of a POLLEN, robot frame in metres) follows the indexer in the CAD instead of cutting through it:
+
+| Point | Where | What is there in the CAD |
+|---|---|---|
+| 0 (0.27, 0, -0.14) | in front of the robot, on the floor | where the intake takes a piece in |
+| 1 (0.15, 0, -0.10) | behind the intake roller, between the front wheels | the curve of compliant wheels that carry the piece up |
+| 2, 3 (0.115, 0, -0.05), (0.098, 0, 0.0) | up and back along that curve | |
+| 4 (0.089, 0, 0.06) | the foot of the column | between the cross shafts at x 0.042 and 0.137 (gap 85 mm, a POLLEN is 71 mm), on the turret's axis |
+| 5 (0.089, 0, 0.215) | the top of the column, inside the turret | the feed rollers behind, the flywheels ahead |
+| 6 (0.162, 0, 0.215) | where a piece waits for the shot | between the two flywheels (their axle is at x 0.162, z 0.215) |
+
+The **stopper** (`StorageSpec.Gate`, the stopper servo) holds the pieces at point 4, the foot of the column: while its servo is under 60 degrees, a piece that has not passed that point waits there however hard the rollers drive, and a piece loaded at the start of a session or after a reset starts there too. That is how the balls are preloaded: the intake brings them up against the shut stopper, and an open one lets them go on to the flywheels. (The CAD's stopper, the goBILDA floodgate switch, is drawn about 0.1 m behind the column; the hold is at the column because that is where the path is.) The intake roller drives the first 0.20 m, the indexer the rest. From point 5 the path is inside the turret: a piece there turns with it about the turret's axis (`StorageSpec.Turned`), so what the window shows is the piece riding the turret's yaw. The shot leaves from the **muzzle** (`LaunchSpec.muzzle`), the opening in front of the flywheels at (0.20, 0, 0.225), turned with the turret too, not from where the piece waited. The flywheels are 3 in wheels behind the 43:30 belt, so a ball leaves at 0.49 of the rim speed, the motor's speed times 0.0381 m / 1.4333 (the 6000 rpm motor under load reaches about 2130 encoder counts a second, a ball speed of about 6 m/s). The launch direction is the same as before (44 degrees plus the hood, turned by the turret). The coordinates are read off the CAD's rollers, shafts and flywheel and the picture of the model; the rollers and the opening are not measured, so a piece still passes through some parts of the picture (a roller squeezes it, as a real one does). DECODE's robot keeps its old path.
 
 ## What the CAD does not have
 

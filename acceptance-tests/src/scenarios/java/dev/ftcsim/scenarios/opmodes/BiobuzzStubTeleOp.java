@@ -9,12 +9,16 @@ import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
+import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.Servo;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Locale;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
+import org.firstinspires.ftc.robotcore.external.navigation.Position;
 
 /**
  * A stand-in for the BIOBUZZ robot's program, which does not exist yet: it checks that the robot drives, that the
@@ -23,12 +27,18 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * knows nothing about the simulator, so the same file runs on the real robot once its names and offsets are checked:
  * copy it into {@code TeamCode} and change the package line.
  *
- * <p>Left stick drives and strafes, right stick turns the robot. The bumpers turn the turret (left bumper to its left)
- * and A, held, turns it to centre the tag the Limelight sees. The turret's angle comes from its two REV Through Bore
+ * <p>Left stick drives and strafes, right stick turns the robot. The bumpers turn the turret (left bumper to its left).
+ * The left trigger runs the intake by hand, and the indexer slowly with it, so that the balls come up against the shut stopper
+ * and wait there, preloaded. A is the automatic shot ({@link BiobuzzAutoShoot}): one press turns the turret to the blue
+ * HIVE's CELL that is nearer to the robot, from the robot's pose, spins the flywheels to the speed that reaches it and sets the
+ * hood, and once the turret, the flywheels and the hood are where they should be opens the stopper and feeds the balls; pressing
+ * A again cancels it. The pose is {@link BiobuzzPoseEstimator}'s: the Pinpoint's odometry corrected by the Limelight's 3D
+ * targets ({@link BiobuzzHive} has the tags), the way Hornet's {@code Camera} blends its botpose into the follower. The estimate
+ * starts when the camera sees two tags together, so drive up to a HIVE first. The turret's angle comes from its two REV Through Bore
  * Encoders on the OctoQuad, in absolute mode: one turns 5.5 times to the turret's one, the other 44/7 times, and the
- * difference of their turns tells which turn of the first the turret is on. The left trigger runs the intake, the right
- * trigger the flywheels and B the indexer; X opens the stopper, Y raises the colibri arms and the D-pad's up and down
- * raise and lower the hood. The hardware names are the ones the robot's configuration uses; the pod offsets are the
+ * difference of their turns tells which turn of the first the turret is on. By hand: the right trigger runs the flywheels, B feeds
+ * the indexer, X opens the stopper, Y raises the colibri arms and the D-pad's up and down raise and lower the hood. The hardware
+ * names are the ones the robot's configuration uses; the pod offsets are the
  * CAD's, and the Limelight sits on the 45 degree panel beside the shooter wheels, where the owner mounts it.
  */
 @TeleOp(name = "BIOBUZZ Stub", group = "Stub")
@@ -48,15 +58,19 @@ public final class BiobuzzStubTeleOp extends OpMode {
     private static final double TURNS_A = 5.5;
     private static final double TURNS_B = 44.0 / 7.0;
     private static final double TURRET_POWER = 0.3;
-    /** Servo power per degree of Limelight bearing while A is held. */
-    private static final double AIM_GAIN = 0.02;
-    private static final double AIM_LIMIT = 0.4;
-    /** Servo positions: the stopper shut and open, the colibri arms down and up, how fast the hood moves per second. */
+    /** Intake roller power, the indexer's power while it carries balls up to the shut stopper, and its power to feed a shot. */
+    private static final double INTAKE_POWER = 0.8;
+    private static final double STAGING_POWER = 0.35;
+    private static final double FEED_POWER = 0.7;
+    /** Camera frames are left out of the pose estimate while the turret or the robot turns faster than this, in degrees per second. */
+    private static final double TURRET_RATE_LIMIT = 40.0;
+    private static final double TURN_RATE_LIMIT = 60.0;
+    /** Servo positions: the stopper shut and open, the colibri arms down and up, how fast the hood moves per second. The hood's servo has five turns and the hood only 24 degrees of range, which is up to position 0.41. */
     private static final double STOPPER_SHUT = 0.0;
     private static final double STOPPER_OPEN = 0.5;
     private static final double COLIBRI_DOWN = 0.0;
     private static final double COLIBRI_UP = 0.4;
-    private static final double HOOD_PER_SECOND = 0.5;
+    private static final double HOOD_PER_SECOND = 0.2;
 
     private DcMotor frontLeft;
     private DcMotor backLeft;
@@ -64,14 +78,19 @@ public final class BiobuzzStubTeleOp extends OpMode {
     private DcMotor backRight;
     private DcMotor intake;
     private DcMotor indexer;
-    private DcMotor shooterLeft;
-    private DcMotor shooterRight;
+    private DcMotorEx shooterLeft;
+    private DcMotorEx shooterRight;
     private Servo hood;
     private Servo stopper;
     private Servo colibriLeft;
     private Servo colibriRight;
     private double hoodPosition;
+    private boolean lastA;
+    private final BiobuzzAutoShoot autoShoot = new BiobuzzAutoShoot();
     private long lastLoopNanos;
+    private double lastTurretDegrees;
+    private double lastHeadingDegrees;
+    private final BiobuzzPoseEstimator estimator = new BiobuzzPoseEstimator(null);
     private GoBildaPinpointDriver odo;
     private Limelight3A limelight;
     private CRServo turretServo;
@@ -110,8 +129,8 @@ public final class BiobuzzStubTeleOp extends OpMode {
 
         intake = hardwareMap.get(DcMotor.class, "intake");
         indexer = hardwareMap.get(DcMotor.class, "up");
-        shooterLeft = hardwareMap.get(DcMotor.class, "shooterLeft");
-        shooterRight = hardwareMap.get(DcMotor.class, "shooterRight");
+        shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
+        shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         for (DcMotor motor : new DcMotor[] {intake, indexer, shooterLeft, shooterRight}) {
             motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
@@ -170,32 +189,73 @@ public final class BiobuzzStubTeleOp extends OpMode {
         LLResult result = limelight.getLatestResult();
         boolean seen = result != null && result.isValid();
 
-        double turretPower = (gamepad1.left_bumper ? TURRET_POWER : 0.0) - (gamepad1.right_bumper ? TURRET_POWER : 0.0);
-        if (gamepad1.a && seen) {
-            // A positive bearing is a tag to the right, so the turret turns right (negative power) to centre it.
-            turretPower = Math.max(-AIM_LIMIT, Math.min(AIM_LIMIT, -AIM_GAIN * result.getTx()));
-        }
-        turretServo.setPower(turretPower);
         int[] pulses = octoquad.readAllEncoderData().positions;
-        telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f p0=%d p1=%d", turretDegrees(pulses), pulses[0], pulses[1]));
-
+        double turretDegrees = turretDegrees(pulses);
         long now = System.nanoTime();
         double seconds = lastLoopNanos == 0 ? 0.0 : (now - lastLoopNanos) / 1e9;
         lastLoopNanos = now;
-        hoodPosition = Math.max(0.0, Math.min(1.0,
+        double turretRate = seconds > 0 ? Math.abs(Math.IEEEremainder(turretDegrees - lastTurretDegrees, 360.0)) / seconds : 0.0;
+        double turnRate = seconds > 0
+                ? Math.abs(Math.IEEEremainder(pose.getHeading(AngleUnit.DEGREES) - lastHeadingDegrees, 360.0)) / seconds : 0.0;
+        lastTurretDegrees = turretDegrees;
+        lastHeadingDegrees = pose.getHeading(AngleUnit.DEGREES);
+
+        estimator.update(pose.getX(DistanceUnit.METER), pose.getY(DistanceUnit.METER), pose.getHeading(AngleUnit.RADIANS));
+        // A frame is some tens of milliseconds old, and the camera turns with the turret: while either turns fast the tags and the
+        // turret angle do not belong together, so those frames are left out.
+        if (seen && turretRate < TURRET_RATE_LIMIT && turnRate < TURN_RATE_LIMIT) {
+            List<BiobuzzPoseEstimator.Sighting> sightings = new ArrayList<>();
+            for (FiducialResult tag : result.getFiducialResults()) {
+                Position at = tag.getTargetPoseCameraSpace().getPosition().toUnit(DistanceUnit.METER);
+                sightings.add(new BiobuzzPoseEstimator.Sighting(tag.getFiducialId(), at.x, at.y, at.z));
+            }
+            estimator.correct(sightings, Math.toRadians(turretDegrees));
+        }
+        BiobuzzPoseEstimator.Pose estimate = estimator.pose();
+        telemetry.addData("Estimate", estimate == null
+                ? "none yet: the camera has not seen two tags together"
+                : String.format(Locale.ROOT, "x=%.3f y=%.3f h=%.1f fixes=%d",
+                        estimate.x(), estimate.y(), Math.toDegrees(estimate.heading()), estimator.fixes()));
+
+        double flywheelTicks = 0.5 * (shooterLeft.getVelocity() + shooterRight.getVelocity());
+        double runtime = getRuntime();
+        if (gamepad1.a && !lastA) {
+            autoShoot.press(runtime, hoodPosition);
+        }
+        lastA = gamepad1.a;
+        BiobuzzAutoShoot.Command auto = autoShoot.update(runtime, estimate, turretDegrees, flywheelTicks, turnRate);
+        boolean automatic = autoShoot.active();
+        telemetry.addData("Aim", automatic ? autoShoot.aim(estimate, turretDegrees) : "off");
+        telemetry.addData("AutoShoot", autoShoot.state() + ": " + autoShoot.status());
+
+        double turretPower = (gamepad1.left_bumper ? TURRET_POWER : 0.0) - (gamepad1.right_bumper ? TURRET_POWER : 0.0);
+        if (automatic) {
+            turretPower = auto.turretPower;
+        }
+        turretServo.setPower(turretPower);
+        telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f p0=%d p1=%d", turretDegrees, pulses[0], pulses[1]));
+
+        // The hood: the D-pad by hand, or where the automatic shot wants it.
+        hoodPosition = automatic ? auto.hoodPosition : Math.max(0.0, Math.min(BiobuzzAutoShoot.HOOD_MAX_POSITION,
                 hoodPosition + HOOD_PER_SECOND * seconds * ((gamepad1.dpad_up ? 1 : 0) - (gamepad1.dpad_down ? 1 : 0))));
         hood.setPosition(hoodPosition);
-        stopper.setPosition(gamepad1.x ? STOPPER_OPEN : STOPPER_SHUT);
+        boolean stopperOpen = automatic ? auto.stopperOpen : gamepad1.x;
+        stopper.setPosition(stopperOpen ? STOPPER_OPEN : STOPPER_SHUT);
         colibriLeft.setPosition(gamepad1.y ? COLIBRI_UP : COLIBRI_DOWN);
         colibriRight.setPosition(gamepad1.y ? COLIBRI_UP : COLIBRI_DOWN);
-        intake.setPower(gamepad1.left_trigger > 0.3 ? 0.8 : 0.0);
-        double flywheels = gamepad1.right_trigger > 0.3 ? 0.6 : 0.0;
+
+        // The intake is by hand. Balls come in against the shut stopper: while the left trigger runs the intake the indexer
+        // carries them slowly up to it (too slowly to feed the flywheels), and they wait there, preloaded, until a shot.
+        boolean intaking = gamepad1.left_trigger > 0.3;
+        intake.setPower(intaking ? INTAKE_POWER : 0.0);
+        double flywheels = automatic ? auto.flywheelPower : gamepad1.right_trigger > 0.3 ? 0.6 : 0.0;
         shooterLeft.setPower(flywheels);
         shooterRight.setPower(flywheels);
-        indexer.setPower(gamepad1.b ? 0.7 : 0.0);
-        telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.2f stopper=%s colibri=%s intake=%s flywheels=%s indexer=%s",
-                hoodPosition, gamepad1.x ? "open" : "shut", gamepad1.y ? "up" : "down",
-                gamepad1.left_trigger > 0.3 ? "on" : "off", flywheels > 0 ? "on" : "off", gamepad1.b ? "on" : "off"));
+        double indexerPower = gamepad1.b ? FEED_POWER : intaking && !stopperOpen ? STAGING_POWER : 0.0;
+        indexer.setPower(automatic ? auto.indexerPower : indexerPower);
+        telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.2f stopper=%s colibri=%s intake=%s flywheels=%.0f indexer=%s",
+                hoodPosition, stopperOpen ? "open" : "shut", gamepad1.y ? "up" : "down",
+                intaking ? "on" : "off", flywheelTicks, automatic ? (auto.indexerPower > 0 ? "feeding" : "off") : indexerPower > 0 ? "on" : "off"));
 
         if (seen) {
             StringBuilder ids = new StringBuilder();

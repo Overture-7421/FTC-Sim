@@ -17,9 +17,9 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 |---|---|
 | Chassis | Generic 18 inch mecanum (0.36 m wheelbase and track) with the fitted losses; mass and wheel diameter come from the mapping. Without all four wheels mapped there is no drivetrain. |
 | Hubs | Control Hub (address 173, embedded) and Expansion Hub (address 2). |
-| Storage | One path of three points holding three pieces. A session or world reset starts it full: DECODE two purple and a green artifact, BIOBUZZ three POLLEN (`FieldRun.robotPreloads`). |
+| Storage | One path holding three pieces (DECODE's: three points; BIOBUZZ's: seven, through the indexer of the CAD, [biobuzz-cad](biobuzz-cad.md)). A session or world reset starts it full: DECODE two purple and a green artifact, BIOBUZZ three POLLEN (`FieldRun.robotPreloads`). |
 | Intake, conveyor | The intake takes in the game's pieces (DECODE 0.10 to 0.15 m across, BIOBUZZ 0.06 to 0.085 m) in a zone in front while its roller turns in at 10 rad/s or more. The roller (radius 0.025 m) drives the first 0.20 m of the path; the conveyor (radius 0.02 m) drives from 0.15 m on. |
-| Shooter | Launcher 55 degrees up and forward, efficiency 0.49, flywheels of 0.05 m radius. A piece leaves when it is at the end of the path, the first conveyor motor feeds forward at 20 rad/s or more, and the flywheels spin. Exit velocity = chassis velocity + launch direction x efficiency x the flywheels' average rim speed; the flywheels pay the piece's kinetic energy, so a shot slows them. No spin, no air drag. |
+| Shooter | Launcher 55 degrees up and forward (DECODE; BIOBUZZ's 44 degrees plus the hood, from an opening in front of the flywheels that turns with the turret), efficiency 0.49, flywheels of 0.05 m radius. A piece leaves when it is at the end of the path, the first conveyor motor feeds forward at 20 rad/s or more, and the flywheels spin. Exit velocity = chassis velocity + launch direction x efficiency x the flywheels' average rim speed; the flywheels pay the piece's kinetic energy, so a shot slows them. No spin, no air drag. |
 | Sensors, camera | Found by the driver class the code asks for, under any name ([adding a device](../architecture/adding-a-device.md)): goBILDA Pinpoint ([page](../devices/pinpoint.md)), REV colour sensor ([page](../devices/color-sensor.md)), Control Hub IMU ([page](../devices/bno055-imu.md)), Limelight ([page](../devices/limelight.md)), and on a robot whose turret has encoders the OctoQuad ([page](../devices/octoquad.md)). |
 
 **Unsupported and unmapped devices.** A device the design has no model for (an external IMU, a second sensor of a kind, a webcam, an OctoQuad on a robot that has none) is unsupported and listed among the session's problems. A motor, servo or pin missing from the mapping gets a free port, appears in `SessionStatus.unmapped`, and the problems list says the name is not in the mapping. An unmapped servo accepts commands and does nothing; an unmapped digital pin reads high (hub pull-up); an unmapped analog pin reads 0 V.
@@ -33,8 +33,8 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 | `name` | The robot's name. | Project folder name |
 | `motors` | Each motor by the name the code gives it: slot, model, Mirrored. At most 8. | none |
 | `massKg` | Mass, 1 to 40 kg. | 11.3 |
-| `wheelDiameterMm` | Drive wheel diameter, 40 to 200 mm. | 96 |
-| `driveMotor` | Catalogue motor on all four wheels (`MotorCatalog`, `Catalogue.motors()`). | `goBILDA-5203-435` |
+| `wheelDiameterMm` | Drive wheel diameter, 40 to 200 mm. | 96 (BIOBUZZ: the CAD's 112 when left at 96) |
+| `driveMotor` | Catalogue motor on all four wheels, behind the reduction to the wheel (`MotorCatalog`, `Catalogue.motors()`). | `goBILDA-5203-435` (BIOBUZZ: `swyft-spike-12.7`, the SWYFT Spike 550 motor at 12.7:1 to the wheel, when left at the default) |
 | `turretRatio` | BIOBUZZ only: motor (or servo) turns per turret turn, above 0. | 1 |
 | `turret` | BIOBUZZ only, see below: the servo, the encoders, the axis and whether the Limelight turns with the turret. | none |
 | `hubLogo`, `hubUsb` | Which way the Control Hub's logo and USB ports face (`UP`, `DOWN`, `FORWARD`, `BACKWARD`, `LEFT`, `RIGHT`), at right angles. | `UP`, `FORWARD` |
@@ -46,9 +46,23 @@ Any other field (the bare floor too) gets DECODE's robot. **A part exists only w
 | Model | A catalogue motor id. Empty means the part's usual motor (`RobotMapping.usualModel`): the bare motor (`goBILDA-bare-6000`) for flywheels, the 435 rpm one otherwise. Wheels use `driveMotor`; their own model stays empty. |
 | Mirrored | The motor is mounted the other way round, so positive power turns its part backwards. Set it as the code does: Hornet inverts `frontLeft`, `backLeft` (Pedro's `REVERSE`) and `upMotor` (`setInverted(true)`) and nothing else. On a wheel it is the motor's direction. An unmirrored conveyor feeds the shooter turning forward, a mirrored one backward (Hornet's belt is mirrored). A mirrored intake roller takes pieces in turning backward. Shooter wheels that get the same power are all unmirrored; if one is mirrored and the other not, one spins against the other, the shot falls short and the session reports a problem. |
 | Ports | Two hubs of four ports, so a ninth motor is a problem. Wheels take Control Hub ports 0 to 3 (front left 0, rear left 1, front right 2, rear right 3); the others take the Expansion Hub first, then the Control Hub's free ports. Code finds motors by name, so ports are never asked. |
-| Turret | Ratio 3.5 means 3.5 motor turns per turret turn; no mechanical limit; zero is forward at session start. The launch direction turns about the robot's Z axis (positive left) by `sign * shaftAngle / ratio` (`PlantView.shaftAngleRad`, radians since the session began; `sign` -1 if mirrored). The first mapped turret motor aims. Only the direction turns: the piece still leaves from the end of the path. |
+| Turret | Ratio 3.5 means 3.5 motor turns per turret turn; no mechanical limit; zero is forward at session start. The launch direction turns about the robot's Z axis (positive left) by `sign * shaftAngle / ratio` (`PlantView.shaftAngleRad`, radians since the session began; `sign` -1 if mirrored). The first mapped turret motor aims. On DECODE's generic path only the direction turns and the piece leaves from the end of the path; on BIOBUZZ's the stretch of the path inside the turret and the opening the shot leaves from turn with it ([biobuzz-cad](biobuzz-cad.md)). |
 
 **The turret has three ways to be verified.** A motor turret by a fixture only (`MechanismsSessionTest`, the `Turret Aim` OpMode: a P loop on a "turret" motor; a preloaded piece leaves along the held heading, 0, +45, -90 degrees, -45 with a mirrored motor). A servo turret by `MechanismsSessionTest` with the `Turret Servo` fixture. The whole BIOBUZZ robot by `BiobuzzStubSessionTest` ([biobuzz-stub](biobuzz-stub.md)). Hornet's code is DECODE's, so no team program of the game exists yet.
+
+### BIOBUZZ's motors and servos
+
+From the team's table of its mechanisms (the part is the simulator's model of it, `RobotDesign` and `MotorCatalog`/`ServoCatalog`):
+
+| Mechanism | Motor or servo | Ratio | In the simulator |
+|---|---|---|---|
+| Intake and indexer (2) | goBILDA Yellow Jacket | 2:1 | `goBILDA-5203-435` (the table gives no rpm, so the usual 13.7:1 one), roller turns at motor / 2 (`INTAKE_RATIO`, `CONVEYOR_RATIO`) |
+| Shooter (2) | goBILDA Yellow Jacket, bare | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`; a ball leaves at 0.49 of the rim speed of a 3 in wheel, which is the motor's speed times 0.0381 m / 1.4333 (`BIOBUZZ_FLYWHEEL_RADIUS_M`, `FLYWHEEL_RATIO`) |
+| Chassis (4) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-12.7`: 6000 rpm, 1.47 kg cm and 9.2 A at stall behind 12.7:1, 112 mm wheels; its encoder counts 28 per motor turn |
+| Colibri arms (2) | goBILDA Torque servo | 40/30 servo to shaft | `gobilda-2000-torque`, `COLIBRI_RATIO` |
+| Hood | goBILDA Torque servo | 730/24 = 30.4167 servo to hood | `gobilda-2000-torque`, `HOOD_RATIO` |
+| Turret | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V) |
+| Stopper | goBILDA Torque servo | 1:1 | `gobilda-2000-torque`; it holds the balls at the foot of the column while shut (below) |
 
 ### A turret turned by a continuous-rotation servo
 
@@ -77,11 +91,11 @@ The BIOBUZZ robot turns its turret with a continuous-rotation servo (Axon Mini+)
 
 ### Positional servos: the hood, the stopper and the colibri arms
 
-The BIOBUZZ robot has four more servos, goBILDA Torque servos that go to a position (`servo.setPosition`). Each is mapped by its name under `turret` (`hood`, `stopper`, `colibriLeft`, `colibriRight`, each `{ "name", "model", "mirrored" }`, model empty for `gobilda-2000-torque`) and takes a Control Hub servo port after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees at the servo's top speed (4.4 rad/s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
+The BIOBUZZ robot has four more servos, goBILDA Torque servos that go to a position (`servo.setPosition`). Each is mapped by its name under `turret` (`hood`, `stopper`, `colibriLeft`, `colibriRight`, each `{ "name", "model", "mirrored" }`, model empty for `gobilda-2000-torque`, or `gobilda-2000-torque-5turn` for the hood: its 730 degrees of servo for 24 degrees of hood need the 5-turn version) and takes a Control Hub servo port after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (4.4 rad/s, so a whole 5-turn range takes 7 s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
 
 | Part | What it does in the simulation |
 |---|---|
-| Hood | Sets the launch elevation: 44 degrees plus the hood's angle, which is 1 degree plus the servo's angle over 30.42 (the 730:24 gears), so 45 degrees at position 0 and 54.9 at position 1. Without a hood servo the launcher is at its fixed 55 degrees |
+| Hood | Sets the launch elevation: 44 degrees plus the hood's angle, which is 1 degree plus the servo's angle over 30.42 (the 730:24 gears), up to the hood's stop at 25 degrees (the CAD's range): 45 degrees at position 0, 69 from position 0.41 of the 5-turn servo on (`HOOD_RANGE_RADIANS`). Without a hood servo the launcher is at its fixed 55 degrees |
 | Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 60 degrees (position 0.2), whatever the belt and flywheels do. Without a stopper servo nothing holds it |
 | Colibri arms | Moved in the picture only. They change nothing in the simulation |
 

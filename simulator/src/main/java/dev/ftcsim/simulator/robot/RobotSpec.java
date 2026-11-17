@@ -86,8 +86,14 @@ public record RobotSpec(
      *
      * @param ratio turns of the servo for one turn of the part; above 0
      * @param rest  the joint's value in radians when the servo's shaft is at 0
+     * @param limit the most the joint can turn from {@code rest}, in radians (a hard stop), or infinity
      */
-    public record ServoJoint(RobotJoint joint, String servo, double ratio, double rest) {}
+    public record ServoJoint(RobotJoint joint, String servo, double ratio, double rest, double limit) {
+        /** A joint with no stop short of the servo's travel. */
+        public ServoJoint(RobotJoint joint, String servo, double ratio, double rest) {
+            this(joint, servo, ratio, rest, Double.POSITIVE_INFINITY);
+        }
+    }
 
     /**
      * A motor port and what its motor turns: exactly one of {@code wheel} and {@code shaft}.

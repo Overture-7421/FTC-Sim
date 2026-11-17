@@ -243,6 +243,73 @@ class MechanismsTest {
     }
 
     @Test
+    void theStretchOfAPathInsideATurretTurnsWithItAndTheShotLeavesFromTheMuzzleTurnedToo() {
+        // The path enters at the front, rises to a point on the turret's axis (0.10, 0) and ends 0.2 m ahead of it, inside the turret.
+        StorageSpec turned = new StorageSpec(
+                "magazine", 3, List.of(ENTRANCE, new Vec3(0.10, 0, 0.20), new Vec3(0.30, 0, 0.20)),
+                List.of(new StorageSpec.Drive("intake", 0.025, 1, 0.0, 0.25), new StorageSpec.Drive("up", 0.02, 1, 0.1, 1.0)),
+                new StorageSpec.Turned(1, 0.10, 0.0));
+        LaunchSpec shooter = shooter();
+        LaunchSpec withMuzzle = new LaunchSpec(
+                shooter.name(), shooter.storage(), shooter.active(), shooter.wheels(), shooter.efficiency(), shooter.direction(),
+                shooter.dribbleSpeed(), new LaunchSpec.Turret("turret", 1.0, 1), null, new Vec3(0.40, 0, 0.35));
+        mechanisms = new Mechanisms(List.of(turned), List.of(intakeZone()), List.of(withMuzzle), plants, Map.of(PIECE_KIND, PIECE));
+        plants.speeds.put("intake", 40.0);
+        plants.speeds.put("up", STAGING);
+        drop(1000, 0.30, 0.0);
+        step(600);
+        assertEquals(List.of(1000), mechanisms.contents("magazine"));
+
+        Vec3 forward = mechanisms.carried().get(0).center();
+        assertEquals(0.30, forward.x(), 0.01, "turret facing forward: the piece waits at the end of the path");
+        assertEquals(0.0, forward.y(), 0.01);
+
+        plants.angles.put("turret", Math.PI / 2);
+        Vec3 left = mechanisms.carried().get(0).center();
+        assertEquals(0.10, left.x(), 0.01, "a quarter turn left takes the end of the path to the left of the axis");
+        assertEquals(0.20, left.y(), 0.01);
+        assertEquals(0.20, left.z(), 0.01, "its height does not change");
+
+        plants.speeds.put("shooterLeft", 100.0);
+        plants.speeds.put("shooterRight", -100.0);
+        plants.speeds.put("up", FEEDING);
+        world.step();
+        mechanisms.step(DT, robot, world.snapshot(), world);
+        BodyPose shot = world.bodyPose(1000);
+        assertEquals(0.10, shot.x(), 0.05, "the shot leaves from the muzzle, which turned with the turret");
+        assertEquals(0.30, shot.y(), 0.05);
+        assertEquals(0.35, shot.z(), 0.05);
+    }
+
+    @Test
+    void aShutStopperHoldsPiecesAtItsGateAndAnOpenOneLetsThemThroughToBeLaunched() {
+        StorageSpec gated = new StorageSpec(
+                "magazine", 3, List.of(ENTRANCE, new Vec3(0.10, 0, 0.10), STAGE),
+                List.of(new StorageSpec.Drive("intake", 0.025, 1, 0.0, 0.25), new StorageSpec.Drive("up", 0.02, 1, 0.1, 1.0)),
+                null, new StorageSpec.Gate(1, "turret", Math.PI / 2));
+        mechanisms = new Mechanisms(List.of(gated), List.of(intakeZone()), List.of(shooter()), plants, Map.of(PIECE_KIND, PIECE));
+        double gate = ENTRANCE.minus(new Vec3(0.10, 0, 0.10)).length();
+        plants.speeds.put("intake", 40.0);
+        plants.speeds.put("up", FEEDING);
+        plants.speeds.put("shooterLeft", 100.0);
+        plants.speeds.put("shooterRight", -100.0);
+        drop(1000, 0.30, 0.0);
+        step(600);
+
+        // The servo ("turret" here) is at 0, under a quarter turn: the stopper is shut.
+        assertEquals(List.of(1000), mechanisms.contents("magazine"), "held, not launched, with the conveyor at its fastest");
+        assertEquals(0.0, mechanisms.carried().get(0).center().minus(robot.pointToField(new Vec3(0.10, 0, 0.10))).length(), 0.01);
+        assertTrue(mechanisms.canLoad("magazine", PIECE_KIND));
+        assertTrue(gate > 0.0);
+
+        plants.angles.put("turret", Math.PI / 2);
+        step(240);
+
+        assertTrue(world.hasPiece(1000), "with the stopper open the piece goes on and is launched");
+        assertEquals(List.of(), mechanisms.contents("magazine"));
+    }
+
+    @Test
     void aTurretThatNamesAMotorTheRobotLacksIsRefused() {
         assertThrows(IllegalArgumentException.class, () -> new Mechanisms(
                 List.of(magazine()), List.of(), List.of(withTurret(new LaunchSpec.Turret("ghost", 1.0, 1))), plants, Map.of()));

@@ -17,6 +17,8 @@ public final class ServoCatalog {
     public static final String AXON_MINI_PLUS = "axon-mini-plus";
     public static final String AXON_MAX = "axon-max";
     public static final String GOBILDA_TORQUE = "gobilda-2000-torque";
+    /** The same servo with five turns of travel (1800 degrees), as the hood needs: 730 degrees of servo for its 24 degrees. */
+    public static final String GOBILDA_TORQUE_5_TURN = "gobilda-2000-torque-5turn";
 
     /** The usual servo of a mechanism, which moves to a position: the goBILDA Torque servo. */
     public static final String USUAL_POSITIONAL = GOBILDA_TORQUE;
@@ -27,15 +29,17 @@ public final class ServoCatalog {
     /** The time constant of every servo's speed response, estimated. */
     static final double LAG_SECONDS = 0.03;
 
-    /** One servo: its no-load speed on a 5 V port. */
-    record Model(String id, double noLoadRadPerSec) {}
+    /** One servo: its no-load speed on a 5 V port and, for a positional one, the travel from position 0 to 1. */
+    record Model(String id, double noLoadRadPerSec, double travelRadians) {}
 
     private static final Map<String, Model> MODELS = new TreeMap<>();
 
     static {
-        MODELS.put(AXON_MINI_PLUS, new Model(AXON_MINI_PLUS, fromSecondsPer60Degrees(0.110, 0.090)));
-        MODELS.put(AXON_MAX, new Model(AXON_MAX, fromSecondsPer60Degrees(0.140, 0.115)));
-        MODELS.put(GOBILDA_TORQUE, new Model(GOBILDA_TORQUE, fromRpm(40.0, 50.0)));
+        double turn = Math.toRadians(300.0);
+        MODELS.put(AXON_MINI_PLUS, new Model(AXON_MINI_PLUS, fromSecondsPer60Degrees(0.110, 0.090), turn));
+        MODELS.put(AXON_MAX, new Model(AXON_MAX, fromSecondsPer60Degrees(0.140, 0.115), turn));
+        MODELS.put(GOBILDA_TORQUE, new Model(GOBILDA_TORQUE, fromRpm(40.0, 50.0), turn));
+        MODELS.put(GOBILDA_TORQUE_5_TURN, new Model(GOBILDA_TORQUE_5_TURN, fromRpm(40.0, 50.0), Math.toRadians(1800.0)));
     }
 
     private ServoCatalog() {}
@@ -64,7 +68,7 @@ public final class ServoCatalog {
 
     /** A plant for the named servo used as a positional one, mounted {@code mirrored} or not. */
     public static PositionServoPlant positionPlant(String id, boolean mirrored) {
-        return new PositionServoPlant(noLoadRadPerSec(id), mirrored);
+        return new PositionServoPlant(noLoadRadPerSec(id), mirrored, model(id).travelRadians());
     }
 
     private static Model model(String id) {

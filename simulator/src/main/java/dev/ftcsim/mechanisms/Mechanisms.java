@@ -32,6 +32,7 @@ public final class Mechanisms {
     public record Carried(int entityId, int kind, Vec3 center, double radiusM) {}
 
     private static final double AT_END_TOLERANCE_M = 0.005;
+    private static final double GATE_TOLERANCE_M = 1e-6;
     private static final double EJECT_SPEED_MPS = 0.3;
     private static final double OPPOSED_MPS = 0.5;
 
@@ -55,6 +56,11 @@ public final class Mechanisms {
         /** Front of the path first, so that each piece is blocked by the one before it. */
         final List<Piece> pieces = new ArrayList<>();
 
+        /** Where the stopper across the path is, metres along it. */
+        double gateS = Double.NaN;
+        /** What turns the stretch of the path inside the turret, or null. */
+        LaunchSpec.Turret turret;
+
         Storage(StorageSpec spec) {
             this.spec = spec;
             this.cumulative = new double[spec.path().size()];
@@ -62,6 +68,9 @@ public final class Mechanisms {
                 cumulative[i] = cumulative[i - 1] + spec.path().get(i).minus(spec.path().get(i - 1)).length();
             }
             this.length = cumulative[cumulative.length - 1];
+            if (spec.gate() != null) {
+                this.gateS = cumulative[spec.gate().point()];
+            }
         }
 
         boolean hasRoomFor(double radius) {
@@ -123,6 +132,9 @@ public final class Mechanisms {
             for (StorageSpec.Drive drive : spec.drives()) {
                 requireShaft(plants, drive.motor(), "storage '" + spec.name() + "'");
             }
+            if (spec.gate() != null) {
+                requireShaft(plants, spec.gate().servo(), "the gate of storage '" + spec.name() + "'");
+            }
         }
         for (CaptureSpec capture : captures) {
             requireStorage(capture.storage(), "intake '" + capture.name() + "'");
@@ -134,6 +146,7 @@ public final class Mechanisms {
             launch.wheels().forEach(wheel -> requireShaft(plants, wheel.motor(), "launcher '" + launch.name() + "'"));
             if (launch.turret() != null) {
                 requireShaft(plants, launch.turret().motor(), "launcher '" + launch.name() + "'");
+                storages.get(launch.storage()).turret = launch.turret();
             }
             if (launch.hood() != null) {
                 requireShaft(plants, launch.hood().servo(), "launcher '" + launch.name() + "'");
@@ -185,6 +198,7 @@ public final class Mechanisms {
 
     private void advance(Storage storage, double dt, BodyPose chassis, WorldSnapshot snapshot, PhysicsWorld world) {
         List<Piece> pieces = storage.pieces;
+        boolean held = gateClosed(storage);
         for (int i = 0; i < pieces.size(); i++) {
             Piece piece = pieces.get(i);
             double speed = 0.0;
@@ -196,6 +210,9 @@ public final class Mechanisms {
             double limit = i == 0
                     ? storage.length
                     : pieces.get(i - 1).s - (pieces.get(i - 1).radius + piece.radius);
+            if (held && piece.s <= storage.gateS + GATE_TOLERANCE_M) {
+                limit = Math.min(limit, storage.gateS);
+            }
             piece.s = Math.min(piece.s + speed * dt, limit);
         }
         if (!pieces.isEmpty() && pieces.get(pieces.size() - 1).s < 0.0) {
@@ -239,7 +256,7 @@ public final class Mechanisms {
         double fromWheels = launch.efficiency() * surface;
         double exitSpeed = Math.max(launch.dribbleSpeed(), fromWheels);
 
-        Vec3 exit = storage.positionAt(storage.length);
+        Vec3 exit = launch.muzzle() == null ? place(storage, storage.length) : turn(storage, launch.muzzle());
         Vec3 velocity = chassis.velocityOfPoint(exit).plus(chassis.directionToField(aim(launch)).times(exitSpeed));
         world.spawnPiece(piece.id, piece.kind, spec, vector(chassis.pointToField(exit)), vector(velocity));
         storage.pieces.remove(0);
@@ -307,6 +324,30 @@ public final class Mechanisms {
         return new Vec3(direction.x() * cos - direction.y() * sin, direction.x() * sin + direction.y() * cos, direction.z());
     }
 
+    /** Where a piece {@code s} metres along the storage's path is in the robot frame, turned with the turret where the path is inside it. */
+    private Vec3 place(Storage storage, double s) {
+        StorageSpec.Turned turned = storage.spec.turned();
+        Vec3 point = storage.positionAt(s);
+        if (turned == null || s < storage.cumulative[turned.fromPoint()]) {
+            return point;
+        }
+        return turn(storage, point);
+    }
+
+    /** A point of the robot frame, given with the turret facing forward, turned with the turret about the storage's axis. */
+    private Vec3 turn(Storage storage, Vec3 point) {
+        StorageSpec.Turned turned = storage.spec.turned();
+        if (turned == null || storage.turret == null) {
+            return point;
+        }
+        double yaw = storage.turret.yawRadians(plants.shaftAngleRad(storage.turret.motor()));
+        double cos = StrictMath.cos(yaw);
+        double sin = StrictMath.sin(yaw);
+        double dx = point.x() - turned.axisX();
+        double dy = point.y() - turned.axisY();
+        return new Vec3(turned.axisX() + dx * cos - dy * sin, turned.axisY() + dx * sin + dy * cos, point.z());
+    }
+
     private void capture(
             CaptureSpec capture,
             Storage storage,
@@ -351,7 +392,7 @@ public final class Mechanisms {
         }
         for (Storage storage : storages.values()) {
             for (Piece piece : storage.pieces) {
-                carried.add(new Carried(piece.id, piece.kind, lastPose.pointToField(storage.positionAt(piece.s)), piece.radius));
+                carried.add(new Carried(piece.id, piece.kind, lastPose.pointToField(place(storage, piece.s)), piece.radius));
             }
         }
         carried.sort((a, b) -> Integer.compare(a.entityId(), b.entityId()));
@@ -401,13 +442,20 @@ public final class Mechanisms {
         return found.pieces.size() < found.spec.capacity() && nextFreeSpot(found, spec.radiusM()) >= 0.0;
     }
 
-    /** Where a piece loaded now would sit: as far forward as the pieces already there allow. */
-    private static double nextFreeSpot(Storage storage, double radius) {
+    /** Whether the storage has a stopper that is shut now. */
+    private boolean gateClosed(Storage storage) {
+        StorageSpec.Gate gate = storage.spec.gate();
+        return gate != null && plants.shaftAngleRad(gate.servo()) < gate.openRadians();
+    }
+
+    /** Where a piece loaded now would sit: as far forward as the pieces already there and a shut stopper allow. */
+    private double nextFreeSpot(Storage storage, double radius) {
+        double front = gateClosed(storage) ? storage.gateS : storage.length;
         if (storage.pieces.isEmpty()) {
-            return storage.length;
+            return front;
         }
         Piece rear = storage.pieces.get(storage.pieces.size() - 1);
-        return rear.s - (rear.radius + radius);
+        return Math.min(front, rear.s - (rear.radius + radius));
     }
 
     private Storage storage(String name) {

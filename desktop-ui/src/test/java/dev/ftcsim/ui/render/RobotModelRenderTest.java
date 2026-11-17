@@ -160,7 +160,7 @@ class RobotModelRenderTest {
         rest[RobotJoint.HOOD.ordinal()] = Math.toRadians(1.9);
 
         int[] front = shoot("biobuzz-cad-front", 30.0, 25.0, 1.4, 0.0, rest);
-        shoot("biobuzz-cad-side", 100.0, 15.0, 1.4, 0.0, rest);
+        shoot("biobuzz-cad-side", 90.0, 0.0, 1.2, 0.0, rest);
         shoot("biobuzz-cad-top", 0.0, 80.0, 1.4, 0.0, rest);
         int[] turned = shoot("biobuzz-cad-turret-90", 30.0, 25.0, 1.4, Math.PI / 2, rest);
         double[] moved = rest.clone();

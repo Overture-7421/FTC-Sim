@@ -48,6 +48,17 @@ class PositionServoPlantTest {
     }
 
     @Test
+    void aFiveTurnServoTravelsFiveTurnsFromPositionZeroToOne() {
+        PositionServoPlant plant = new PositionServoPlant(100.0, false, Math.toRadians(1800.0));
+
+        run(plant, 1.0, true, 1500, 0.004);
+        assertEquals(Math.toRadians(1800.0) * 0.5, plant.angleRadians(), 1e-9, "half way is two and a half turns");
+        run(plant, 1.0, true, 2400, 0.004);
+        assertEquals(Math.toRadians(1800.0), plant.angleRadians(), 1e-9);
+        assertThrows(IllegalArgumentException.class, () -> new PositionServoPlant(4.0, false, 0.0));
+    }
+
+    @Test
     void aMirroredServoStartsAtTheOtherEndAndTravelsTheOtherWay() {
         PositionServoPlant plant = new PositionServoPlant(100.0, true);
         assertEquals(PositionServoPlant.TRAVEL_RADIANS, plant.angleRadians());
