@@ -10,6 +10,7 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.CRServo;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
+import com.qualcomm.robotcore.hardware.Servo;
 import java.util.Locale;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -25,14 +26,20 @@ import org.firstinspires.ftc.robotcore.external.navigation.Pose2D;
  * <p>Left stick drives and strafes, right stick turns the robot. The bumpers turn the turret (left bumper to its left)
  * and A, held, turns it to centre the tag the Limelight sees. The turret's angle comes from its two REV Through Bore
  * Encoders on the OctoQuad, in absolute mode: one turns 5.5 times to the turret's one, the other 44/7 times, and the
- * difference of their turns tells which turn of the first the turret is on. The hardware names are the ones the robot's
- * configuration uses; the pod offsets are placeholders until they are measured on the CAD.
+ * difference of their turns tells which turn of the first the turret is on. The left trigger runs the intake, the right
+ * trigger the flywheels and B the indexer; X opens the stopper, Y raises the colibri arms and the D-pad's up and down
+ * raise and lower the hood. The hardware names are the ones the robot's configuration uses; the pod offsets are the
+ * CAD's, and the Limelight's mount is an estimate, as the CAD has no Limelight.
  */
 @TeleOp(name = "BIOBUZZ Stub", group = "Stub")
 public final class BiobuzzStubTeleOp extends OpMode {
-    /** Where the forward pod is along the robot's Y and the strafe pod along its X, in inches. Placeholders. */
-    private static final double FORWARD_POD_Y_INCHES = -4.467131;
-    private static final double STRAFE_POD_X_INCHES = -0.160124;
+    /**
+     * The odometry pods in the robot's CAD, from the centre of its four wheels: the forward-measuring pod sits 70.4 mm to the
+     * right of it (so -2.772 in to the left) and the strafe-measuring pod 58.9 mm ahead of it (2.319 in). The Pinpoint takes
+     * them as the left offset of the forward pod and the forward offset of the strafe pod.
+     */
+    private static final double FORWARD_POD_LEFT_INCHES = -2.772;
+    private static final double STRAFE_POD_FORWARD_INCHES = 2.319;
     private static final int TELEMETRY_INTERVAL_MS = 50;
     /** The pulse a REV Through Bore Encoder (version 2) sends over a turn, in microseconds. */
     private static final int PULSE_MIN_US = 4;
@@ -44,11 +51,27 @@ public final class BiobuzzStubTeleOp extends OpMode {
     /** Servo power per degree of Limelight bearing while A is held. */
     private static final double AIM_GAIN = 0.02;
     private static final double AIM_LIMIT = 0.4;
+    /** Servo positions: the stopper shut and open, the colibri arms down and up, how fast the hood moves per second. */
+    private static final double STOPPER_SHUT = 0.0;
+    private static final double STOPPER_OPEN = 0.5;
+    private static final double COLIBRI_DOWN = 0.0;
+    private static final double COLIBRI_UP = 0.4;
+    private static final double HOOD_PER_SECOND = 0.5;
 
     private DcMotor frontLeft;
     private DcMotor backLeft;
     private DcMotor frontRight;
     private DcMotor backRight;
+    private DcMotor intake;
+    private DcMotor indexer;
+    private DcMotor shooterLeft;
+    private DcMotor shooterRight;
+    private Servo hood;
+    private Servo stopper;
+    private Servo colibriLeft;
+    private Servo colibriRight;
+    private double hoodPosition;
+    private long lastLoopNanos;
     private GoBildaPinpointDriver odo;
     private Limelight3A limelight;
     private CRServo turretServo;
@@ -68,7 +91,7 @@ public final class BiobuzzStubTeleOp extends OpMode {
         }
 
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odopods");
-        odo.setOffsets(FORWARD_POD_Y_INCHES, STRAFE_POD_X_INCHES, DistanceUnit.INCH);
+        odo.setOffsets(FORWARD_POD_LEFT_INCHES, STRAFE_POD_FORWARD_INCHES, DistanceUnit.INCH);
         odo.setEncoderResolution(GoBildaPinpointDriver.GoBildaOdometryPods.goBILDA_4_BAR_POD);
         odo.setEncoderDirections(GoBildaPinpointDriver.EncoderDirection.REVERSED, GoBildaPinpointDriver.EncoderDirection.REVERSED);
         odo.resetPosAndIMU();
@@ -84,6 +107,22 @@ public final class BiobuzzStubTeleOp extends OpMode {
         octoquad.setChannelBankConfig(OctoQuad.ChannelBankConfig.ALL_PULSE_WIDTH);
         octoquad.setSingleChannelPulseWidthParams(0, PULSE_MIN_US, PULSE_MAX_US);
         octoquad.setSingleChannelPulseWidthParams(1, PULSE_MIN_US, PULSE_MAX_US);
+
+        intake = hardwareMap.get(DcMotor.class, "intake");
+        indexer = hardwareMap.get(DcMotor.class, "up");
+        shooterLeft = hardwareMap.get(DcMotor.class, "shooterLeft");
+        shooterRight = hardwareMap.get(DcMotor.class, "shooterRight");
+        for (DcMotor motor : new DcMotor[] {intake, indexer, shooterLeft, shooterRight}) {
+            motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+        }
+        hood = hardwareMap.get(Servo.class, "hood");
+        stopper = hardwareMap.get(Servo.class, "stopper");
+        colibriLeft = hardwareMap.get(Servo.class, "colibriLeft");
+        colibriRight = hardwareMap.get(Servo.class, "colibriRight");
+        stopper.setPosition(STOPPER_SHUT);
+        colibriLeft.setPosition(COLIBRI_DOWN);
+        colibriRight.setPosition(COLIBRI_DOWN);
+        hood.setPosition(hoodPosition);
     }
 
     /** Where the turret points, in degrees left of the robot's front, from the two absolute encoders. */
@@ -140,6 +179,24 @@ public final class BiobuzzStubTeleOp extends OpMode {
         int[] pulses = octoquad.readAllEncoderData().positions;
         telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f p0=%d p1=%d", turretDegrees(pulses), pulses[0], pulses[1]));
 
+        long now = System.nanoTime();
+        double seconds = lastLoopNanos == 0 ? 0.0 : (now - lastLoopNanos) / 1e9;
+        lastLoopNanos = now;
+        hoodPosition = Math.max(0.0, Math.min(1.0,
+                hoodPosition + HOOD_PER_SECOND * seconds * ((gamepad1.dpad_up ? 1 : 0) - (gamepad1.dpad_down ? 1 : 0))));
+        hood.setPosition(hoodPosition);
+        stopper.setPosition(gamepad1.x ? STOPPER_OPEN : STOPPER_SHUT);
+        colibriLeft.setPosition(gamepad1.y ? COLIBRI_UP : COLIBRI_DOWN);
+        colibriRight.setPosition(gamepad1.y ? COLIBRI_UP : COLIBRI_DOWN);
+        intake.setPower(gamepad1.left_trigger > 0.3 ? 0.8 : 0.0);
+        double flywheels = gamepad1.right_trigger > 0.3 ? 0.6 : 0.0;
+        shooterLeft.setPower(flywheels);
+        shooterRight.setPower(flywheels);
+        indexer.setPower(gamepad1.b ? 0.7 : 0.0);
+        telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.2f stopper=%s colibri=%s intake=%s flywheels=%s indexer=%s",
+                hoodPosition, gamepad1.x ? "open" : "shut", gamepad1.y ? "up" : "down",
+                gamepad1.left_trigger > 0.3 ? "on" : "off", flywheels > 0 ? "on" : "off", gamepad1.b ? "on" : "off"));
+
         if (seen) {
             StringBuilder ids = new StringBuilder();
             for (FiducialResult tag : result.getFiducialResults()) {
@@ -162,6 +219,10 @@ public final class BiobuzzStubTeleOp extends OpMode {
         frontRight.setPower(0);
         backRight.setPower(0);
         turretServo.setPower(0);
+        intake.setPower(0);
+        indexer.setPower(0);
+        shooterLeft.setPower(0);
+        shooterRight.setPower(0);
         limelight.stop();
     }
 }

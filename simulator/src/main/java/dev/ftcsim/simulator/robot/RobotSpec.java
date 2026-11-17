@@ -2,6 +2,7 @@ package dev.ftcsim.simulator.robot;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.session.RobotMapping;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.mechanisms.CaptureSpec;
 import dev.ftcsim.mechanisms.LaunchSpec;
 import dev.ftcsim.mechanisms.Mechanisms;
@@ -32,6 +33,7 @@ import java.util.Map;
  * @param imu         how the Control Hub's IMU is mounted
  * @param colorSensor where the colour sensor is
  * @param limelight   the Limelight's mount and pipeline
+ * @param joints      what the window's picture of the robot follows
  */
 public record RobotSpec(
         String name,
@@ -45,7 +47,8 @@ public record RobotSpec(
         List<LaunchSpec> launches,
         ImuMount imu,
         ColorSensor colorSensor,
-        Limelight limelight) {
+        Limelight limelight,
+        Joints joints) {
 
     public RobotSpec {
         hubs = List.copyOf(hubs);
@@ -54,7 +57,37 @@ public record RobotSpec(
         storages = List.copyOf(storages);
         captures = List.copyOf(captures);
         launches = List.copyOf(launches);
+        joints = joints == null ? Joints.NONE : joints;
     }
+
+    /**
+     * What the window's picture of the robot follows: the motors whose shafts turn its rollers and flywheel, and the
+     * servos that move its hood, stopper and colibri arms.
+     *
+     * @param intake   the intake roller's motor, or null
+     * @param conveyor the indexer's motor, or null
+     * @param flywheel the flywheel's motor, or null
+     * @param servos   the positional servos by the joint each moves
+     */
+    public record Joints(
+            String intake, int intakeSign, String conveyor, int conveyorSign, String flywheel, int flywheelSign,
+            List<ServoJoint> servos) {
+
+        /** A robot whose picture has nothing to follow. */
+        public static final Joints NONE = new Joints(null, 1, null, 1, null, 1, List.of());
+
+        public Joints {
+            servos = List.copyOf(servos);
+        }
+    }
+
+    /**
+     * A positional servo and the joint it moves: the joint's value is {@code rest + servo angle / ratio}.
+     *
+     * @param ratio turns of the servo for one turn of the part; above 0
+     * @param rest  the joint's value in radians when the servo's shaft is at 0
+     */
+    public record ServoJoint(RobotJoint joint, String servo, double ratio, double rest) {}
 
     /**
      * A motor port and what its motor turns: exactly one of {@code wheel} and {@code shaft}.
@@ -81,13 +114,21 @@ public record RobotSpec(
     public record Shaft(double loadInertiaKgM2, double frictionNmsPerRad) {}
 
     /**
-     * A continuous-rotation servo on a hub's servo port.
+     * A servo on a hub's servo port: the turret's is continuous-rotation, the mechanisms' go to positions.
      *
-     * @param hub   the hub address
-     * @param port  0..5
-     * @param model the catalogue id of the servo ({@link ServoCatalog})
+     * @param hub        the hub address
+     * @param port       0..5
+     * @param model      the catalogue id of the servo ({@link ServoCatalog})
+     * @param positional whether it goes to the position it is sent, and does not turn without end
+     * @param mirrored   for a positional servo, whether its travel runs the other way round
      */
-    public record Servo(int hub, int port, String model) {}
+    public record Servo(int hub, int port, String model, boolean positional, boolean mirrored) {
+
+        /** A continuous-rotation servo. */
+        public Servo(int hub, int port, String model) {
+            this(hub, port, model, false, false);
+        }
+    }
 
     /**
      * The robot's turret: what turns it, how, and what rides on it.

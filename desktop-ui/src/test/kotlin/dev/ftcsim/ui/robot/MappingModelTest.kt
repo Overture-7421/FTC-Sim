@@ -98,6 +98,33 @@ class MappingModelTest {
     }
 
     @Test
+    fun theMechanismServosAreOnThePageAndComeBackWithTheirModelsOnASave() {
+        val file = hornet().withMotors(hornet().motors().take(4)).withTurretParts(
+            RobotMapping.TurretParts(
+                null, emptyList(), 0.0, 0.0, false,
+                listOf(
+                    RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, RobotMapping.ServoMapping("hood", "gobilda-2000-torque", true)),
+                    RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, RobotMapping.ServoMapping("gate", "", false)),
+                ),
+            ),
+        )
+        val model = model(turret = true)
+        model.load(file)
+
+        assertEquals("hood", model.form.mechanismServos[RobotMapping.ServoRole.HOOD])
+        assertFalse(model.edited)
+        assertEquals(file, model.mapping())
+
+        model.edit { it.copy(mechanismServos = it.mechanismServos + (RobotMapping.ServoRole.COLIBRI_LEFT to "armL") + (RobotMapping.ServoRole.STOPPER to "")) }
+        val saved = model.mapping()!!.turretParts()
+
+        assertTrue(model.edited)
+        assertEquals(RobotMapping.ServoMapping("hood", "gobilda-2000-torque", true), saved.servoFor(RobotMapping.ServoRole.HOOD))
+        assertEquals("armL", saved.servoFor(RobotMapping.ServoRole.COLIBRI_LEFT)?.name())
+        assertNull(saved.servoFor(RobotMapping.ServoRole.STOPPER), "an empty name takes the servo off")
+    }
+
+    @Test
     fun anyChangeToWhatWasLoadedCanBeSavedAndChangingItBackCannot() {
         val model = model()
         model.load(hornet())

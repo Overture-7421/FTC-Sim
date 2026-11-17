@@ -117,6 +117,13 @@ final class ContractCodec {
         w.doubleBits(parts.axisX());
         w.doubleBits(parts.axisY());
         w.bool(parts.cameraOnTurret());
+        w.count(parts.mechanisms().size(), "the mechanism servos");
+        for (RobotMapping.MechanismServo mechanism : parts.mechanisms()) {
+            w.integer(mechanism.role().ordinal());
+            w.string(mechanism.servo().name());
+            w.string(mechanism.servo().model());
+            w.bool(mechanism.servo().mirrored());
+        }
     }
 
     private static RobotMapping readMapping(WireReader r) throws WireException {
@@ -144,7 +151,21 @@ final class ContractCodec {
             String model = r.string("a turret encoder model");
             encoders.add(new TurretEncoder(channel, model, r.doubleBits(), r.doubleBits(), r.bool()));
         }
-        TurretParts parts = new TurretParts(servo, encoders, r.doubleBits(), r.doubleBits(), r.bool());
+        double axisX = r.doubleBits();
+        double axisY = r.doubleBits();
+        boolean cameraOnTurret = r.bool();
+        int mechanismCount = r.count(4 + 2 * STRING_BYTES + 1, "the mechanism servos");
+        List<RobotMapping.MechanismServo> mechanisms = new ArrayList<>(mechanismCount);
+        RobotMapping.ServoRole[] roles = RobotMapping.ServoRole.values();
+        for (int i = 0; i < mechanismCount; i++) {
+            int role = r.integer();
+            if (role < 0 || role >= roles.length) {
+                throw new WireException("unknown servo role " + role);
+            }
+            mechanisms.add(new RobotMapping.MechanismServo(
+                    roles[role], new ServoMapping(r.string("a mechanism servo name"), r.string("a mechanism servo model"), r.bool())));
+        }
+        TurretParts parts = new TurretParts(servo, encoders, axisX, axisY, cameraOnTurret, mechanisms);
         return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts);
     }
 

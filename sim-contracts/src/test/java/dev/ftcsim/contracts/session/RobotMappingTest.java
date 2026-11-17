@@ -90,6 +90,30 @@ class RobotMappingTest {
     }
 
     @Test
+    void theMechanismServosNeedNamesAreOneToARoleAndCannotClashWithMotorsOrEachOther() {
+        RobotMapping.ServoMapping hood = new RobotMapping.ServoMapping("hood", "", false);
+        RobotMapping.MechanismServo asHood = new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, hood);
+
+        RobotMapping fine = RobotMapping.empty("Team").withTurretParts(
+                new RobotMapping.TurretParts(null, List.of(), 0, 0, false, List.of(asHood)));
+        assertEquals(List.of(), fine.problems(true));
+        assertEquals(hood, fine.turretParts().servoFor(RobotMapping.ServoRole.HOOD));
+        assertEquals(null, fine.turretParts().servoFor(RobotMapping.ServoRole.STOPPER));
+
+        RobotMapping twice = RobotMapping.empty("Team").withTurretParts(new RobotMapping.TurretParts(
+                null, List.of(), 0, 0, false,
+                List.of(asHood, new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("other", "", false)))));
+        assertTrue(twice.problems(true).contains("Two servos are the hood"), twice.problems(true).toString());
+
+        RobotMapping shared = with(motor("hood", Slot.SHOOTER)).withTurretParts(new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("gate", "", false), List.of(), 0, 0, false,
+                List.of(asHood, new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("gate", "", false)))));
+        List<String> problems = shared.problems(true);
+        assertTrue(problems.contains("hood is mapped as a motor and as the hood servo"), problems.toString());
+        assertTrue(problems.contains("gate is the servo of two parts"), problems.toString());
+    }
+
+    @Test
     void theTurretServoNeedsAFreeNameAndCannotShareTheTurretWithAMotor() {
         RobotMapping clash = with(motor("turretServo", Slot.TURRET))
                 .withTurretParts(new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(), 0, 0, false));

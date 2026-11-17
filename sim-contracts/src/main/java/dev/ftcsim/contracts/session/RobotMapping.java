@@ -130,6 +130,30 @@ public record RobotMapping(
         }
     }
 
+    /** What a servo of the BIOBUZZ robot other than the turret's does. */
+    public enum ServoRole {
+        /** The hood: its angle sets how high a piece leaves. */
+        HOOD,
+        /** The stopper that holds pieces in the indexer until it opens. */
+        STOPPER,
+        /** The left colibri arm, which lifts pieces out of the flower. */
+        COLIBRI_LEFT,
+        /** The right colibri arm. */
+        COLIBRI_RIGHT
+    }
+
+    /**
+     * A positional servo of the robot's code and the part it moves. The Torque servo of the BIOBUZZ robot is the usual
+     * one; {@code mirrored} is a servo mounted so that its position 0 is the end of its travel where 1 would be.
+     */
+    public record MechanismServo(ServoRole role, ServoMapping servo) {
+
+        public MechanismServo {
+            Objects.requireNonNull(role, "role");
+            Objects.requireNonNull(servo, "servo");
+        }
+    }
+
     /**
      * What else is on the turret of a robot that has one.
      *
@@ -138,19 +162,38 @@ public record RobotMapping(
      * @param axisX         where the turret turns about, metres ahead of the chassis centre
      * @param axisY         and metres to the left of it
      * @param cameraOnTurret whether the Limelight turns with the turret
+     * @param mechanisms    the positional servos of the hood, the stopper and the colibri arms, one at most for each role
      */
-    public record TurretParts(ServoMapping servo, List<TurretEncoder> encoders, double axisX, double axisY, boolean cameraOnTurret) {
+    public record TurretParts(
+            ServoMapping servo, List<TurretEncoder> encoders, double axisX, double axisY, boolean cameraOnTurret,
+            List<MechanismServo> mechanisms) {
 
         /** Nothing mapped: no servo, no encoders, the turret about the centre and the camera on the chassis. */
         public static final TurretParts NONE = new TurretParts(null, List.of(), 0.0, 0.0, false);
 
         public TurretParts {
             encoders = List.copyOf(encoders);
+            mechanisms = List.copyOf(mechanisms);
+        }
+
+        /** Parts without any mechanism servo. */
+        public TurretParts(ServoMapping servo, List<TurretEncoder> encoders, double axisX, double axisY, boolean cameraOnTurret) {
+            this(servo, encoders, axisX, axisY, cameraOnTurret, List.of());
+        }
+
+        /** The servo that moves the part of this role, or null. */
+        public ServoMapping servoFor(ServoRole role) {
+            for (MechanismServo mechanism : mechanisms) {
+                if (mechanism.role() == role) {
+                    return mechanism.servo();
+                }
+            }
+            return null;
         }
 
         /** Whether anything about the turret beyond its motors is mapped. */
         public boolean mapped() {
-            return servo != null || !encoders.isEmpty() || cameraOnTurret || axisX != 0.0 || axisY != 0.0;
+            return servo != null || !encoders.isEmpty() || cameraOnTurret || axisX != 0.0 || axisY != 0.0 || !mechanisms.isEmpty();
         }
     }
 
@@ -296,6 +339,25 @@ public record RobotMapping(
         }
         if (!(Math.abs(parts.axisX()) <= MAX_TURRET_AXIS_M && Math.abs(parts.axisY()) <= MAX_TURRET_AXIS_M)) {
             problems.add("The turret axis is within " + MAX_TURRET_AXIS_M + " m of the robot's centre");
+        }
+        Set<ServoRole> roles = new HashSet<>();
+        Set<String> servoNames = new HashSet<>();
+        if (parts.servo() != null) {
+            servoNames.add(parts.servo().name());
+        }
+        for (MechanismServo mechanism : parts.mechanisms()) {
+            String name = mechanism.servo().name();
+            String role = mechanism.role().name().toLowerCase(java.util.Locale.ROOT).replace('_', ' ');
+            if (!roles.add(mechanism.role())) {
+                problems.add("Two servos are the " + role);
+            }
+            if (name.isBlank()) {
+                problems.add("The " + role + " servo has no name");
+            } else if (motorNames.contains(name)) {
+                problems.add(name + " is mapped as a motor and as the " + role + " servo");
+            } else if (!servoNames.add(name)) {
+                problems.add(name + " is the servo of two parts");
+            }
         }
     }
 

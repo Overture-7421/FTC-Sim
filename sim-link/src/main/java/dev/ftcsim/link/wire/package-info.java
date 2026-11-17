@@ -89,6 +89,8 @@
  *       lists profiles
  *   <li>8: the mapping of {@code Open} ends with the turret parts (servo, absolute encoders, axis, camera on the turret),
  *       and the robot info of {@code Opened} ends with the id of the model the window draws the robot with
+ *   <li>9: the turret parts end with the positional servos of the hood, the stopper and the colibri arms (a count, then a
+ *       role, a name, a model and a mirrored flag each)
  * </ul>
  */
 package dev.ftcsim.link.wire;

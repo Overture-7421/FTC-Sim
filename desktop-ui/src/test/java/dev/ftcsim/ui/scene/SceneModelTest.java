@@ -94,16 +94,17 @@ class SceneModelTest {
     }
 
     @Test
-    void theBiobuzzRobotHasATurretBodyAboveItsChassisAndOtherRobotsHaveNone() {
+    void theBiobuzzRobotIsItsCadAndNotBoxesAndOtherRobotsAreBoxes() {
         RobotInfo biobuzz = new RobotInfo("robot", 0.4, 0.3, 0.2, List.of(), List.of(), List.of(), RobotInfo.BIOBUZZ_MODEL);
 
-        SceneModel.Part[] turret = SceneModel.of(null, biobuzz).parts(BodyKinds.TURRET);
+        SceneModel scene = SceneModel.of(null, biobuzz);
 
-        assertTrue(turret.length > 1, "a ring, a launcher and a camera");
-        for (SceneModel.Part part : turret) {
-            assertTrue(part.z() - part.reachZ() >= 0.1f - 1e-6f, "everything of the turret is above the chassis's top: " + part);
-        }
-        assertEquals(0, SceneModel.of(null, robot()).parts(BodyKinds.TURRET).length);
+        assertTrue(scene.robotModel() != null, "the build carries the model");
+        assertEquals(0, scene.parts(BodyKinds.CHASSIS).length, "the CAD stands in for the box");
+        assertEquals(0, scene.parts(BodyKinds.TURRET).length);
+        SceneModel plain = SceneModel.of(null, robot());
+        assertEquals(null, plain.robotModel());
+        assertTrue(plain.parts(BodyKinds.CHASSIS).length > 0);
     }
 
     @Test

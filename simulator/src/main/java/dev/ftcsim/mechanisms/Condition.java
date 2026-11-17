@@ -7,13 +7,19 @@ package dev.ftcsim.mechanisms;
  *
  * @param minRadPerSec the lowest speed that satisfies the condition, negative infinity for none
  * @param maxRadPerSec the highest speed that satisfies it, positive infinity for none
+ * @param onAngle      whether the range is of the shaft's angle in radians since the session began and not of its speed
  */
-public record Condition(String motor, double minRadPerSec, double maxRadPerSec) {
+public record Condition(String motor, double minRadPerSec, double maxRadPerSec, boolean onAngle) {
 
     public Condition {
         if (!(minRadPerSec <= maxRadPerSec)) {
-            throw new IllegalArgumentException("the speed range is empty: " + minRadPerSec + " .. " + maxRadPerSec);
+            throw new IllegalArgumentException("the range is empty: " + minRadPerSec + " .. " + maxRadPerSec);
         }
+    }
+
+    /** A condition on the shaft's speed. */
+    public Condition(String motor, double minRadPerSec, double maxRadPerSec) {
+        this(motor, minRadPerSec, maxRadPerSec, false);
     }
 
     /** Turning forward at least this fast. */
@@ -26,8 +32,13 @@ public record Condition(String motor, double minRadPerSec, double maxRadPerSec) 
         return new Condition(motor, Double.NEGATIVE_INFINITY, radPerSec);
     }
 
+    /** A servo whose shaft has turned at least this far, which is how far a gate must have opened. */
+    public static Condition angleAtLeast(String servo, double radians) {
+        return new Condition(servo, radians, Double.POSITIVE_INFINITY, true);
+    }
+
     boolean holds(PlantView plants) {
-        double speed = plants.shaftSpeedRadPerSec(motor);
-        return speed >= minRadPerSec && speed <= maxRadPerSec;
+        double value = onAngle ? plants.shaftAngleRad(motor) : plants.shaftSpeedRadPerSec(motor);
+        return value >= minRadPerSec && value <= maxRadPerSec;
     }
 }

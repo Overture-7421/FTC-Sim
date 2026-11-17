@@ -242,6 +242,63 @@ class MechanismsSessionTest {
         }
     }
 
+    /** The BIOBUZZ robot with a hood and a stopper, each on a positional servo, and no turret. */
+    private static RobotSpec hoodRobot() {
+        List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                null, List.of(), 0, 0, false,
+                List.of(
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hoodServo", "", false)),
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopperServo", "", false))));
+        RobotMapping mapping = new RobotMapping(
+                "hood rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), 1.0, MAPPING.hubLogo(), MAPPING.hubUsb(),
+                MAPPING.camera(), parts);
+        return RobotDesign.biobuzz().spec(mapping);
+    }
+
+    private static GamepadState hoodPad(float stickX, boolean flywheels, boolean conveyor, boolean open) {
+        return new GamepadState(
+                stickX, 0f, 0f, 0f, 0f, flywheels ? 1f : 0f, false, false, false, false, conveyor, open, false, false, false, false, false,
+                false, false, false, false);
+    }
+
+    /** Spins up the flywheels, runs the belt for 3 seconds and reports whether the piece left, and how steeply when it did. */
+    private static double[] hoodShot(float stickX, boolean stopperOpen) throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(hoodRobot(), new TestField(), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(1, session.preload("magazine", TestField.PIECE_KIND, 1));
+            int id = TestField.IN_RESERVE.get(0);
+            session.init("Hood Stopper");
+            session.start();
+            session.setGamepad(1, hoodPad(stickX, true, false, stopperOpen));
+            session.runFor(3 * SECOND);
+            session.setGamepad(1, hoodPad(stickX, true, true, stopperOpen));
+            for (int i = 0; i < 300 && !inWorld(session, id); i++) {
+                session.runFor(SECOND / 100);
+            }
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+            if (!inWorld(session, id)) {
+                return new double[] {0.0, 0.0};
+            }
+            BodyPose piece = session.world().bodyPose(id);
+            return new double[] {1.0, Math.toDegrees(Math.atan2(piece.vz(), Math.hypot(piece.vx(), piece.vy())))};
+        }
+    }
+
+    @Test
+    void theStopperHoldsThePieceUntilItsServoOpensAndTheHoodSetsHowSteeplyItLeaves() throws IOException {
+        double[] closed = hoodShot(-1f, false);
+        double[] low = hoodShot(-1f, true);
+        double[] high = hoodShot(1f, true);
+
+        assertEquals(0.0, closed[0], "the belt cannot push the piece out past a closed stopper");
+        assertEquals(1.0, low[0], "and it leaves once the stopper is open");
+        assertEquals(1.0, high[0]);
+        assertEquals(45.0, low[1], 3.0, "the hood at its lowest, 1 degree, sends it up at 45 degrees (a little less by the time it is looked at)");
+        assertEquals(54.9, high[1], 3.0, "and at the end of its servo's travel, 10.9 degrees, at about 55");
+        assertEquals(9.86, high[1] - low[1], 1.0, "the travel of the servo, 300 degrees, over the hood's 30.4 to 1 gears");
+    }
+
     @Test
     void aBiobuzzPieceLeavesAlongTheHeadingAContinuousRotationServoTurnedTheTurretTo() throws IOException {
         // Stick 0.25 is a pulse of 1725 us: 0.225 of the Axon Mini+'s 9.8 rad/s, for about a second, over 2.75 turns of servo.

@@ -45,6 +45,8 @@ data class MappingForm(
     val turretServo: String = "",
     val servoMirrored: Boolean = false,
     val cameraOnTurret: Boolean = false,
+    /** The names of the positional servos of the hood, the stopper and the colibri arms, empty for none; by [RobotMapping.ServoRole]. */
+    val mechanismServos: Map<RobotMapping.ServoRole, String> = emptyMap(),
 )
 
 /**
@@ -222,7 +224,13 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
         val servo = form.turretServo.trim().takeIf { it.isNotEmpty() }?.let {
             RobotMapping.ServoMapping(it, before.servo()?.model().orEmpty(), form.servoMirrored)
         }
-        return RobotMapping.TurretParts(servo, before.encoders(), before.axisX(), before.axisY(), form.cameraOnTurret)
+        val mechanisms = RobotMapping.ServoRole.entries.mapNotNull { role ->
+            form.mechanismServos[role]?.trim()?.takeIf { it.isNotEmpty() }?.let { name ->
+                val kept = before.servoFor(role)
+                RobotMapping.MechanismServo(role, RobotMapping.ServoMapping(name, kept?.model().orEmpty(), kept?.mirrored() ?: false))
+            }
+        }
+        return RobotMapping.TurretParts(servo, before.encoders(), before.axisX(), before.axisY(), form.cameraOnTurret, mechanisms)
     }
 
     private fun number(text: String): Double = SetupValidation.number(text) ?: Double.NaN
@@ -270,6 +278,7 @@ class MappingModel(projectName: String, val motors: List<MotorChoice>, val turre
                 mapping.turretParts().servo()?.name().orEmpty(),
                 mapping.turretParts().servo()?.mirrored() ?: false,
                 mapping.turretParts().cameraOnTurret(),
+                RobotMapping.ServoRole.entries.mapNotNull { role -> mapping.turretParts().servoFor(role)?.let { role to it.name() } }.toMap(),
             )
         }
 

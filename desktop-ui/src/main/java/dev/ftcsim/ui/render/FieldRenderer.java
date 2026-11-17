@@ -170,6 +170,8 @@ public final class FieldRenderer implements AutoCloseable {
     private InstanceBatch[] fixed;
     private InstanceBatch[] moving;
     private SceneModel scene;
+    private ModelRenderer picture;
+    private final float[] light = new float[3];
     private float floorHalf;
     private int uViewProjection;
     private int uLight;
@@ -218,6 +220,13 @@ public final class FieldRenderer implements AutoCloseable {
     public void setScene(SceneModel newScene) {
         scene = newScene;
         floorHalf = newScene.floorHalfExtent();
+        if (picture != null && picture.model() != newScene.robotModel()) {
+            picture.close();
+            picture = null;
+        }
+        if (picture == null && newScene.robotModel() != null) {
+            picture = new ModelRenderer(newScene.robotModel());
+        }
         for (InstanceBatch batch : fixed) {
             batch.begin();
         }
@@ -264,7 +273,10 @@ public final class FieldRenderer implements AutoCloseable {
         program.use();
         glUniformMatrix4fv(uViewProjection, false, viewProjection);
         float lightLength = (float) Math.sqrt(LIGHT_X * LIGHT_X + LIGHT_Y * LIGHT_Y + LIGHT_Z * LIGHT_Z);
-        glUniform3f(uLight, LIGHT_X / lightLength, LIGHT_Y / lightLength, LIGHT_Z / lightLength);
+        light[0] = LIGHT_X / lightLength;
+        light[1] = LIGHT_Y / lightLength;
+        light[2] = LIGHT_Z / lightLength;
+        glUniform3f(uLight, light[0], light[1], light[2]);
         glUniform3f(uEye, eye[0], eye[1], eye[2]);
         glUniform1f(uFieldHalf, floorHalf);
 
@@ -272,6 +284,12 @@ public final class FieldRenderer implements AutoCloseable {
         glUniform1i(uPass, 0);
         drawAll(fixed, true);
         drawAll(moving, true);
+        boolean pictured = picture != null && picture.place(poses);
+        if (pictured) {
+            picture.begin(viewProjection, light, eye, floorHalf);
+            picture.draw(0);
+            program.use();
+        }
 
         // Shadows are translucent decals on the floor; the stencil lets each pixel be darkened once however many
         // shadows overlap there, and nothing is written to the depth buffer.
@@ -284,6 +302,12 @@ public final class FieldRenderer implements AutoCloseable {
         glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
         glUniform1i(uPass, 1);
         drawAll(moving, false);
+        if (pictured) {
+            picture.draw(1);
+            drawCalls += picture.drawCalls();
+            drawnTriangles += picture.drawnTriangles();
+            program.use();
+        }
         glDisable(GL_STENCIL_TEST);
         glDisable(GL_BLEND);
         glDepthMask(true);
@@ -356,6 +380,9 @@ public final class FieldRenderer implements AutoCloseable {
         }
         for (InstanceBatch batch : moving) {
             batch.close();
+        }
+        if (picture != null) {
+            picture.close();
         }
         program.close();
     }

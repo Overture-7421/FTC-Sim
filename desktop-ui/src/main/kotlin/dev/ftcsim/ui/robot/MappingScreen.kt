@@ -161,6 +161,13 @@ private val SLOT_LABEL_WIDTH = 140.dp
 
 private val FORM_FIELD_WIDTH = 170.dp
 
+private val MECHANISM_SERVO_LABELS = listOf(
+    RobotMapping.ServoRole.HOOD to "Hood servo (name in code)",
+    RobotMapping.ServoRole.STOPPER to "Stopper servo (name in code)",
+    RobotMapping.ServoRole.COLIBRI_LEFT to "Left colibri servo (name in code)",
+    RobotMapping.ServoRole.COLIBRI_RIGHT to "Right colibri servo (name in code)",
+)
+
 @Composable
 private fun ScanLine(scan: ScanState, onCancel: () -> Unit) {
     when (scan) {
@@ -309,6 +316,13 @@ private fun RobotForm(model: MappingModel) {
                 form.turretServo, { text -> model.edit { it.copy(turretServo = text) } }, "Turret servo (name in code)",
                 problems[MappingModel.SERVO], "Empty when a motor turns the turret", Modifier.width(240.dp),
             )
+            for ((role, label) in MECHANISM_SERVO_LABELS) {
+                FormTextField(
+                    form.mechanismServos[role].orEmpty(),
+                    { text -> model.edit { it.copy(mechanismServos = it.mechanismServos + (role to text)) } },
+                    label, null, "Empty when the robot has none", Modifier.width(240.dp),
+                )
+            }
         }
     }
     if (model.turret) {

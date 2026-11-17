@@ -15,6 +15,7 @@ import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
 import dev.ftcsim.contracts.snapshot.BodyState;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
@@ -57,14 +58,25 @@ class BiobuzzStubSessionTest {
                 new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
                 new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
                 new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-                new MotorMapping("backRight", Slot.REAR_RIGHT, "", false)));
+                new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
+                new MotorMapping("intake", Slot.INTAKE, "", false),
+                new MotorMapping("up", Slot.CONVEYOR, "", false),
+                new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
+                new MotorMapping("shooterRight", Slot.SHOOTER, "", false)));
         RobotMapping.TurretParts turret = new RobotMapping.TurretParts(
                 new RobotMapping.ServoMapping("turretServo", "", false),
                 List.of(new RobotMapping.TurretEncoder(0, "", 5.5, 0, false), new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0, false)),
-                0, 0, true);
+                0, 0, true,
+                List.of(
+                        servo(RobotMapping.ServoRole.HOOD, "hood"), servo(RobotMapping.ServoRole.STOPPER, "stopper"),
+                        servo(RobotMapping.ServoRole.COLIBRI_LEFT, "colibriLeft"), servo(RobotMapping.ServoRole.COLIBRI_RIGHT, "colibriRight")));
         return RobotDesign.biobuzz().spec(new RobotMapping(
                 wheels.name(), wheels.motors(), wheels.massKg(), wheels.wheelDiameterMm(), wheels.driveMotor(), 2.75,
                 wheels.hubLogo(), wheels.hubUsb(), wheels.camera(), turret));
+    }
+
+    private static RobotMapping.MechanismServo servo(RobotMapping.ServoRole role, String name) {
+        return new RobotMapping.MechanismServo(role, new RobotMapping.ServoMapping(name, "", false));
     }
 
     private static StartPose redCentre() {
@@ -217,6 +229,70 @@ class BiobuzzStubSessionTest {
         double straight = value(ahead[1], "tx");
         double left = value(turnedLeft[1], "tx");
         assertTrue(left > straight + 6.0, String.format(Locale.ROOT, "turning the robot left moves the tag right in the image: %.1f then %.1f", straight, left));
+    }
+
+    // ---- the mechanisms the window draws -------------------------------------------------------------------------
+
+    private static GamepadState pad(float leftTrigger, float rightTrigger, boolean dpadUp, boolean b, boolean x, boolean y) {
+        return new GamepadState(
+                0f, 0f, 0f, 0f, leftTrigger, rightTrigger, dpadUp, false, false, false, false, b, x, y, false, false, false, false,
+                false, false, false);
+    }
+
+    /** What a joint of the picture is, as the snapshot says it, in degrees. */
+    private static double joint(SimulationSession session, RobotJoint joint) {
+        BodyState body = session.snapshot().bodies().stream().filter(candidate -> candidate.kind() == joint.kind()).findFirst().orElseThrow();
+        return Math.toDegrees(body.x());
+    }
+
+    @Test
+    void everyMovingPartOfThePictureFollowsTheMotorOrServoThatMovesIt() throws IOException {
+        StartPose start = redCentre();
+        try (TestSessions.Handle handle = open(start.x(), start.y(), start.headingRadians())) {
+            SimulationSession session = handle.session;
+            initAndStart(session);
+            session.runFor(SECOND / 2);
+
+            assertEquals(1.0, joint(session, RobotJoint.HOOD), 0.2, "the hood stands at the bottom of its range, 1 degree");
+            assertEquals(0.0, joint(session, RobotJoint.STOPPER), 0.5, "the stopper is shut");
+            assertEquals(0.0, joint(session, RobotJoint.COLIBRI_LEFT), 0.5);
+            double wheel = joint(session, RobotJoint.WHEEL_FRONT_LEFT);
+
+            session.setGamepad(1, GamepadState.sticks(0f, -1f, 0f, 0f));
+            session.runFor(SECOND / 2);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            assertTrue(joint(session, RobotJoint.WHEEL_FRONT_LEFT) - wheel > 90, "driving ahead turns the wheels forward");
+
+            session.setGamepad(1, pad(1f, 0f, false, false, false, false));
+            session.runFor(SECOND);
+            double intake = joint(session, RobotJoint.INTAKE);
+            session.runFor(SECOND / 4);
+            assertTrue(joint(session, RobotJoint.INTAKE) - intake > 30, "the left trigger runs the intake roller");
+
+            session.setGamepad(1, pad(0f, 1f, false, true, false, false));
+            session.runFor(SECOND);
+            double flywheel = joint(session, RobotJoint.FLYWHEEL);
+            double conveyor = joint(session, RobotJoint.CONVEYOR);
+            session.runFor(SECOND / 4);
+            assertTrue(joint(session, RobotJoint.FLYWHEEL) - flywheel > 100, "the right trigger spins the flywheel");
+            assertTrue(joint(session, RobotJoint.CONVEYOR) - conveyor > 30, "and B the indexer");
+
+            session.setGamepad(1, pad(0f, 0f, false, false, true, true));
+            session.runFor(SECOND);
+            assertEquals(150.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.5, half of 300 degrees");
+            assertEquals(0.4 * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
+            assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
+
+            session.setGamepad(1, pad(0f, 0f, true, false, false, false));
+            session.runFor(SECOND);
+            assertTrue(joint(session, RobotJoint.HOOD) > 3.0, "the D-pad's up raises the hood: " + joint(session, RobotJoint.HOOD));
+
+            session.setGamepad(1, turretPad(true, false, false));
+            session.runFor(SECOND);
+            double yaw = Math.toDegrees(session.rig().turretYawRadians());
+            assertEquals(-yaw * 5.5, joint(session, RobotJoint.ENCODER_A), 5.0, "the encoder gear turns 5.5 times to the turret's one, the other way");
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+        }
     }
 
     // ---- the turret ---------------------------------------------------------------------------------------------

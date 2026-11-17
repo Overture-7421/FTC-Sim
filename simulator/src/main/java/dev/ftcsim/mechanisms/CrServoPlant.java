@@ -9,7 +9,7 @@ package dev.ftcsim.mechanisms;
  * around the neutral pulse; a servo that is not being sent pulses stops. A step integrates the lag exactly, so the
  * result does not depend on how a span of time is cut into steps.
  */
-public final class CrServoPlant {
+public final class CrServoPlant implements ServoPlant {
 
     /** The pulse at which the servo stands still, in microseconds. */
     public static final int NEUTRAL_MICROS = 1500;
@@ -53,6 +53,7 @@ public final class CrServoPlant {
      * @param enabled     whether the hub's output for the servo is on
      * @param pulseMicros the pulse width it is set to
      */
+    @Override
     public void step(double seconds, boolean enabled, int pulseMicros) {
         double target = enabled ? command(pulseMicros) * noLoadRadPerSec : 0.0;
         double decay = StrictMath.exp(-seconds / lagSeconds);
@@ -61,10 +62,12 @@ public final class CrServoPlant {
     }
 
     /** The shaft's angle since the plant was created; positive for pulses above neutral. */
+    @Override
     public double angleRadians() {
         return angleRadians;
     }
 
+    @Override
     public double speedRadPerSec() {
         return speedRadPerSec;
     }

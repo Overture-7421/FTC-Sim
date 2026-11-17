@@ -1,6 +1,7 @@
 package dev.ftcsim.simulator.robot;
 
 import dev.ftcsim.mechanisms.CrServoPlant;
+import dev.ftcsim.mechanisms.PositionServoPlant;
 import java.util.Map;
 import java.util.TreeMap;
 
@@ -16,6 +17,9 @@ public final class ServoCatalog {
     public static final String AXON_MINI_PLUS = "axon-mini-plus";
     public static final String AXON_MAX = "axon-max";
     public static final String GOBILDA_TORQUE = "gobilda-2000-torque";
+
+    /** The usual servo of a mechanism, which moves to a position: the goBILDA Torque servo. */
+    public static final String USUAL_POSITIONAL = GOBILDA_TORQUE;
 
     /** The usual servo of a mapping. */
     public static final String USUAL = AXON_MINI_PLUS;
@@ -53,9 +57,14 @@ public final class ServoCatalog {
         return model(id).noLoadRadPerSec();
     }
 
-    /** A plant for the named servo. */
+    /** A plant for the named continuous-rotation servo. */
     public static CrServoPlant plant(String id) {
         return new CrServoPlant(noLoadRadPerSec(id), LAG_SECONDS);
+    }
+
+    /** A plant for the named servo used as a positional one, mounted {@code mirrored} or not. */
+    public static PositionServoPlant positionPlant(String id, boolean mirrored) {
+        return new PositionServoPlant(noLoadRadPerSec(id), mirrored);
     }
 
     private static Model model(String id) {

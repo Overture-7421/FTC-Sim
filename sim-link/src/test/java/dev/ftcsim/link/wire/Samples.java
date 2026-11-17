@@ -74,7 +74,11 @@ final class Samples {
                         List.of(
                                 new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, -12.5, false),
                                 new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0.0, true)),
-                        0.05, -0.02, true));
+                        0.05, -0.02, true,
+                        List.of(
+                                new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
+                                new RobotMapping.MechanismServo(
+                                        RobotMapping.ServoRole.COLIBRI_RIGHT, new RobotMapping.ServoMapping("arm ✓", "gobilda-2000-torque", true)))));
     }
 
     static GamepadState gamepad() {

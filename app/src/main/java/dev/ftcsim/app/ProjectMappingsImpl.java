@@ -62,7 +62,8 @@ public final class ProjectMappingsImpl implements ProjectMappings {
     private static final Set<String> MOTOR_KEYS = Set.of("slot", "model", "mirrored");
     private static final Set<String> HUB_KEYS = Set.of("logo", "usb");
     private static final Set<String> CAMERA_KEYS = Set.of("x", "y", "z", "yawDegrees", "pitchDegrees", "rollDegrees");
-    private static final Set<String> TURRET_KEYS = Set.of("servo", "encoders", "axis", "cameraOnTurret");
+    private static final Set<String> TURRET_KEYS = Set.of(
+            "servo", "encoders", "axis", "cameraOnTurret", "hood", "stopper", "colibriLeft", "colibriRight");
     private static final Set<String> SERVO_KEYS = Set.of("name", "model", "mirrored");
     private static final Set<String> ENCODER_KEYS = Set.of("channel", "model", "turnsPerTurretTurn", "zeroOffsetDegrees", "mirrored");
     private static final Set<String> AXIS_KEYS = Set.of("x", "y");
@@ -257,9 +258,31 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             }
         }
         JsonNode axis = object(turret, "axis", AXIS_KEYS);
+        List<RobotMapping.MechanismServo> mechanisms = new ArrayList<>();
+        for (RobotMapping.ServoRole role : RobotMapping.ServoRole.values()) {
+            JsonNode node = object(turret, roleKey(role), SERVO_KEYS);
+            if (node != null) {
+                String name = text(node, "name", null);
+                if (name == null) {
+                    throw new IllegalArgumentException("the " + roleKey(role) + " servo has no name");
+                }
+                mechanisms.add(new RobotMapping.MechanismServo(
+                        role, new ServoMapping(name, text(node, "model", ""), flag(node, "mirrored", "the " + roleKey(role) + " servo"))));
+            }
+        }
         return new TurretParts(
                 servo, encoders, axis == null ? 0.0 : number(axis, "x", 0.0), axis == null ? 0.0 : number(axis, "y", 0.0),
-                flag(turret, "cameraOnTurret", "turret"));
+                flag(turret, "cameraOnTurret", "turret"), mechanisms);
+    }
+
+    /** The key of a mechanism servo in the turret object: {@code hood}, {@code stopper}, {@code colibriLeft}, {@code colibriRight}. */
+    private static String roleKey(RobotMapping.ServoRole role) {
+        return switch (role) {
+            case HOOD -> "hood";
+            case STOPPER -> "stopper";
+            case COLIBRI_LEFT -> "colibriLeft";
+            case COLIBRI_RIGHT -> "colibriRight";
+        };
     }
 
     private static boolean flag(JsonNode node, String key, String where) {
@@ -456,6 +479,13 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             axis.put("y", finite(parts.axisY()));
             turret.put("axis", axis);
             turret.put("cameraOnTurret", parts.cameraOnTurret());
+            for (RobotMapping.MechanismServo mechanism : parts.mechanisms()) {
+                Map<String, Object> servo = new LinkedHashMap<>();
+                servo.put("name", mechanism.servo().name());
+                servo.put("model", mechanism.servo().model());
+                servo.put("mirrored", mechanism.servo().mirrored());
+                turret.put(roleKey(mechanism.role()), servo);
+            }
             root.put("turret", turret);
         }
         Map<String, Object> runEntry = new LinkedHashMap<>();

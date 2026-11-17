@@ -4,6 +4,7 @@ import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.contracts.world.Vec3;
 import dev.ftcsim.hardware.device.rev.ThroughBoreEncoder;
 import dev.ftcsim.mechanisms.CaptureSpec;
@@ -123,10 +124,38 @@ public final class RobotDesign {
                 mapping.name(), hubs(), chassis(mapping), motors, servos(mapping), turret, storages, captures, launches,
                 new RobotSpec.ImuMount(mapping.hubLogo(), mapping.hubUsb()),
                 new RobotSpec.ColorSensor(-0.12, 0.09, 0.26, -90.0),
-                new RobotSpec.Limelight(mapping.camera(), "field", "1280x960", mapping.turretParts().cameraOnTurret()));
+                new RobotSpec.Limelight(mapping.camera(), "field", "1280x960", mapping.turretParts().cameraOnTurret()),
+                joints(mapping));
     }
 
-    /** The turret servo has the first servo port of the Control Hub. */
+    /** Motor turns to one turn of the intake roller (the Yellow Jacket motors of the CAD's intake and indexer drive at 2:1). */
+    public static final double INTAKE_RATIO = 2.0;
+
+    /** Motor turns to one turn of the indexer's rollers. */
+    public static final double CONVEYOR_RATIO = 2.0;
+
+    /** Motor turns to one turn of the flywheel (the CAD's 43:30 belt). */
+    public static final double FLYWHEEL_RATIO = 43.0 / 30.0;
+
+    /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
+    public static final double COLIBRI_RATIO = 40.0 / 30.0;
+
+    /** Servo turns to one turn of the hood (the CAD's 730:24 gears). */
+    public static final double HOOD_RATIO = 730.0 / 24.0;
+
+    /** Servo turns to one turn of the stopper. */
+    public static final double STOPPER_RATIO = 1.0;
+
+    /** The hood's angle above level with its servo's shaft at 0: the lower limit of its range in the CAD. */
+    public static final double HOOD_REST_RADIANS = Math.toRadians(1.0);
+
+    /** How high a piece leaves, above the hood's angle: with the hood at 1 degree it leaves at 45 degrees. Estimated. */
+    public static final double HOOD_BASE_ELEVATION_RADIANS = Math.toRadians(44.0);
+
+    /** How far the stopper's servo must have turned for pieces to pass, 60 degrees. Estimated. */
+    public static final double STOPPER_OPEN_RADIANS = Math.toRadians(60.0);
+
+    /** The turret servo has the first servo port of the Control Hub; the mechanisms' servos follow in the order of {@link RobotMapping.ServoRole}. */
     private static Map<String, RobotSpec.Servo> servos(RobotMapping mapping) {
         Map<String, RobotSpec.Servo> servos = new LinkedHashMap<>();
         RobotMapping.ServoMapping servo = mapping.turretParts().servo();
@@ -135,7 +164,40 @@ public final class RobotDesign {
             ServoCatalog.noLoadRadPerSec(model);
             servos.put(servo.name(), new RobotSpec.Servo(CONTROL_HUB, 0, model));
         }
+        for (RobotMapping.MechanismServo mechanism : mapping.turretParts().mechanisms()) {
+            String model = mechanism.servo().model().isEmpty() ? ServoCatalog.USUAL_POSITIONAL : mechanism.servo().model();
+            ServoCatalog.noLoadRadPerSec(model);
+            servos.put(
+                    mechanism.servo().name(),
+                    new RobotSpec.Servo(CONTROL_HUB, 1 + mechanism.role().ordinal(), model, true, mechanism.servo().mirrored()));
+        }
         return servos;
+    }
+
+    /** What the picture of the robot follows: its first intake, conveyor and shooter motors and its mechanism servos. */
+    private static RobotSpec.Joints joints(RobotMapping mapping) {
+        List<RobotSpec.ServoJoint> servos = new ArrayList<>();
+        for (RobotMapping.MechanismServo mechanism : mapping.turretParts().mechanisms()) {
+            String name = mechanism.servo().name();
+            servos.add(switch (mechanism.role()) {
+                case HOOD -> new RobotSpec.ServoJoint(RobotJoint.HOOD, name, HOOD_RATIO, HOOD_REST_RADIANS);
+                case STOPPER -> new RobotSpec.ServoJoint(RobotJoint.STOPPER, name, STOPPER_RATIO, 0.0);
+                case COLIBRI_LEFT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_LEFT, name, COLIBRI_RATIO, 0.0);
+                case COLIBRI_RIGHT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_RIGHT, name, COLIBRI_RATIO, 0.0);
+            });
+        }
+        MotorMapping intake = firstMotor(mapping, Slot.INTAKE);
+        MotorMapping conveyor = firstMotor(mapping, Slot.CONVEYOR);
+        MotorMapping shooter = firstMotor(mapping, Slot.SHOOTER);
+        return new RobotSpec.Joints(
+                intake == null ? null : intake.name(), intake == null ? 1 : sign(intake),
+                conveyor == null ? null : conveyor.name(), conveyor == null ? 1 : sign(conveyor),
+                shooter == null ? null : shooter.name(), shooter == null ? 1 : sign(shooter), servos);
+    }
+
+    private static MotorMapping firstMotor(RobotMapping mapping, Slot slot) {
+        List<MotorMapping> motors = mapping.in(slot);
+        return motors.isEmpty() ? null : motors.get(0);
     }
 
     /** The turret a BIOBUZZ robot has: turned by its motor, or by its servo, or by nothing if neither is mapped. */
@@ -252,9 +314,15 @@ public final class RobotDesign {
         }
         if (!shooter.isEmpty()) {
             List<LaunchSpec.Wheel> wheels = shooter.stream().map(motor -> new LaunchSpec.Wheel(motor.name(), 0.05, sign(motor))).toList();
-            List<Condition> feed = conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0));
+            List<Condition> feed = new ArrayList<>(conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0)));
+            RobotMapping.ServoMapping stopper = mapping.turretParts().servoFor(RobotMapping.ServoRole.STOPPER);
+            if (stopper != null && !feed.isEmpty()) {
+                feed.add(Condition.angleAtLeast(stopper.name(), STOPPER_OPEN_RADIANS));
+            }
+            RobotMapping.ServoMapping hood = mapping.turretParts().servoFor(RobotMapping.ServoRole.HOOD);
+            LaunchSpec.Hood tilt = hood == null ? null : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS);
             LaunchSpec.Turret aim = turret == null || turret.shaft() == null ? null : turret.aim();
-            launches.add(new LaunchSpec(LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim));
+            launches.add(new LaunchSpec(LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim, tilt));
         }
     }
 }

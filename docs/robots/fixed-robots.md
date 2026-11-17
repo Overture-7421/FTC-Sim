@@ -2,7 +2,7 @@
 
 This page says which robot FTC-Sim simulates and what a team writes in `ftcsim.json` to connect its code to it.
 
-**The robot designs are fixed, and sensors are fixed and ideal.** A team supplies only a mapping: which motor of its code is which part, the motor model, Mirrored, a few body numbers, the hub mounting and the Limelight mount. There are no editable zones, mechanisms or sensor settings. `dev.ftcsim.simulator.robot.RobotDesign` holds the designs (numbers from the robot the simulator was fitted to: [hornet-fit.md](hornet-fit.md)); `dev.ftcsim.contracts.session.RobotMapping` is the mapping. The worker never reads `ftcsim.json`: it gets the mapping inline in the session request ([link](../architecture/link.md), protocol 8) and builds the robot with `RobotDesign.spec(mapping)`.
+**The robot designs are fixed, and sensors are fixed and ideal.** A team supplies only a mapping: which motor of its code is which part, the motor model, Mirrored, a few body numbers, the hub mounting and the Limelight mount. There are no editable zones, mechanisms or sensor settings. `dev.ftcsim.simulator.robot.RobotDesign` holds the designs (numbers from the robot the simulator was fitted to: [hornet-fit.md](hornet-fit.md)); `dev.ftcsim.contracts.session.RobotMapping` is the mapping. The worker never reads `ftcsim.json`: it gets the mapping inline in the session request ([link](../architecture/link.md), protocol 9) and builds the robot with `RobotDesign.spec(mapping)`.
 
 ## The designs
 
@@ -75,6 +75,22 @@ The BIOBUZZ robot turns its turret with a continuous-rotation servo (Axon Mini+)
 
 **Ambiguity.** An absolute encoder repeats every turn of itself, so two encoders whose ratios are not whole numbers tell the turret's angle only within one turn of the turret (the vernier the team's code computes). Past one full turn of the turret the encoders show what the real ones would, which is not the first turn's reading again. The turret has no mechanical limit in the simulator; a real one has cables.
 
+### Positional servos: the hood, the stopper and the colibri arms
+
+The BIOBUZZ robot has four more servos, goBILDA Torque servos that go to a position (`servo.setPosition`). Each is mapped by its name under `turret` (`hood`, `stopper`, `colibriLeft`, `colibriRight`, each `{ "name", "model", "mirrored" }`, model empty for `gobilda-2000-torque`) and takes a Control Hub servo port after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees at the servo's top speed (4.4 rad/s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
+
+| Part | What it does in the simulation |
+|---|---|
+| Hood | Sets the launch elevation: 44 degrees plus the hood's angle, which is 1 degree plus the servo's angle over 30.42 (the 730:24 gears), so 45 degrees at position 0 and 54.9 at position 1. Without a hood servo the launcher is at its fixed 55 degrees |
+| Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 60 degrees (position 0.2), whatever the belt and flywheels do. Without a stopper servo nothing holds it |
+| Colibri arms | Moved in the picture only. They change nothing in the simulation |
+
+All four are estimates where the CAD has no number ([biobuzz-cad](biobuzz-cad.md)). Verified by `PositionServoPlantTest`, `MechanismsSessionTest` (the `Hood Stopper` fixture: closed stopper holds, open releases, the hood changes the elevation by 9.9 degrees) and `BiobuzzStubSessionTest`.
+
+### The picture
+
+`RobotInfo.model` is `biobuzz` for a robot with a turret, and the window draws it from the CAD ([biobuzz-cad](biobuzz-cad.md)): the wheels, intake, indexer, flywheel, hood, stopper, colibri arms, encoder gears and turret each move with their motor or servo.
+
 ### The Limelight on the turret
 
 `turret.cameraOnTurret` (true on the BIOBUZZ robot): the Limelight's `camera` mount is given with the turret facing forward and the camera turns with the turret about `turret.axis` (metres from the robot's centre, X forward, Y left), so what it sees, and the tag bearings it reports, follow the turret. `RobotInfo.model` is `biobuzz` and the window draws the turret as its own body (`BodyKinds.TURRET`, placeholder solids until the CAD is drawn).
@@ -93,7 +109,9 @@ The application reads and writes the file whole (`ProjectMappingsImpl`). Every k
   "turret": { "servo": { "name": "turretServo", "model": "axon-mini-plus", "mirrored": false },
               "encoders": [ { "channel": 0, "turnsPerTurretTurn": 5.5 },
                             { "channel": 1, "turnsPerTurretTurn": 6.285714285714286 } ],
-              "axis": { "x": 0, "y": 0 }, "cameraOnTurret": true },
+              "axis": { "x": 0.089, "y": 0 }, "cameraOnTurret": true,
+              "hood": { "name": "hood" }, "stopper": { "name": "stopper" },
+              "colibriLeft": { "name": "colibriLeft" }, "colibriRight": { "name": "colibriRight" } },
   "run": { "field": "decode", "alliance": "BLUE", "startPose": "BLUE goal side" },
   "startPositions": [ { "name": "Near goal", "field": "decode", "x": -1.2, "y": 0.5, "headingDegrees": 135 } ] }
 ```

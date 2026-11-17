@@ -10,6 +10,7 @@ import dev.ftcsim.contracts.field.Scenery;
 import dev.ftcsim.contracts.field.Shape;
 import dev.ftcsim.contracts.session.RobotInfo;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
+import dev.ftcsim.ui.model.RobotModel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -126,16 +127,27 @@ public final class SceneModel {
     private final Part[][] hostParts;
     private final float floorHalf;
     private final boolean ownFloor;
+    private final RobotModel robotModel;
 
     private SceneModel(
-            List<Part> scenery, int[] kindIds, Part[][] kindParts, int[] hostIds, Part[][] hostParts, float floorHalf) {
+            List<Part> scenery, int[] kindIds, Part[][] kindParts, int[] hostIds, Part[][] hostParts, float floorHalf,
+            RobotModel robotModel) {
         this.scenery = scenery;
         this.kindIds = kindIds;
         this.kindParts = kindParts;
         this.hostIds = hostIds;
         this.hostParts = hostParts;
         this.floorHalf = floorHalf;
+        this.robotModel = robotModel;
         this.ownFloor = scenery.stream().anyMatch(part -> part.floor() && covers(part, floorHalf));
+    }
+
+    /**
+     * The robot's picture made from its CAD, which stands in for the chassis box and the turret solids, or null when the
+     * robot has none or this build does not carry it.
+     */
+    public RobotModel robotModel() {
+        return robotModel;
     }
 
     private static boolean covers(Part floor, float half) {
@@ -190,16 +202,36 @@ public final class SceneModel {
                 }
             }
         }
+        RobotModel picture = null;
         if (robot != null) {
-            kinds.put(BodyKinds.CHASSIS, robotParts(robot, robotRgb));
             if (RobotInfo.BIOBUZZ_MODEL.equals(robot.model())) {
-                kinds.put(BodyKinds.TURRET, turretParts(robot, robotRgb));
+                picture = biobuzzPicture();
+            }
+            if (picture != null) {
+                kinds.put(BodyKinds.CHASSIS, NO_PARTS);
+            } else {
+                kinds.put(BodyKinds.CHASSIS, robotParts(robot, robotRgb));
+                if (RobotInfo.BIOBUZZ_MODEL.equals(robot.model())) {
+                    kinds.put(BodyKinds.TURRET, turretParts(robot, robotRgb));
+                }
             }
         }
         int[] ids = kinds.keySet().stream().mapToInt(Integer::intValue).toArray();
         int[] hostIds = hosted.keySet().stream().mapToInt(Integer::intValue).toArray();
         Part[][] hostParts = hosted.values().stream().map(list -> list.toArray(new Part[0])).toArray(Part[][]::new);
-        return new SceneModel(List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half);
+        return new SceneModel(List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half, picture);
+    }
+
+    private static RobotModel biobuzzModel;
+    private static boolean biobuzzModelRead;
+
+    /** The BIOBUZZ model, read from the class path once; null when the build has none. */
+    private static synchronized RobotModel biobuzzPicture() {
+        if (!biobuzzModelRead) {
+            biobuzzModel = RobotModel.fromResource(RobotModel.BIOBUZZ);
+            biobuzzModelRead = true;
+        }
+        return biobuzzModel;
     }
 
     /** The fixed scenery with every pose in field coordinates. */

@@ -9,6 +9,9 @@ public final class EntityIds {
     /** The robot's turret, in the snapshot only. */
     public static final int TURRET = 2;
 
+    /** The first entity id of the robot's joint bodies ({@code RobotJoint}). */
+    public static final int JOINT_BASE = 10;
+
     /** The first id a field may use for its pieces and moving structures. */
     public static final int FIELD_BASE = 1000;
 

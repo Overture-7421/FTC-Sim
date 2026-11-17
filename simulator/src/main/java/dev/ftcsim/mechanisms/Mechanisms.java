@@ -135,6 +135,9 @@ public final class Mechanisms {
             if (launch.turret() != null) {
                 requireShaft(plants, launch.turret().motor(), "launcher '" + launch.name() + "'");
             }
+            if (launch.hood() != null) {
+                requireShaft(plants, launch.hood().servo(), "launcher '" + launch.name() + "'");
+            }
         }
         this.captures = List.copyOf(captures);
         this.launches = List.copyOf(launches);
@@ -279,16 +282,28 @@ public final class Mechanisms {
         }
     }
 
-    /** The launch direction in the robot frame: the launcher's own, turned about the robot's vertical axis by its turret. */
+    /**
+     * The launch direction in the robot frame: the launcher's own, raised or lowered by its hood, then turned about the
+     * robot's vertical axis by its turret.
+     */
     private Vec3 aim(LaunchSpec launch) {
+        Vec3 direction = launch.direction();
+        LaunchSpec.Hood hood = launch.hood();
+        if (hood != null) {
+            double elevation = hood.elevationRadians(plants.shaftAngleRad(hood.servo()));
+            double horizontal = StrictMath.hypot(direction.x(), direction.y());
+            double heading = horizontal > 0 ? StrictMath.atan2(direction.y(), direction.x()) : 0.0;
+            direction = new Vec3(
+                    StrictMath.cos(elevation) * StrictMath.cos(heading), StrictMath.cos(elevation) * StrictMath.sin(heading),
+                    StrictMath.sin(elevation));
+        }
         LaunchSpec.Turret turret = launch.turret();
         if (turret == null) {
-            return launch.direction();
+            return direction;
         }
         double turn = turret.yawRadians(plants.shaftAngleRad(turret.motor()));
         double cos = StrictMath.cos(turn);
         double sin = StrictMath.sin(turn);
-        Vec3 direction = launch.direction();
         return new Vec3(direction.x() * cos - direction.y() * sin, direction.x() * sin + direction.y() * cos, direction.z());
     }
 

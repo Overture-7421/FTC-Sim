@@ -2,7 +2,7 @@
 
 What is tested where, how to run it and how to write a test that earns its place; for anyone who changes or reviews code. Commands and hazards are in [development.md](development.md).
 
-Last full run (2026-11-17): `gradlew check` without the Hornet properties ran 1,836 tests, none failed, 19 skipped (18 in `acceptance-tests`, 1 in `project-import`). `:acceptance-tests:test` with the Hornet properties ran its 194, none failed or skipped. Counts change with every test: run the build for today's.
+Last full run (2026-11-17): `gradlew check` without the Hornet properties ran about 1,850 tests, none failed, 19 skipped (18 in `acceptance-tests`, 1 in `project-import`). `:acceptance-tests:test` with the Hornet properties ran its 196, none failed or skipped. Counts change with every test: run the build for today's.
 
 ## The layers
 
@@ -27,7 +27,7 @@ Last full run (2026-11-17): `gradlew check` without the Hornet properties ran 1,
 - **Per SDK.** `-PftcSdk=<version>` changes only the SDK jars the robot world loads. A feature the SDK sees (a device, a hook) must pass on every release of the matrix before it is done.
 - **Two processes** (`@Tag("two-process")`): `WorkerProcessTest`, `RealHostSessionTest`, `RealHostProjectTest`, `RealHostHornetTest` and `app`'s `RealHostWorkerTest` start the real worker through the real launcher and assert no process is left behind; `DistributionEndToEndTest` starts the distribution through `FTC-Sim.cmd`. `-Pftcsim.runtime=<runtime folder>` runs the test JVMs, and so the workers, on a Java runtime such as `app\build\dist\FTC-Sim\runtime`; use it with `--tests "*RealHost*Hornet*"`, because other tests need a JDK's compiler or tools.
 - `ProjectMappingsAcceptanceTest` checks the stored mapping against the fixed robot and real sessions, with no checkout. `HornetMapping` is the Hornet mapping the session-opening tests share.
-- `BiobuzzStubSessionTest` runs the whole BIOBUZZ robot (drive, Pinpoint, Limelight on the turret, servo turret, OctoQuad encoders) with the stub program ([biobuzz-stub](robots/biobuzz-stub.md)); it is also the end-to-end check of the servo, OctoQuad and camera-on-turret code. A turret test must compare while the turret is still: telemetry lags by its interval.
+- `BiobuzzStubSessionTest` runs the whole BIOBUZZ robot (drive, Pinpoint, Limelight on the turret, servo turret, OctoQuad encoders) with the stub program ([biobuzz-stub](robots/biobuzz-stub.md)); it is also the end-to-end check of the servo, OctoQuad and camera-on-turret code. A turret test must compare while the turret is still: telemetry lags by its interval. `RobotModelRenderTest` (`desktop-ui`, OpenGL 3.3) draws the CAD robot from several views into `build\screens`, checks that the turret, colibri arms, hood and wheels change the picture and times a frame.
 
 ### The Hornet tests
 

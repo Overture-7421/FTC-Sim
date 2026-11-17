@@ -151,12 +151,19 @@ class ProjectMappingsImplTest {
                 List.of(
                         new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.5, false),
                         new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, -3.0, true)),
-                0.05, -0.02, true);
+                0.05, -0.02, true,
+                List.of(
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("gate", "", false)),
+                        new RobotMapping.MechanismServo(
+                                RobotMapping.ServoRole.COLIBRI_LEFT, new RobotMapping.ServoMapping("armL", "gobilda-2000-torque", true))));
         RobotMapping withParts = robot().withTurretParts(parts);
 
         ProjectMappings.Saved saved = mappings.save(project, withParts);
 
         JsonNode json = read(saved.file());
+        assertEquals("gate", json.at("/turret/stopper/name").asText());
+        assertTrue(json.at("/turret/colibriLeft/mirrored").asBoolean());
+        assertEquals("gobilda-2000-torque", json.at("/turret/colibriLeft/model").asText());
         assertEquals("turretServo", json.at("/turret/servo/name").asText());
         assertTrue(json.at("/turret/servo/mirrored").asBoolean());
         assertEquals(1, json.at("/turret/encoders/1/channel").asInt());

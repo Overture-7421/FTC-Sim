@@ -14,6 +14,7 @@ import java.util.List;
  * @param direction     the way the piece leaves when the turret, if there is one, faces forward, in the robot frame
  * @param dribbleSpeed  the least speed a released piece has, for a launcher whose wheels are stopped
  * @param turret        what turns the launcher about the robot's vertical axis, or null for a launcher that is fixed
+ * @param hood          what sets how high a piece leaves, or null for a launcher whose {@code direction} holds
  */
 public record LaunchSpec(
         String name,
@@ -23,7 +24,27 @@ public record LaunchSpec(
         double efficiency,
         Vec3 direction,
         double dribbleSpeed,
-        Turret turret) {
+        Turret turret,
+        Hood hood) {
+
+    /**
+     * A servo that tilts the launch. The piece leaves {@code baseElevationRadians + servoAngle / ratio} above the
+     * horizontal, along the direction's heading.
+     *
+     * @param ratio turns of the servo for one turn of the hood; above 0
+     */
+    public record Hood(String servo, double ratio, double baseElevationRadians) {
+        public Hood {
+            if (!(ratio > 0)) {
+                throw new IllegalArgumentException("a hood needs a gear ratio above 0: " + servo);
+            }
+        }
+
+        /** The launch elevation when the servo's shaft has turned {@code servoAngleRad}. */
+        public double elevationRadians(double servoAngleRad) {
+            return baseElevationRadians + servoAngleRad / ratio;
+        }
+    }
 
     /**
      * The motor that turns the launcher. Its shaft angle is zero when the session starts, which is the launcher facing
@@ -67,7 +88,20 @@ public record LaunchSpec(
             double efficiency,
             Vec3 direction,
             double dribbleSpeed) {
-        this(name, storage, active, wheels, efficiency, direction, dribbleSpeed, null);
+        this(name, storage, active, wheels, efficiency, direction, dribbleSpeed, null, null);
+    }
+
+    /** A launcher on a turret, with no hood. */
+    public LaunchSpec(
+            String name,
+            String storage,
+            List<Condition> active,
+            List<Wheel> wheels,
+            double efficiency,
+            Vec3 direction,
+            double dribbleSpeed,
+            Turret turret) {
+        this(name, storage, active, wheels, efficiency, direction, dribbleSpeed, turret, null);
     }
 
     public LaunchSpec {
