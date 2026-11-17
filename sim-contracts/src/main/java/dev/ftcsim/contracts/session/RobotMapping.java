@@ -20,6 +20,8 @@ import java.util.Set;
  * @param hubLogo     which way the Control Hub's logo faces on the robot, one of {@link #DIRECTIONS}
  * @param hubUsb      which way its USB ports face; at right angles to the logo
  * @param camera      where the Limelight is mounted
+ * @param turretParts what else turns or measures the turret (BIOBUZZ's robot): its servo, the absolute encoders on it and
+ *                    whether the camera rides on it; {@link TurretParts#NONE} when none of that is mapped
  */
 public record RobotMapping(
         String name,
@@ -30,10 +32,17 @@ public record RobotMapping(
         double turretRatio,
         String hubLogo,
         String hubUsb,
-        CameraMount camera) {
+        CameraMount camera,
+        TurretParts turretParts) {
 
     /** The two hubs have four motor ports each. */
     public static final int MAX_MOTORS = 8;
+
+    /** The OctoQuad has eight channels. */
+    public static final int MAX_TURRET_ENCODERS = 8;
+
+    /** The most the turret's axis may be from the robot's centre, in metres. */
+    public static final double MAX_TURRET_AXIS_M = 0.5;
 
     /** The directions a hub's logo and USB ports may face. */
     public static final List<String> DIRECTIONS = List.of("UP", "DOWN", "FORWARD", "BACKWARD", "LEFT", "RIGHT");
@@ -90,6 +99,61 @@ public record RobotMapping(
      */
     public record CameraMount(double x, double y, double z, double yawDegrees, double pitchDegrees, double rollDegrees) {}
 
+    /**
+     * A continuous-rotation servo of the robot's code.
+     *
+     * @param name     the name the code asks the hardware map for
+     * @param model    the id of its servo; empty for the usual one
+     * @param mirrored whether turning it forward (a pulse above neutral) turns the turret clockwise instead of counter-clockwise
+     */
+    public record ServoMapping(String name, String model, boolean mirrored) {
+
+        public ServoMapping {
+            Objects.requireNonNull(name, "name");
+            model = model == null ? "" : model;
+        }
+    }
+
+    /**
+     * An absolute encoder on the turret, read through the OctoQuad.
+     *
+     * @param channel            the OctoQuad port, 0 to 7
+     * @param model              the id of the encoder; empty for the usual one
+     * @param turnsPerTurretTurn how many turns the encoder makes for one turn of the turret; above 0
+     * @param zeroOffsetDegrees  the encoder's angle, in degrees of its own turn, when the turret points forward
+     * @param mirrored           whether the encoder's pulse falls instead of rising as the turret turns counter-clockwise
+     */
+    public record TurretEncoder(int channel, String model, double turnsPerTurretTurn, double zeroOffsetDegrees, boolean mirrored) {
+
+        public TurretEncoder {
+            model = model == null ? "" : model;
+        }
+    }
+
+    /**
+     * What else is on the turret of a robot that has one.
+     *
+     * @param servo         the servo that turns it, or null when a motor does (or nothing does)
+     * @param encoders      the absolute encoders on it, in the order they were mapped
+     * @param axisX         where the turret turns about, metres ahead of the chassis centre
+     * @param axisY         and metres to the left of it
+     * @param cameraOnTurret whether the Limelight turns with the turret
+     */
+    public record TurretParts(ServoMapping servo, List<TurretEncoder> encoders, double axisX, double axisY, boolean cameraOnTurret) {
+
+        /** Nothing mapped: no servo, no encoders, the turret about the centre and the camera on the chassis. */
+        public static final TurretParts NONE = new TurretParts(null, List.of(), 0.0, 0.0, false);
+
+        public TurretParts {
+            encoders = List.copyOf(encoders);
+        }
+
+        /** Whether anything about the turret beyond its motors is mapped. */
+        public boolean mapped() {
+            return servo != null || !encoders.isEmpty() || cameraOnTurret || axisX != 0.0 || axisY != 0.0;
+        }
+    }
+
     public RobotMapping {
         Objects.requireNonNull(name, "name");
         motors = List.copyOf(motors);
@@ -97,6 +161,14 @@ public record RobotMapping(
         Objects.requireNonNull(hubLogo, "hubLogo");
         Objects.requireNonNull(hubUsb, "hubUsb");
         Objects.requireNonNull(camera, "camera");
+        Objects.requireNonNull(turretParts, "turretParts");
+    }
+
+    /** A mapping with nothing on the turret but its motors. */
+    public RobotMapping(
+            String name, List<MotorMapping> motors, double massKg, double wheelDiameterMm, String driveMotor, double turretRatio,
+            String hubLogo, String hubUsb, CameraMount camera) {
+        this(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, TurretParts.NONE);
     }
 
     /** A robot with no motors and the usual numbers: nothing is mapped yet. */
@@ -113,7 +185,12 @@ public record RobotMapping(
 
     /** A copy with these motors. */
     public RobotMapping withMotors(List<MotorMapping> changed) {
-        return new RobotMapping(name, changed, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera);
+        return new RobotMapping(name, changed, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, turretParts);
+    }
+
+    /** A copy with this on the turret. */
+    public RobotMapping withTurretParts(TurretParts changed) {
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, changed);
     }
 
     /** The motors in [slot], in the order they were mapped. */
@@ -173,10 +250,53 @@ public record RobotMapping(
         if (!(turretRatio > 0)) {
             problems.add("Turret ratio is above 0");
         }
+        turretProblems(turret, names, problems);
         if (!DIRECTIONS.contains(hubLogo) || !DIRECTIONS.contains(hubUsb) || axis(hubLogo).equals(axis(hubUsb))) {
             problems.add("Hub logo and USB face at right angles");
         }
         return problems;
+    }
+
+    private void turretProblems(boolean turret, Set<String> motorNames, List<String> problems) {
+        TurretParts parts = turretParts;
+        if (!parts.mapped()) {
+            return;
+        }
+        if (!turret) {
+            problems.add("This game's robot has no turret for a servo, encoders or an axis");
+            return;
+        }
+        ServoMapping servo = parts.servo();
+        if (servo != null) {
+            if (servo.name().isBlank()) {
+                problems.add("The turret servo has no name");
+            } else if (motorNames.contains(servo.name())) {
+                problems.add(servo.name() + " is mapped as a motor and as the turret servo");
+            }
+            if (!in(Slot.TURRET).isEmpty()) {
+                problems.add("The turret has a motor and a servo: map one of them");
+            }
+        }
+        if (parts.encoders().size() > MAX_TURRET_ENCODERS) {
+            problems.add("At most " + MAX_TURRET_ENCODERS + " encoders fit on the OctoQuad");
+        }
+        Set<Integer> channels = new HashSet<>();
+        for (TurretEncoder encoder : parts.encoders()) {
+            if (encoder.channel() < 0 || encoder.channel() >= MAX_TURRET_ENCODERS) {
+                problems.add("An encoder is on OctoQuad port " + encoder.channel() + ", which is 0 to 7");
+            } else if (!channels.add(encoder.channel())) {
+                problems.add("OctoQuad port " + encoder.channel() + " has two encoders");
+            }
+            if (!(encoder.turnsPerTurretTurn() > 0 && Double.isFinite(encoder.turnsPerTurretTurn()))) {
+                problems.add("Encoder " + encoder.channel() + ": turns per turret turn is above 0");
+            }
+            if (!Double.isFinite(encoder.zeroOffsetDegrees())) {
+                problems.add("Encoder " + encoder.channel() + ": zero offset is a number");
+            }
+        }
+        if (!(Math.abs(parts.axisX()) <= MAX_TURRET_AXIS_M && Math.abs(parts.axisY()) <= MAX_TURRET_AXIS_M)) {
+            problems.add("The turret axis is within " + MAX_TURRET_AXIS_M + " m of the robot's centre");
+        }
     }
 
     private static String axis(String direction) {

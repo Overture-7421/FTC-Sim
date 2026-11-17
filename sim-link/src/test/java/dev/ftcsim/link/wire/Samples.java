@@ -68,7 +68,13 @@ final class Samples {
                 Double.longBitsToDouble(0x7FF8000000001234L),
                 "UP",
                 "BACKWARD",
-                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30));
+                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30),
+                new RobotMapping.TurretParts(
+                        new RobotMapping.ServoMapping("turrët ✓", "axon-mini-plus", true),
+                        List.of(
+                                new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, -12.5, false),
+                                new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0.0, true)),
+                        0.05, -0.02, true));
     }
 
     static GamepadState gamepad() {
@@ -102,7 +108,9 @@ final class Samples {
                 List.of(
                         new OpModeDescriptor("Mecanum Drive", "Drive", OpModeKind.TELEOP, "dev.ftcsim.scenarios.opmodes.MecanumDriveTeleOp"),
                         new OpModeDescriptor("Two Ball Auto", "", OpModeKind.AUTONOMOUS, "org.team.TwoBallAuto")),
-                new RobotInfo("Hornet 2026", 0.4572, 0.4572, 0.3048, List.of("frontLeft", "frontRight"), List.of("hood"), List.of("odo")));
+                new RobotInfo(
+                        "Hornet 2026", 0.4572, 0.4572, 0.3048, List.of("frontLeft", "frontRight"), List.of("hood"), List.of("odo"),
+                        "biobuzz-robot"));
     }
 
     static WorldSnapshot snapshot() {

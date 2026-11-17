@@ -37,7 +37,10 @@
  *   <tr><td>0x10<td>Open<td>mapping (name (text); motors, each name (text), slot (one byte: front left, front right, rear left,
  *       rear right, intake, conveyor, shooter, turret), model (text), mirrored (flag); mass, wheel diameter (doubles); drive
  *       motor (text); turret ratio (double); hub logo and USB directions (text); camera x, y, z, yaw, pitch, roll
- *       (doubles)); program, field (text); alliance; seed (64 bits); startX, startY, startHeading, speed (doubles)
+ *       (doubles); turret parts: flag and, if set, the servo's name, model (text) and mirrored (flag); the encoders, each
+ *       OctoQuad port (32 bits), model (text), turns per turret turn, zero offset in degrees (doubles) and mirrored
+ *       (flag); the turret axis x, y (doubles); the camera on the turret (flag)); program, field (text); alliance; seed
+ *       (64 bits); startX, startY, startHeading, speed (doubles)
  *   <tr><td>0x11<td>Init<td>OpMode name (text)
  *   <tr><td>0x12<td>Start<td>-
  *   <tr><td>0x13<td>Stop<td>-
@@ -84,6 +87,8 @@
  *   <li>6: the {@code Log} event (0x46): batches of lines the robot program wrote
  *   <li>7: {@code Open} carries the robot mapping inline instead of a profile name or path; the {@code Catalogue} no longer
  *       lists profiles
+ *   <li>8: the mapping of {@code Open} ends with the turret parts (servo, absolute encoders, axis, camera on the turret),
+ *       and the robot info of {@code Opened} ends with the id of the model the window draws the robot with
  * </ul>
  */
 package dev.ftcsim.link.wire;

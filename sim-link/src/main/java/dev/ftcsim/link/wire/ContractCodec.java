@@ -27,7 +27,10 @@ import dev.ftcsim.contracts.session.RobotInfo;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.ServoMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
+import dev.ftcsim.contracts.session.RobotMapping.TurretEncoder;
+import dev.ftcsim.contracts.session.RobotMapping.TurretParts;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -96,6 +99,24 @@ final class ContractCodec {
         w.doubleBits(camera.yawDegrees());
         w.doubleBits(camera.pitchDegrees());
         w.doubleBits(camera.rollDegrees());
+        TurretParts parts = mapping.turretParts();
+        w.bool(parts.servo() != null);
+        if (parts.servo() != null) {
+            w.string(parts.servo().name());
+            w.string(parts.servo().model());
+            w.bool(parts.servo().mirrored());
+        }
+        w.count(parts.encoders().size(), "the turret encoders");
+        for (TurretEncoder encoder : parts.encoders()) {
+            w.integer(encoder.channel());
+            w.string(encoder.model());
+            w.doubleBits(encoder.turnsPerTurretTurn());
+            w.doubleBits(encoder.zeroOffsetDegrees());
+            w.bool(encoder.mirrored());
+        }
+        w.doubleBits(parts.axisX());
+        w.doubleBits(parts.axisY());
+        w.bool(parts.cameraOnTurret());
     }
 
     private static RobotMapping readMapping(WireReader r) throws WireException {
@@ -115,7 +136,16 @@ final class ContractCodec {
         String hubUsb = r.string("the hub USB direction");
         CameraMount camera =
                 new CameraMount(r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
-        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera);
+        ServoMapping servo = r.bool() ? new ServoMapping(r.string("the turret servo name"), r.string("the turret servo model"), r.bool()) : null;
+        int encoderCount = r.count(STRING_BYTES + 4 + 2 * 8 + 1, "the turret encoders");
+        List<TurretEncoder> encoders = new ArrayList<>(encoderCount);
+        for (int i = 0; i < encoderCount; i++) {
+            int channel = r.integer();
+            String model = r.string("a turret encoder model");
+            encoders.add(new TurretEncoder(channel, model, r.doubleBits(), r.doubleBits(), r.bool()));
+        }
+        TurretParts parts = new TurretParts(servo, encoders, r.doubleBits(), r.doubleBits(), r.bool());
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts);
     }
 
     static void writeInfo(WireWriter w, SessionInfo info) {
@@ -138,6 +168,7 @@ final class ContractCodec {
         writeStrings(w, robot.motors(), "the motors");
         writeStrings(w, robot.servos(), "the servos");
         writeStrings(w, robot.devices(), "the devices");
+        w.string(robot.model());
     }
 
     static SessionInfo readInfo(WireReader r) throws WireException {
@@ -152,7 +183,7 @@ final class ContractCodec {
         }
         RobotInfo robot = new RobotInfo(
                 r.string("the robot name"), r.doubleBits(), r.doubleBits(), r.doubleBits(), readStrings(r, "the motors"),
-                readStrings(r, "the servos"), readStrings(r, "the devices"));
+                readStrings(r, "the servos"), readStrings(r, "the devices"), r.string("the robot model"));
         return new SessionInfo(field, opModes, robot);
     }
 
