@@ -17,6 +17,11 @@ public interface CameraModel {
 
     CameraWire.Reply delete(String path, long nowNanos);
 
+    /** AprilTag ids in the latest completed frame at the given simulated instant, without polling the camera. */
+    default List<Integer> visibleTagIds(long nowNanos) {
+        return List.of();
+    }
+
     /** What robot code did with the camera that the model does not honour, for the simulator's list of problems. */
     List<String> problems();
 }

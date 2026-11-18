@@ -144,8 +144,11 @@ public final class SimulationSession implements AutoCloseable {
                     live.fieldRun.afterStep(afterStep);
                 }
                 mechanisms.step(STEP_SECONDS, rig.chassisView().sample(), afterStep, world);
-                snapshots.set(withCarriedPieces(world.snapshot(), mechanisms.carried(), rig.viewBodies(rig.chassisView().sample())));
                 rig.stepDevices(nanos);
+                WorldSnapshot visible = withCarriedPieces(
+                        world.snapshot(), mechanisms.carried(), rig.viewBodies(rig.chassisView().sample()));
+                snapshots.set(new WorldSnapshot(
+                        visible.stepIndex(), visible.simTimeNanos(), visible.bodies(), rig.cameras().visibleTagIds(nanos)));
             });
             clockwork.every(HUB_TICKS_PER_SECOND, (index, nanos) -> rig.tick(nanos));
 

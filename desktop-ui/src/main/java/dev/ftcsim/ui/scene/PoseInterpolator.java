@@ -18,6 +18,7 @@ public final class PoseInterpolator {
         public int[] entityIds = new int[0];
         public int[] kinds = new int[0];
         public float[] values = new float[0];
+        public List<Integer> visibleTagIds = List.of();
 
         void ensureCapacity(int bodies) {
             if (entityIds.length < bodies) {
@@ -39,7 +40,7 @@ public final class PoseInterpolator {
 
         /** Whether both hold the same bodies at the same poses. */
         public boolean sameAs(Poses other) {
-            if (count != other.count) {
+            if (count != other.count || !visibleTagIds.equals(other.visibleTagIds)) {
                 return false;
             }
             for (int i = 0; i < count; i++) {
@@ -54,6 +55,7 @@ public final class PoseInterpolator {
         public void copyFrom(Poses other) {
             ensureCapacity(other.count);
             count = other.count;
+            visibleTagIds = other.visibleTagIds;
             System.arraycopy(other.entityIds, 0, entityIds, 0, count);
             System.arraycopy(other.kinds, 0, kinds, 0, count);
             System.arraycopy(other.values, 0, values, 0, count * POSE_STRIDE);
@@ -117,6 +119,7 @@ public final class PoseInterpolator {
             count++;
         }
         out.count = count;
+        out.visibleTagIds = latest.current().visibleTagIds();
     }
 
     private static void blend(BodyState a, BodyState b, float t, float[] out, int offset) {

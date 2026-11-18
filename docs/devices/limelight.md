@@ -28,6 +28,9 @@ sources). The real driver polls `http://<ip>:5807/...` from its own thread; the 
 - **The driver.** `setPollRateHz` (1..250, ignored while running), `getTimeSinceLastUpdate` and `isConnected` (250 ms) follow the
   SDK's `scheduleAtFixedRate` grid in virtual time. A request advances the robot's clock by its latency (an unanswered one by
   the SDK's 100 ms connect timeout).
+- **Viewport.** A bright green outline marks each tag in the newest completed frame, using the same detections as
+  `/results` (including tags absent from the camera's map). Highlights do not require robot code to poll the camera,
+  follow tags on moving bodies, and disappear when a completed frame no longer detects them.
 
 ## Numbers and sources
 

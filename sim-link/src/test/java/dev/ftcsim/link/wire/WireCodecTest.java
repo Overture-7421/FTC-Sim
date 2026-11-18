@@ -359,6 +359,7 @@ class WireCodecTest {
             }
         }
 
+        w.integer(0);
         WireException error = assertThrows(WireException.class, () -> WireCodec.decodeEvent(w.finish()));
 
         assertTrue(error.getMessage().contains("strictly ordered"), error.getMessage());

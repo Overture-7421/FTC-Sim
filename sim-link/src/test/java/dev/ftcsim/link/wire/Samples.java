@@ -125,7 +125,7 @@ final class Samples {
         for (int i = 0; i < 40; i++) {
             bodies.add(new BodyState(1000 + 3 * i, 100 + i % 3, 0.01f * i, -0.02f * i, 0.0635f, 0f, 0f, 0.7071068f, 0.7071068f));
         }
-        return new WorldSnapshot(123_456_789L, 514_403_287_500L, bodies);
+        return new WorldSnapshot(123_456_789L, 514_403_287_500L, bodies, List.of(20, 24));
     }
 
     static SessionStatus status() {

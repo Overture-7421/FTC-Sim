@@ -47,6 +47,10 @@ public final class SceneModel {
     private static final float TAG_CORE_SHARE = 0.40f;
     private static final int TAG_BLACK_RGB = 0x101010;
     private static final int TAG_WHITE_RGB = 0xF2F2F2;
+    private static final int TAG_HIGHLIGHT_RGB = 0x39FF14;
+
+    /** A detected tag's outline, relative to its host body or the field when the host is -1. */
+    public record TagHighlight(int hostEntityId, Part[] parts) {}
 
     /** The meshes the renderer has; a sphere's detail follows its size. */
     public enum Mesh {
@@ -130,10 +134,11 @@ public final class SceneModel {
     private final float floorHalf;
     private final boolean ownFloor;
     private final RobotModel robotModel;
+    private final Map<Integer, TagHighlight> tagHighlights;
 
     private SceneModel(
             List<Part> scenery, int[] kindIds, Part[][] kindParts, int[] hostIds, Part[][] hostParts, float floorHalf,
-            RobotModel robotModel) {
+            RobotModel robotModel, Map<Integer, TagHighlight> tagHighlights) {
         this.scenery = scenery;
         this.kindIds = kindIds;
         this.kindParts = kindParts;
@@ -141,6 +146,7 @@ public final class SceneModel {
         this.hostParts = hostParts;
         this.floorHalf = floorHalf;
         this.robotModel = robotModel;
+        this.tagHighlights = Map.copyOf(tagHighlights);
         this.ownFloor = scenery.stream().anyMatch(part -> part.floor() && covers(part, floorHalf));
     }
 
@@ -178,6 +184,7 @@ public final class SceneModel {
         List<Part> fixed = new ArrayList<>();
         Map<Integer, Part[]> kinds = new TreeMap<>();
         Map<Integer, List<Part>> hosted = new TreeMap<>();
+        Map<Integer, TagHighlight> highlights = new TreeMap<>();
         float half = BARE_FLOOR_HALF;
         if (field != null) {
             half = FIELD_FLOOR_HALF;
@@ -198,6 +205,12 @@ public final class SceneModel {
             for (FieldTag tag : field.tags()) {
                 List<Part> target = tag.hostEntityId() < 0 ? fixed : hosted.computeIfAbsent(tag.hostEntityId(), id -> new ArrayList<>());
                 float[] pose = poseOf(tag.local());
+                Part[] outline = tagOutline((float) tag.sizeMeters() / 2f);
+                for (int i = 0; i < outline.length; i++) {
+                    outline[i].placeOn(pose, 0, placed);
+                    outline[i] = withPose(outline[i], placed);
+                }
+                highlights.put(tag.id(), new TagHighlight(tag.hostEntityId(), outline));
                 for (Part layer : tagLayers((float) tag.sizeMeters() / 2f)) {
                     layer.placeOn(pose, 0, placed);
                     target.add(withPose(layer, placed));
@@ -221,7 +234,8 @@ public final class SceneModel {
         int[] ids = kinds.keySet().stream().mapToInt(Integer::intValue).toArray();
         int[] hostIds = hosted.keySet().stream().mapToInt(Integer::intValue).toArray();
         Part[][] hostParts = hosted.values().stream().map(list -> list.toArray(new Part[0])).toArray(Part[][]::new);
-        return new SceneModel(List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half, picture);
+        return new SceneModel(
+                List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half, picture, highlights);
     }
 
     private static RobotModel biobuzzModel;
@@ -239,6 +253,11 @@ public final class SceneModel {
     /** The fixed scenery with every pose in field coordinates. */
     public List<Part> scenery() {
         return scenery;
+    }
+
+    /** The outline to draw for a detected tag, or null if this field has no such tag. */
+    public TagHighlight tagHighlight(int id) {
+        return tagHighlights.get(id);
     }
 
     /** The solids of one kind of body relative to the body; empty when the field does not describe the kind. */
@@ -308,6 +327,18 @@ public final class SceneModel {
             box(0f, 0f, step, half, half, step, TAG_BLACK_RGB),
             box(0f, 0f, step + TAG_LAYER_STEP, half * TAG_WHITE_SHARE, half * TAG_WHITE_SHARE, step, TAG_WHITE_RGB),
             box(0f, 0f, step + 2 * TAG_LAYER_STEP, half * TAG_CORE_SHARE, half * TAG_CORE_SHARE, step, TAG_BLACK_RGB),
+        };
+    }
+
+    private static Part[] tagOutline(float half) {
+        float width = Math.max(0.008f, half * 0.12f);
+        float edge = half + width;
+        float z = 2f * TAG_LAYER_HALF_THICKNESS + 2f * TAG_LAYER_STEP;
+        return new Part[] {
+            box(-edge, 0f, z, width, half + 2f * width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(edge, 0f, z, width, half + 2f * width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(0f, -edge, z, half, width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(0f, edge, z, half, width, 0.002f, TAG_HIGHLIGHT_RGB),
         };
     }
 

@@ -25,6 +25,23 @@ class LimelightModelTest {
 
     private static final List<FieldTag> GOALS = List.of(CameraWorld.blueGoal(), CameraWorld.redGoal());
 
+    @Test
+    void viewportDetectionsMatchCompletedResultsWithoutPollingAndClearWhenTheTagLeavesView() {
+        Rigid start = TestScene.robotFacing(SceneTag.of(CameraWorld.blueGoal()), 1.5, 0.0, 0.0);
+        ScriptedBody body = ScriptedBody.startingAt(
+                start.translation().x(), start.translation().y(), start.rotation().yaw())
+                .stay(0.5).move(0.5, 0, 0, 2 * Math.PI).stay(1).build();
+        CameraWorld world = new CameraWorld(body, CameraWorld.OPEN_SPACE, GOALS, CameraWorld.settings("none"), 7);
+        assertTrue(world.camera.visibleTagIds(0).isEmpty(), "no completed frame yet");
+        world.rig.runTo(300 * MS);
+        assertEquals(List.of(20), world.camera.visibleTagIds(300 * MS), "no SDK poll or mapped pose is needed");
+        long finished = completionOf(world.results(300 * MS));
+        assertEquals(List.of(20), world.camera.visibleTagIds(finished));
+        assertEquals(List.of(20.0), fiducials(world.results(finished)).stream().map(tag -> tag.get("fID")).toList());
+        world.rig.runTo(1500 * MS);
+        assertTrue(world.camera.visibleTagIds(1500 * MS).isEmpty(), "a newer empty frame clears detections");
+    }
+
     @SuppressWarnings("unchecked")
     private static List<Map<String, Object>> fiducials(Map<String, Object> results) {
         return (List<Map<String, Object>>) results.get("Fiducial");

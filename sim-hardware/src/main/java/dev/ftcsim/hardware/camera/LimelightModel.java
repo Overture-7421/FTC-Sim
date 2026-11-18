@@ -415,16 +415,25 @@ public final class LimelightModel implements CameraModel {
         return null;
     }
 
-    /** The newest result the camera had finished by the instant, as the JSON the camera serves. */
-    private String resultsAt(long nowNanos) {
-        Frame newest = null;
+    private Frame frameAt(long nowNanos) {
         for (Iterator<Frame> it = frames.descendingIterator(); it.hasNext(); ) {
             Frame frame = it.next();
             if (frame.completionNanos() <= nowNanos) {
-                newest = frame;
-                break;
+                return frame;
             }
         }
+        return null;
+    }
+
+    @Override
+    public List<Integer> visibleTagIds(long nowNanos) {
+        Frame frame = frameAt(nowNanos);
+        return frame == null ? List.of() : frame.tags().stream().map(Frame.Reading::id).toList();
+    }
+
+    /** The newest result the camera had finished by the instant, as the JSON the camera serves. */
+    private String resultsAt(long nowNanos) {
+        Frame newest = frameAt(nowNanos);
         if (newest == null) {
             return LimelightJson.nothingYet(activePipeline, nowNanos, cameraPose());
         }

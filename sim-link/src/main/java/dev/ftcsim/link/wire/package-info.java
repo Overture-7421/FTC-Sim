@@ -61,7 +61,7 @@
  *   <caption>Events</caption>
  *   <tr><th>kind<th>name<th>fields
  *   <tr><td>0x40<td>Opened<td>flag and field description; OpModes; robot info (see {@code SessionInfo})
- *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies (see {@code WorldSnapshot})
+ *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies; visible AprilTag ids (list of 32-bit ids)
  *   <tr><td>0x42<td>Status<td>see {@code SessionStatus}; the match is followed by the unplaced names, each a kind (one byte:
  *       motor, servo, I2C device, digital pin, analog pin) and the name (text)
  *   <tr><td>0x43<td>Failed<td>message (text): a session that was asked for could not be opened, or cannot go on
@@ -96,6 +96,7 @@
  *   <li>10: each mapped motor ends with its gear ratio (64 bits), and the mapping carries the drive ratio, after the drive motor
  *   <li>11: every field part ends with its opacity (float), after its colour
  *   <li>12: a field part's shape may also be a wedge (code 3: a triangular prism, three half extents)
+ *   <li>13: snapshots end with the AprilTag ids in the Limelight's latest completed frame
  * </ul>
  */
 package dev.ftcsim.link.wire;

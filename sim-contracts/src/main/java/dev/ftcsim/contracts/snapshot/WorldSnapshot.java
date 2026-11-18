@@ -8,11 +8,17 @@ import java.util.List;
  *
  * @param stepIndex    number of fixed steps taken since the session started
  * @param simTimeNanos simulated time, derived from the step index rather than any wall clock
+ * @param visibleTagIds AprilTag ids in the Limelight's latest completed frame
  */
-public record WorldSnapshot(long stepIndex, long simTimeNanos, List<BodyState> bodies) {
+public record WorldSnapshot(long stepIndex, long simTimeNanos, List<BodyState> bodies, List<Integer> visibleTagIds) {
+
+    public WorldSnapshot(long stepIndex, long simTimeNanos, List<BodyState> bodies) {
+        this(stepIndex, simTimeNanos, bodies, List.of());
+    }
 
     public WorldSnapshot {
         bodies = List.copyOf(bodies);
+        visibleTagIds = List.copyOf(visibleTagIds);
         for (int i = 1; i < bodies.size(); i++) {
             if (bodies.get(i - 1).entityId() >= bodies.get(i).entityId()) {
                 throw new IllegalArgumentException(

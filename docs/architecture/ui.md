@@ -126,6 +126,8 @@ The window never blocks on any of them.
 The render thread draws into an offscreen framebuffer, reads it back and Compose shows it as a bitmap, so menus, dialogs and snackbars overlap it ([viewport-measurements.md](viewport-measurements.md) says why not a native canvas). The renderer is described in the Javadoc of `ui.render` and `ui.viewport`.
 
 - The loop interpolates one snapshot interval behind the newest and draws only when something changed, so a world at rest costs no render time.
+- AprilTags detected in the Limelight's latest completed frame have bright green outlines, including tags on moving
+  bodies. Detection changes redraw even a stationary world; the UI never recomputes camera visibility.
 - Field parts keep their RGB colour and opacity separately. Translucent panels are depth-tested and blended back to front
   after opaque geometry and shadows, without writing depth or casting opaque shadows; pieces stay visible through them.
 - Besides boxes, cylinders and spheres, a field part may be a wedge (`Shape.Wedge`, a triangular prism with a unit mesh

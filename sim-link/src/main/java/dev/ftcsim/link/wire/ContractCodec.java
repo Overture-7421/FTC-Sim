@@ -418,6 +418,10 @@ final class ContractCodec {
             w.floatBits(body.qz());
             w.floatBits(body.qw());
         }
+        w.count(snapshot.visibleTagIds().size(), "the visible tags");
+        for (int id : snapshot.visibleTagIds()) {
+            w.integer(id);
+        }
     }
 
     static WorldSnapshot readSnapshot(WireReader r) throws WireException {
@@ -430,7 +434,12 @@ final class ContractCodec {
                     r.integer(), r.integer(), r.floatBits(), r.floatBits(), r.floatBits(), r.floatBits(), r.floatBits(),
                     r.floatBits(), r.floatBits()));
         }
-        return new WorldSnapshot(stepIndex, simTimeNanos, bodies);
+        int tagCount = r.count(4, "the visible tags");
+        List<Integer> visibleTags = new ArrayList<>(tagCount);
+        for (int i = 0; i < tagCount; i++) {
+            visibleTags.add(r.integer());
+        }
+        return new WorldSnapshot(stepIndex, simTimeNanos, bodies, visibleTags);
     }
 
     static void writeStatus(WireWriter w, SessionStatus status) {

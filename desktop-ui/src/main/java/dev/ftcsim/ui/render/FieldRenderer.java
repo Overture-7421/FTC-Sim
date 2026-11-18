@@ -38,6 +38,7 @@ import static org.lwjgl.opengl.GL33C.glViewport;
 import dev.ftcsim.ui.scene.PoseInterpolator;
 import dev.ftcsim.ui.scene.SceneModel;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.List;
 import org.lwjgl.opengl.GL;
@@ -62,6 +63,7 @@ public final class FieldRenderer implements AutoCloseable {
     private static final float LIGHT_X = 0.45f;
     private static final float LIGHT_Y = -0.35f;
     private static final float LIGHT_Z = 0.82f;
+    private static final float[] IDENTITY_POSE = {0f, 0f, 0f, 0f, 0f, 0f, 1f};
 
     private static final String VERTEX_SHADER = """
             #version 330 core
@@ -410,6 +412,20 @@ public final class FieldRenderer implements AutoCloseable {
             int offset = i * PoseInterpolator.POSE_STRIDE;
             addParts(scene.parts(poses.kinds[i]), values, offset);
             addParts(scene.carriedBy(poses.entityIds[i]), values, offset);
+        }
+        for (int id : poses.visibleTagIds) {
+            SceneModel.TagHighlight highlight = scene.tagHighlight(id);
+            if (highlight == null) {
+                continue;
+            }
+            if (highlight.hostEntityId() == -1) {
+                addParts(highlight.parts(), IDENTITY_POSE, 0);
+            } else {
+                int host = Arrays.binarySearch(poses.entityIds, 0, poses.count, highlight.hostEntityId());
+                if (host >= 0) {
+                    addParts(highlight.parts(), values, host * PoseInterpolator.POSE_STRIDE);
+                }
+            }
         }
         for (InstanceBatch batch : moving) {
             batch.upload();

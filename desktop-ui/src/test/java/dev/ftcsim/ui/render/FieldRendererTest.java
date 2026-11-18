@@ -37,6 +37,53 @@ class FieldRendererTest {
     private static final int FLOOR_RGB = 0x808080;
     private static final int BALL_RGB = 0xFF00FF;
 
+    @Test
+    void onlyDetectedTagsGetGreenOutlinesAndHostedOutlinesMoveWithTheirBody() {
+        OrbitCamera camera = new OrbitCamera();
+        camera.select(OrbitCamera.Preset.TOP);
+        for (int host : new int[] {-1, 10}) {
+            FieldTag tag = new FieldTag(20, 0.4, host, Pose3.at(0, 0, 0.4));
+            renderer.setScene(SceneModel.of(field(List.of(tag), false), null));
+            PoseInterpolator.Poses frame = poses(
+                    host < 0 ? List.of() : List.of(new BodyState(host, 99, 0, 0, 0, 0, 0, 0, 1)));
+            renderer.render(frame, camera, target.framebuffer(), WIDTH, HEIGHT);
+            int[] unseen = target.readArgb();
+            assertEquals(0, greenPixels(unseen));
+            frame.visibleTagIds = List.of(24);
+            renderer.render(frame, camera, target.framebuffer(), WIDTH, HEIGHT);
+            assertArrayEquals(unseen, target.readArgb(), "an unknown tag highlights nothing");
+            frame.visibleTagIds = List.of(20);
+            renderer.render(frame, camera, target.framebuffer(), WIDTH, HEIGHT);
+            int[] seen = target.readArgb();
+            assertTrue(greenPixels(seen) > 10, "a green border surrounds the detected tag");
+            if (host >= 0) {
+                frame.values[0] = 0.8f;
+                renderer.render(frame, camera, target.framebuffer(), WIDTH, HEIGHT);
+                int[] moved = target.readArgb();
+                assertTrue(greenPixels(moved) > 10);
+                int overlap = 0;
+                for (int i = 0; i < seen.length; i++) {
+                    if (isGreen(seen[i]) && isGreen(moved[i])) {
+                        overlap++;
+                    }
+                }
+                assertEquals(0, overlap, "the outline follows the host rather than staying at the old pose");
+                frame.values[0] = 0;
+            }
+            frame.visibleTagIds = List.of();
+            renderer.render(frame, camera, target.framebuffer(), WIDTH, HEIGHT);
+            assertArrayEquals(unseen, target.readArgb(), "losing the tag removes the outline");
+        }
+    }
+
+    private static boolean isGreen(int pixel) {
+        return ((pixel >> 8) & 0xFF) > 100 && ((pixel >> 16) & 0xFF) < 90 && (pixel & 0xFF) < 90;
+    }
+
+    private static long greenPixels(int[] picture) {
+        return Arrays.stream(picture).filter(FieldRendererTest::isGreen).count();
+    }
+
     private GlfwThread glfw;
     private HiddenGlContext context;
     private FieldRenderer renderer;
