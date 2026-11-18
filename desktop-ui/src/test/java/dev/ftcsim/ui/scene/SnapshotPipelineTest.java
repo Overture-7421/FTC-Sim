@@ -15,6 +15,26 @@ import org.junit.jupiter.api.Test;
 class SnapshotPipelineTest {
     private static final long STEP = 4_000_000L;
 
+    @Test
+    void detectionChangesRedrawAStationaryWorldAndSurvivePoseCopiesUntilCleared() {
+        SnapshotMailbox mailbox = new SnapshotMailbox();
+        List<BodyState> bodies = List.of(body(1, 0f, 0f, 1f));
+        mailbox.publish(new WorldSnapshot(1, STEP, bodies), 0);
+        PoseInterpolator.Poses old = new PoseInterpolator.Poses();
+        PoseInterpolator.interpolate(mailbox.latest(), 1, old);
+        assertTrue(mailbox.publish(new WorldSnapshot(2, 2 * STEP, bodies, List.of(20)), 100));
+        PoseInterpolator.Poses seen = new PoseInterpolator.Poses();
+        PoseInterpolator.interpolate(mailbox.latest(), 0.5, seen);
+        assertEquals(List.of(20), seen.visibleTagIds);
+        assertFalse(seen.sameAs(old), "the render loop must not skip a detection-only change");
+        old.copyFrom(seen);
+        assertTrue(old.sameAs(seen));
+        assertTrue(mailbox.publish(new WorldSnapshot(3, 3 * STEP, bodies), 200));
+        PoseInterpolator.interpolate(mailbox.latest(), 1, seen);
+        assertTrue(seen.visibleTagIds.isEmpty());
+        assertFalse(seen.sameAs(old));
+    }
+
     private static BodyState body(int id, float x, float qz, float qw) {
         return new BodyState(id, 1, x, 0f, 0f, 0f, 0f, qz, qw);
     }

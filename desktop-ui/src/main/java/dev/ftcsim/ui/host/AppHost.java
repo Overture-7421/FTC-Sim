@@ -32,4 +32,9 @@ public interface AppHost {
     default boolean isFake() {
         return false;
     }
+
+    /** How the application keeps itself up to date; by default it does not. */
+    default UpdateService updates() {
+        return UpdateService.NONE;
+    }
 }

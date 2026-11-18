@@ -64,6 +64,29 @@ class WiringTableTest {
     }
 
     @Test
+    void aServoTheMappingPlacedKeepsItsPortFromOtherServosAndIsNotReported() {
+        WiringTable table = controlHubAndExpansionHub().servo("turret", 173, 0).build();
+
+        assertEquals(new HardwareDirectory.ServoWiring(173, 0, true), table.servo("turret"));
+        assertEquals(new HardwareDirectory.ServoWiring(173, 1, false), table.servo("claw"), "another servo takes the next free port");
+        assertEquals(List.of(new UnmappedDevice(UnmappedDevice.Kind.SERVO, "claw")), table.unmapped());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().servo("a", 173, 0).servo("b", 173, 0).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().servo("a", 173, 6).build());
+    }
+
+    @Test
+    void theOctoQuadIsOnlyOnARobotWhoseDesignPutsOneOnItAndItsAbsenceIsAnErrorThatNamesIt() {
+        WiringTable without = controlHubAndExpansionHub().build();
+        WiringTable with = controlHubAndExpansionHub().sensor(Sensor.OCTOQUAD).build();
+
+        assertFalse(without.hasSensor(Sensor.OCTOQUAD));
+        assertTrue(without.hasSensor(Sensor.PINPOINT), "the other sensors are on every robot");
+        IllegalStateException refused = assertThrows(IllegalStateException.class, () -> without.sensor("octo", Sensor.OCTOQUAD));
+        assertTrue(refused.getMessage().toLowerCase(java.util.Locale.ROOT).contains("octo"), refused.getMessage());
+        assertEquals(3, with.sensor("octo", Sensor.OCTOQUAD).bus());
+    }
+
+    @Test
     void whenTheFirstHubIsFullTheNextHubGetsTheDevice() {
         WiringTable table = controlHubAndExpansionHub().build();
 

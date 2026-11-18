@@ -29,7 +29,7 @@ Only what the design sets; everything else is `MecanumConfig.generic18Inch()` (m
 | `rollerRollingResistance` | 0.053 | Fitted to the sideways deceleration; the share of its load a wheel's rollers drag with. |
 | `rollerFriction` | 0.5 | Chosen, not fitted: the cap of the roller drag, kept well above it so it takes no grip away. |
 
-Generic values behind them: 96 mm mecanum wheels (radius 0.048 m), goBILDA 5203 435 rpm motors (stall 1.834 N m, free speed 45.55 rad/s, 9.2 A stall at 12 V, from the data sheet), wheelbase and track 0.36 m, body 0.457 x 0.457 x 0.305 m, centre of mass 0.08 m up, traction friction 0.8.
+Generic values behind them: 96 mm mecanum wheels (radius 0.048 m), goBILDA Yellow Jacket motors behind 13.7:1 (a 435 rpm motor: stall 1.834 N m, free speed 45.55 rad/s, 9.2 A stall at 12 V, from the data sheet), the same for the intake and the belt, whose rollers are the motor's speed over 13.7, wheelbase and track 0.36 m, body 0.457 x 0.457 x 0.305 m, centre of mass 0.08 m up, traction friction 0.8.
 
 - **Wheels and motors.** 76.84 in/s is 1.95 m/s, 40.7 rad/s on 96 mm wheels, 89 % of a 435 rpm motor's free speed at 12 V; 312 rpm motors could not reach it. Hornet's repository names neither wheels nor drive motors, so both are estimates.
 - **Wheel friction is constant, not viscous.** A real gearbox loses about the same torque at any speed. A robot that loses 0.835 m/s^2 on average coasting from 30 in/s to a stop and still reaches 89 % of free speed cannot be pure viscous drag (drag that stops it that hard, 0.04 N m s/rad, would top out at 45 in/s, not 77). The two measurements fix the constant part (0.12 N m per wheel) and the viscous part (0.0034).

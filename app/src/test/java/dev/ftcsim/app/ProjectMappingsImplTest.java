@@ -47,12 +47,12 @@ class ProjectMappingsImplTest {
                         new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
                         new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
                         new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-                        new MotorMapping("shooter", Slot.SHOOTER, "goBILDA-5203-1150", false),
+                        new MotorMapping("shooter", Slot.SHOOTER, "swyft-spike-6000", false),
                         new MotorMapping("belt", Slot.CONVEYOR, "", true),
                         new MotorMapping("aim", Slot.TURRET, "", false)),
                 10.5,
                 104,
-                "goBILDA-5203-312",
+                "rev-hd-hex-6000",
                 3.5,
                 "LEFT",
                 "UP",
@@ -80,10 +80,10 @@ class ProjectMappingsImplTest {
         assertEquals("Team robot", json.get("name").asText());
         assertEquals("FRONT_LEFT", json.at("/motors/frontLeft/slot").asText());
         assertTrue(json.at("/motors/frontLeft/mirrored").asBoolean());
-        assertEquals("goBILDA-5203-1150", json.at("/motors/shooter/model").asText());
+        assertEquals("swyft-spike-6000", json.at("/motors/shooter/model").asText());
         assertEquals(10.5, json.get("massKg").asDouble());
         assertEquals(104, json.get("wheelDiameterMm").asDouble());
-        assertEquals("goBILDA-5203-312", json.get("driveMotor").asText());
+        assertEquals("rev-hd-hex-6000", json.get("driveMotor").asText());
         assertEquals(3.5, json.get("turretRatio").asDouble());
         assertEquals("LEFT", json.at("/hub/logo").asText());
         assertEquals("UP", json.at("/hub/usb").asText());
@@ -98,6 +98,31 @@ class ProjectMappingsImplTest {
         assertTrue(found.usable());
         assertNull(found.problem());
         assertEquals(RunDefaults.NONE, found.run());
+    }
+
+    @Test
+    void aGearRatioIsANumberOrAFractionPerMotorAndForTheDriveAndIsWrittenOnlyWhenItIsGiven() throws IOException {
+        write("{\"schema\":2,\"driveMotor\":\"swyft-spike-6000\",\"driveRatio\":12.7,\"motors\":{"
+                + "\"intake\":{\"slot\":\"INTAKE\",\"ratio\":2},\"fly\":{\"slot\":\"SHOOTER\",\"ratio\":\" 43 / 30 \"},\"belt\":{\"slot\":\"CONVEYOR\"}}}");
+
+        RobotMapping mapping = mappings.find(project).orElseThrow().mapping();
+
+        assertEquals(12.7, mapping.driveRatio());
+        assertEquals(2.0, mapping.in(Slot.INTAKE).get(0).ratio());
+        assertEquals(43.0 / 30.0, mapping.in(Slot.SHOOTER).get(0).ratio(), 1e-12, "a fraction as a team writes it");
+        assertEquals(0.0, mapping.in(Slot.CONVEYOR).get(0).ratio(), "none given is none");
+
+        mappings.save(project, mapping);
+        JsonNode json = read(project.resolve("ftcsim.json"));
+        assertEquals(12.7, json.get("driveRatio").asDouble());
+        assertEquals(2.0, json.at("/motors/intake/ratio").asDouble());
+        assertFalse(json.at("/motors/belt").has("ratio"));
+        assertEquals(mapping, mappings.find(project).orElseThrow().mapping(), "and it reads back the same");
+
+        write("{\"schema\":2,\"motors\":{\"fly\":{\"slot\":\"SHOOTER\",\"ratio\":\"two to one\"}}}");
+        ProjectMappings.Found bad = mappings.find(project).orElseThrow();
+        assertFalse(bad.usable());
+        assertTrue(bad.problem().contains("ratio 'two to one' is not a number or a fraction"), bad.problem());
     }
 
     @Test
@@ -135,6 +160,56 @@ class ProjectMappingsImplTest {
                 "{\"schema\":2,\"motors\":{\"a\":{\"slot\":\"INTAKE\",\"mirrored\":\"yes\"}}}",
                 "{\"schema\":2,\"massKg\":\"heavy\"}",
                 "{\"schema\":2,\"motors\":{\"a\":{\"slot\":\"INTAKE\"},\"a\":{\"slot\":\"SHOOTER\"}}}")) {
+            write(text);
+
+            ProjectMappings.Found found = mappings.find(project).orElseThrow();
+
+            assertFalse(found.usable(), text);
+            assertTrue(found.problem().startsWith("ftcsim.json cannot be read: "), found.problem());
+        }
+    }
+
+    @Test
+    void theTurretsServoEncodersAxisAndCameraRoundTripAndAFileWithoutThemHasNone() throws IOException {
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("turretServo", "axon-mini-plus", true),
+                List.of(
+                        new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.5, false),
+                        new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, -3.0, true)),
+                0.05, -0.02, true,
+                List.of(
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("gate", "", false)),
+                        new RobotMapping.MechanismServo(
+                                RobotMapping.ServoRole.COLIBRI_LEFT, new RobotMapping.ServoMapping("armL", "gobilda-2000-torque", true))));
+        RobotMapping withParts = robot().withTurretParts(parts);
+
+        ProjectMappings.Saved saved = mappings.save(project, withParts);
+
+        JsonNode json = read(saved.file());
+        assertEquals("gate", json.at("/turret/stopper/name").asText());
+        assertTrue(json.at("/turret/colibriLeft/mirrored").asBoolean());
+        assertEquals("gobilda-2000-torque", json.at("/turret/colibriLeft/model").asText());
+        assertEquals("turretServo", json.at("/turret/servo/name").asText());
+        assertTrue(json.at("/turret/servo/mirrored").asBoolean());
+        assertEquals(1, json.at("/turret/encoders/1/channel").asInt());
+        assertEquals(5.5, json.at("/turret/encoders/0/turnsPerTurretTurn").asDouble());
+        assertEquals(-0.02, json.at("/turret/axis/y").asDouble());
+        assertTrue(json.at("/turret/cameraOnTurret").asBoolean());
+        assertEquals(withParts, mappings.find(project).orElseThrow().mapping());
+
+        mappings.save(project, robot());
+        assertFalse(read(saved.file()).has("turret"), "a robot with nothing on its turret writes no turret key");
+        assertEquals(RobotMapping.TurretParts.NONE, mappings.find(project).orElseThrow().mapping().turretParts());
+    }
+
+    @Test
+    void aTurretKeyThatIsNotPartOfTheFileOrANonsenseEncoderIsAProblem() throws IOException {
+        for (String text : List.of(
+                "{\"schema\":2,\"turret\":{\"gears\":3}}",
+                "{\"schema\":2,\"turret\":{\"servo\":{\"model\":\"axon-mini-plus\"}}}",
+                "{\"schema\":2,\"turret\":{\"encoders\":[{\"channel\":0}]}}",
+                "{\"schema\":2,\"turret\":{\"encoders\":[{\"channel\":0.5,\"turnsPerTurretTurn\":5}]}}",
+                "{\"schema\":2,\"turret\":{\"cameraOnTurret\":\"yes\"}}")) {
             write(text);
 
             ProjectMappings.Found found = mappings.find(project).orElseThrow();
@@ -264,7 +339,7 @@ class ProjectMappingsImplTest {
     @Test
     void aNumberThatIsNotFiniteIsNotWritten() {
         RobotMapping broken = new RobotMapping(
-                "x", List.of(), Double.NaN, 96, "goBILDA-5203-435", 1, "UP", "FORWARD", RobotMapping.empty("x").camera());
+                "x", List.of(), Double.NaN, 96, "goBILDA-bare-6000", 1, "UP", "FORWARD", RobotMapping.empty("x").camera());
 
         assertThrows(IOException.class, () -> mappings.save(project, broken));
         assertFalse(Files.exists(project.resolve("ftcsim.json")));

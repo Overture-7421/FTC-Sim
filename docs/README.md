@@ -10,13 +10,14 @@ Start with the root `README.md` (what FTC-Sim is, how to use and build it), then
 | build, run, change and hand over work | `development.md` |
 | write or run tests | `testing.md` |
 | set up VS Code | `vscode.md` |
-| add an ideal sensor, or see how a driver class is bound | `architecture/adding-a-device.md`, `devices/` (`pinpoint`, `color-sensor`, `bno055-imu`, `limelight`) |
-| map a robot, or see how the fixed one was fitted | `robots/fixed-robots.md`, `robots/hornet-fit.md` |
+| add an ideal sensor, or see how a driver class is bound | `architecture/adding-a-device.md`, `devices/` (`pinpoint`, `color-sensor`, `bno055-imu`, `limelight`, `octoquad`) |
+| map a robot, or see how the fixed one was fitted | `robots/fixed-robots.md`, `robots/hornet-fit.md`, `robots/biobuzz-stub.md` (the BIOBUZZ programs: the red and blue driver TeleOps and the diagnostic stub), `robots/biobuzz-cad.md` (the robot's picture, from the CAD) |
 | know what a field models and estimates | `fields/decode.md`, `fields/biobuzz.md` |
 | change the window or its 3D view | `architecture/ui.md`, `architecture/viewport-measurements.md` |
 | change how the window talks to the simulation | `architecture/link.md` |
 | understand the app, its folders and the importer | `architecture/app.md`, `architecture/prepared-program.md` |
 | change startup, the Java runtime or the zip | `architecture/distribution.md` |
+| make a release, change the installer, or see how the app updates itself | `architecture/updates.md` |
 | see which FTC SDK releases are supported | `sdk-versions.md` |
 | see what is missing and what to do next | `roadmap.md` |
 

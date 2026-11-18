@@ -20,7 +20,9 @@ public interface HardwareDirectory {
         /** The goBILDA Pinpoint odometry computer. */
         PINPOINT(1),
         /** The REV colour sensor. */
-        COLOR_SENSOR(2);
+        COLOR_SENSOR(2),
+        /** The Digital Chicken Labs OctoQuad, on a robot whose design puts encoders on it. */
+        OCTOQUAD(3);
 
         private final int bus;
 
@@ -78,6 +80,11 @@ public interface HardwareDirectory {
      * @throws IllegalStateException if the sensor already has another name
      */
     I2cWiring sensor(String name, Sensor kind);
+
+    /** Whether the robot has a sensor of that kind; every robot has the Pinpoint and the colour sensor, few have an OctoQuad. */
+    default boolean hasSensor(Sensor kind) {
+        return true;
+    }
 
     /**
      * Where the IMU is for robot code that asks for an IMU, the {@code IMU} interface or {@code BNO055IMU}, under

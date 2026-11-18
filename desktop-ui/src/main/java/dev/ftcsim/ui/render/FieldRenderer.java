@@ -37,6 +37,10 @@ import static org.lwjgl.opengl.GL33C.glViewport;
 
 import dev.ftcsim.ui.scene.PoseInterpolator;
 import dev.ftcsim.ui.scene.SceneModel;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.List;
 import org.lwjgl.opengl.GL;
 
 /**
@@ -59,6 +63,7 @@ public final class FieldRenderer implements AutoCloseable {
     private static final float LIGHT_X = 0.45f;
     private static final float LIGHT_Y = -0.35f;
     private static final float LIGHT_Z = 0.82f;
+    private static final float[] IDENTITY_POSE = {0f, 0f, 0f, 0f, 0f, 0f, 1f};
 
     private static final String VERTEX_SHADER = """
             #version 330 core
@@ -104,6 +109,7 @@ public final class FieldRenderer implements AutoCloseable {
             uniform int uPass;
             uniform float uFieldHalf;
             uniform float uSpecular;
+            uniform float uAlpha;
             out vec4 fragColor;
 
             const float TILE = 0.6096;
@@ -156,12 +162,18 @@ public final class FieldRenderer implements AutoCloseable {
                 vec3 halfway = normalize(uLight + normalize(uEye - vWorld));
                 float specular = pow(max(dot(n, halfway), 0.0), 48.0) * shine;
                 vec3 lit = base * (ambientLight(n) + vec3(1.0, 0.97, 0.90) * diffuse * 0.85) + vec3(specular);
-                fragColor = vec4(lit, 1.0);
+                fragColor = vec4(lit, uAlpha);
             }
             """;
 
     // Spheres are glossy, everything else is matte plastic, foam and painted wood.
-    private static final float[] SPECULAR_BY_MESH = {0.05f, 0.05f, 0.30f, 0.30f, 0.30f};
+    private static final float[] SPECULAR_BY_MESH = {0.05f, 0.05f, 0.05f, 0.30f, 0.30f, 0.30f};
+
+    private record TranslucentPart(
+            SceneModel.Part part, float x, float y, float z, float qx, float qy, float qz, float qw, float depth) {}
+
+    private static final Comparator<TranslucentPart> BACK_TO_FRONT =
+            Comparator.comparingDouble(TranslucentPart::depth).reversed();
 
     private final float[] viewProjection = new float[16];
     private final float[] eye = new float[3];
@@ -169,7 +181,13 @@ public final class FieldRenderer implements AutoCloseable {
     private GlProgram program;
     private InstanceBatch[] fixed;
     private InstanceBatch[] moving;
+    private InstanceBatch[] translucent;
+    private final List<TranslucentPart> translucentParts = new ArrayList<>();
+    private int translucentFixed;
+    private int translucentMoving;
     private SceneModel scene;
+    private ModelRenderer picture;
+    private final float[] light = new float[3];
     private float floorHalf;
     private int uViewProjection;
     private int uLight;
@@ -177,6 +195,7 @@ public final class FieldRenderer implements AutoCloseable {
     private int uPass;
     private int uFieldHalf;
     private int uSpecular;
+    private int uAlpha;
     private int drawCalls;
     private int drawnInstances;
     private long drawnTriangles;
@@ -194,8 +213,10 @@ public final class FieldRenderer implements AutoCloseable {
         uPass = program.uniform("uPass");
         uFieldHalf = program.uniform("uFieldHalf");
         uSpecular = program.uniform("uSpecular");
+        uAlpha = program.uniform("uAlpha");
         fixed = createBatches(8);
         moving = createBatches(128);
+        translucent = createBatches(1);
     }
 
     private static InstanceBatch[] createBatches(int initialCapacity) {
@@ -205,6 +226,7 @@ public final class FieldRenderer implements AutoCloseable {
             Meshes.Mesh mesh = switch (kind) {
                 case BOX -> Meshes.box();
                 case CYLINDER -> Meshes.cylinder(CYLINDER_SEGMENTS);
+                case WEDGE -> Meshes.wedge();
                 case SPHERE_COARSE -> Meshes.sphere(SPHERE_DETAIL[0][0], SPHERE_DETAIL[0][1]);
                 case SPHERE_MEDIUM -> Meshes.sphere(SPHERE_DETAIL[1][0], SPHERE_DETAIL[1][1]);
                 case SPHERE_FINE -> Meshes.sphere(SPHERE_DETAIL[2][0], SPHERE_DETAIL[2][1]);
@@ -218,6 +240,13 @@ public final class FieldRenderer implements AutoCloseable {
     public void setScene(SceneModel newScene) {
         scene = newScene;
         floorHalf = newScene.floorHalfExtent();
+        if (picture != null && picture.model() != newScene.robotModel()) {
+            picture.close();
+            picture = null;
+        }
+        if (picture == null && newScene.robotModel() != null) {
+            picture = new ModelRenderer(newScene.robotModel());
+        }
         for (InstanceBatch batch : fixed) {
             batch.begin();
         }
@@ -228,6 +257,9 @@ public final class FieldRenderer implements AutoCloseable {
                     floorHalf, floorHalf, FLOOR_THICKNESS, 0f, 0f, 0f);
         }
         for (SceneModel.Part part : newScene.scenery()) {
+            if (part.alpha() < 1f) {
+                continue;
+            }
             fixed[part.mesh().ordinal()].add(
                     part.x(), part.y(), part.z(), part.floor() ? FIELD_FLOOR : PLAIN, part.qx(), part.qy(), part.qz(), part.qw(),
                     part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue());
@@ -250,6 +282,7 @@ public final class FieldRenderer implements AutoCloseable {
         if (scene == null) {
             return;
         }
+        camera.viewProjection(width / (float) Math.max(1, height), viewProjection, eye);
         collect(poses);
         drawCalls = 0;
         drawnInstances = 0;
@@ -260,18 +293,27 @@ public final class FieldRenderer implements AutoCloseable {
         glFrontFace(GL_CCW);
         glCullFace(GL_BACK);
 
-        camera.viewProjection(width / (float) Math.max(1, height), viewProjection, eye);
         program.use();
         glUniformMatrix4fv(uViewProjection, false, viewProjection);
         float lightLength = (float) Math.sqrt(LIGHT_X * LIGHT_X + LIGHT_Y * LIGHT_Y + LIGHT_Z * LIGHT_Z);
-        glUniform3f(uLight, LIGHT_X / lightLength, LIGHT_Y / lightLength, LIGHT_Z / lightLength);
+        light[0] = LIGHT_X / lightLength;
+        light[1] = LIGHT_Y / lightLength;
+        light[2] = LIGHT_Z / lightLength;
+        glUniform3f(uLight, light[0], light[1], light[2]);
         glUniform3f(uEye, eye[0], eye[1], eye[2]);
         glUniform1f(uFieldHalf, floorHalf);
+        glUniform1f(uAlpha, 1f);
 
         glEnable(GL_CULL_FACE);
         glUniform1i(uPass, 0);
         drawAll(fixed, true);
         drawAll(moving, true);
+        boolean pictured = picture != null && picture.place(poses);
+        if (pictured) {
+            picture.begin(viewProjection, light, eye, floorHalf);
+            picture.draw(0);
+            program.use();
+        }
 
         // Shadows are translucent decals on the floor; the stencil lets each pixel be darkened once however many
         // shadows overlap there, and nothing is written to the depth buffer.
@@ -284,7 +326,16 @@ public final class FieldRenderer implements AutoCloseable {
         glStencilOp(GL_KEEP, GL_KEEP, GL_INCR);
         glUniform1i(uPass, 1);
         drawAll(moving, false);
+        if (pictured) {
+            picture.draw(1);
+            drawCalls += picture.drawCalls();
+            drawnTriangles += picture.drawnTriangles();
+            program.use();
+        }
         glDisable(GL_STENCIL_TEST);
+        glEnable(GL_CULL_FACE);
+        glUniform1i(uPass, 0);
+        drawTranslucent();
         glDisable(GL_BLEND);
         glDepthMask(true);
         glBindVertexArray(0);
@@ -295,7 +346,28 @@ public final class FieldRenderer implements AutoCloseable {
         if (fixed == null) {
             return new FrameStats(0, 0, 0, 0, 0);
         }
-        return new FrameStats(drawCalls, drawnInstances, drawnTriangles, countOf(fixed), countOf(moving));
+        return new FrameStats(drawCalls, drawnInstances, drawnTriangles,
+                countOf(fixed) + translucentFixed, countOf(moving) + translucentMoving);
+    }
+
+    private void drawTranslucent() {
+        translucentParts.sort(BACK_TO_FRONT);
+        for (TranslucentPart placedPart : translucentParts) {
+            SceneModel.Part part = placedPart.part();
+            InstanceBatch batch = translucent[part.mesh().ordinal()];
+            batch.begin();
+            batch.add(
+                    placedPart.x(), placedPart.y(), placedPart.z(), part.floor() ? FIELD_FLOOR : PLAIN,
+                    placedPart.qx(), placedPart.qy(), placedPart.qz(), placedPart.qw(),
+                    part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue());
+            batch.upload();
+            glUniform1f(uAlpha, part.alpha());
+            glUniform1f(uSpecular, SPECULAR_BY_MESH[part.mesh().ordinal()]);
+            int count = batch.draw();
+            drawCalls++;
+            drawnInstances += count;
+            drawnTriangles += (long) count * batch.triangles();
+        }
     }
 
     private static int countOf(InstanceBatch[] batches) {
@@ -323,6 +395,15 @@ public final class FieldRenderer implements AutoCloseable {
     }
 
     private void collect(PoseInterpolator.Poses poses) {
+        translucentParts.clear();
+        translucentFixed = 0;
+        translucentMoving = 0;
+        for (SceneModel.Part part : scene.scenery()) {
+            if (part.alpha() > 0f && part.alpha() < 1f) {
+                addTranslucent(part, part.x(), part.y(), part.z(), part.qx(), part.qy(), part.qz(), part.qw());
+                translucentFixed++;
+            }
+        }
         for (InstanceBatch batch : moving) {
             batch.begin();
         }
@@ -332,6 +413,20 @@ public final class FieldRenderer implements AutoCloseable {
             addParts(scene.parts(poses.kinds[i]), values, offset);
             addParts(scene.carriedBy(poses.entityIds[i]), values, offset);
         }
+        for (int id : poses.visibleTagIds) {
+            SceneModel.TagHighlight highlight = scene.tagHighlight(id);
+            if (highlight == null) {
+                continue;
+            }
+            if (highlight.hostEntityId() == -1) {
+                addParts(highlight.parts(), IDENTITY_POSE, 0);
+            } else {
+                int host = Arrays.binarySearch(poses.entityIds, 0, poses.count, highlight.hostEntityId());
+                if (host >= 0) {
+                    addParts(highlight.parts(), values, host * PoseInterpolator.POSE_STRIDE);
+                }
+            }
+        }
         for (InstanceBatch batch : moving) {
             batch.upload();
         }
@@ -339,11 +434,24 @@ public final class FieldRenderer implements AutoCloseable {
 
     private void addParts(SceneModel.Part[] parts, float[] values, int offset) {
         for (SceneModel.Part part : parts) {
+            if (part.alpha() == 0f) {
+                continue;
+            }
             part.placeOn(values, offset, placed);
-            moving[part.mesh().ordinal()].add(
-                    placed[0], placed[1], placed[2], 0f, placed[3], placed[4], placed[5], placed[6],
-                    part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue());
+            if (part.alpha() < 1f) {
+                addTranslucent(part, placed[0], placed[1], placed[2], placed[3], placed[4], placed[5], placed[6]);
+                translucentMoving++;
+            } else {
+                moving[part.mesh().ordinal()].add(
+                        placed[0], placed[1], placed[2], 0f, placed[3], placed[4], placed[5], placed[6],
+                        part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue());
+            }
         }
+    }
+
+    private void addTranslucent(SceneModel.Part part, float x, float y, float z, float qx, float qy, float qz, float qw) {
+        float depth = viewProjection[3] * x + viewProjection[7] * y + viewProjection[11] * z + viewProjection[15];
+        translucentParts.add(new TranslucentPart(part, x, y, z, qx, qy, qz, qw, depth));
     }
 
     @Override
@@ -356,6 +464,12 @@ public final class FieldRenderer implements AutoCloseable {
         }
         for (InstanceBatch batch : moving) {
             batch.close();
+        }
+        for (InstanceBatch batch : translucent) {
+            batch.close();
+        }
+        if (picture != null) {
+            picture.close();
         }
         program.close();
     }

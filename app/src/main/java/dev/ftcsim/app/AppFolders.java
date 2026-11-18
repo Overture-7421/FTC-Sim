@@ -14,6 +14,7 @@ import java.util.Locale;
  * <pre>
  * natives\                          the physics engine's native library, unpacked by the worker once per version
  * logs\                             one log per worker launch, and the crash report of a worker that crashed
+ * updates\                          the installer of a newer version, fetched and checked, until it is run
  * import\work\NAME-HASH\            the importer's copy of one project and what it builds there, kept between preparations
  * programs\NAME-FINGERPRINT\        a prepared program: the project's name and the first digits of the hash of its source
  * programs\NAME-FINGERPRINT.build.log   the output of the build that made it
@@ -53,6 +54,11 @@ public final class AppFolders {
     /** Where the logs are: one per start of the application ({@link AppLog}) and per worker launch, and the crash reports of the Java runtime; each kind keeps only the newest. */
     public Path logs() {
         return base.resolve("logs");
+    }
+
+    /** Where the installer of a newer version is kept between being fetched and being run. */
+    public Path updates() {
+        return base.resolve("updates");
     }
 
     /** Where prepared programs are made. */

@@ -5,6 +5,7 @@ import dev.ftcsim.link.WorkerLauncher;
 import dev.ftcsim.ui.host.AppHost;
 import dev.ftcsim.ui.host.ProgramPreparer;
 import dev.ftcsim.ui.host.ProjectMappings;
+import dev.ftcsim.ui.host.UpdateService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -36,6 +37,7 @@ public final class RealHost implements AppHost, AutoCloseable {
     private final ProjectMappings mappings;
     private Duration connectTimeout = Duration.ofSeconds(60);
     private Duration shutdownGrace = Duration.ofSeconds(3);
+    private UpdateService updates = UpdateService.NONE;
 
     /** The host of the computer this program runs on, whose jars are where {@link AppClasspath#locate()} finds them. */
     public static RealHost forThisMachine() {
@@ -104,6 +106,17 @@ public final class RealHost implements AppHost, AutoCloseable {
     @Override
     public ProjectMappings mappings() {
         return mappings;
+    }
+
+    /** How this host keeps the application up to date; none unless given one (a development build has no version to update from). */
+    public RealHost updates(UpdateService service) {
+        this.updates = service;
+        return this;
+    }
+
+    @Override
+    public UpdateService updates() {
+        return updates;
     }
 
     /** Stops a preparation that is under way. The link is the window's to close. */

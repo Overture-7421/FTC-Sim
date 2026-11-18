@@ -2,7 +2,7 @@
 
 What `:app:dist` produces, how `FTC-Sim.cmd` starts the application, and what the zip does and does not hold; read it when you change startup, the bundled Java runtime, the zip or the licence notices.
 
-A driver unzips `FTC-Sim.zip` anywhere and double-clicks `FTC-Sim.cmd` on a Windows 10 or 11 x64 PC with no Java, no network and no PowerShell policy to satisfy. Decisions and measurements: `decisions.md`, section 7.
+A driver unzips `FTC-Sim.zip` anywhere and double-clicks `FTC-Sim.cmd` on a Windows 10 or 11 x64 PC with no Java, no network and no PowerShell policy to satisfy. Releases also carry an installer and the application updates itself from them: [updates.md](updates.md). Decisions and measurements: `decisions.md`, section 7.
 
 ## What is in the folder
 
@@ -98,14 +98,14 @@ Open points:
 
 ## Updating
 
-Unzip the new release into a new folder and start it; delete the old one when convenient. Nothing is installed, so nothing is uninstalled. `%LOCALAPPDATA%\FTC-Sim` (`natives`, `logs`, `programs`, `import`, `config`) is kept between releases. A `jdks` folder left by a release that downloaded its Java is unused and may be deleted.
+A release made by the workflow has an installer, and an installed FTC-Sim offers a newer release in its window and installs it when the person says so ([updates.md](updates.md)). The zip is still published: unzip a newer one into a new folder and start it; delete the old one when convenient. Nothing is installed by the zip, so nothing is uninstalled. `%LOCALAPPDATA%\FTC-Sim` (`natives`, `logs`, `programs`, `import`, `config`) is kept between releases. A `jdks` folder left by a release that downloaded its Java is unused and may be deleted.
 
 ## What is not in it
 
 - **A JDK.** No compiler, `jlink`, debugging or monitoring tools, no `jdk.jfr`. A robot program that compiles code at run time (`javax.tools`) cannot run, and a debugger cannot attach to the worker through `jdk.jdwp.agent` (a small module that can be added to `runtimeModules`).
 - **The Hornet package and any team's code.** A project is imported on the PC ([prepared-program.md](prepared-program.md)), built with the team's own Gradle on a JDK 17 to 21 (`JdkDiscovery`) and prepared into `%LOCALAPPDATA%\FTC-Sim\programs`. No robot description is bundled: the fixed robots are code (`RobotDesign`), a project's mapping is its own `ftcsim.json`.
 - **The Android SDK and the FTC SDK jars.** Importing needs an Android SDK on the PC (`AndroidSdkDiscovery`); the FTC SDK comes with the team's project.
-- **An installer, a signature, automatic updates.** A zip from the internet carries the Mark of the Web, so Windows may ask once before running `FTC-Sim.cmd` (Properties, Unblock, before unpacking, avoids it).
+- **A signature.** The installer and the zip are unsigned. A file from the internet carries the Mark of the Web, so Windows may ask once before running the installer or `FTC-Sim.cmd` (Properties, Unblock, before unpacking, avoids it for the zip).
 
 ## Not verified
 

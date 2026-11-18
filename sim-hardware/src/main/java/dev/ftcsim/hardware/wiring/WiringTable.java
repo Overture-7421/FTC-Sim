@@ -38,6 +38,7 @@ public final class WiringTable implements HardwareDirectory {
     private final List<UnmappedDevice> assigned = new ArrayList<>();
     private final Map<Sensor, String> sensorNames = new EnumMap<>(Sensor.class);
     private final Set<String> unsupported = new LinkedHashSet<>();
+    private final Set<Sensor> optionalSensorsPresent;
     private String embeddedImuName;
 
     /** What a motor the mapping does not describe is assumed to be. */
@@ -49,9 +50,10 @@ public final class WiringTable implements HardwareDirectory {
         }
     }
 
-    private WiringTable(List<Hub> hubs, MotorSpec defaultMotor) {
+    private WiringTable(List<Hub> hubs, MotorSpec defaultMotor, Set<Sensor> optionalSensorsPresent) {
         this.hubs = List.copyOf(hubs);
         this.defaultMotor = defaultMotor;
+        this.optionalSensorsPresent = Set.copyOf(optionalSensorsPresent);
     }
 
     public static Builder builder() {
@@ -88,7 +90,15 @@ public final class WiringTable implements HardwareDirectory {
     }
 
     @Override
+    public boolean hasSensor(Sensor kind) {
+        return kind != Sensor.OCTOQUAD || optionalSensorsPresent.contains(kind);
+    }
+
+    @Override
     public synchronized I2cWiring sensor(String name, Sensor kind) {
+        if (!hasSensor(kind)) {
+            throw new IllegalStateException("\"" + name + "\" asks for the " + describe(kind) + ", but this robot has none");
+        }
         String bound = sensorNames.putIfAbsent(kind, name);
         if (bound != null && !bound.equals(name)) {
             throw new IllegalStateException("\"" + name + "\" asks for the " + describe(kind) + ", but the robot has one and \"" + bound
@@ -159,6 +169,7 @@ public final class WiringTable implements HardwareDirectory {
         return switch (kind) {
             case PINPOINT -> "Pinpoint odometry computer";
             case COLOR_SENSOR -> "colour sensor";
+            case OCTOQUAD -> "OctoQuad";
         };
     }
 
@@ -181,7 +192,14 @@ public final class WiringTable implements HardwareDirectory {
         private final List<Hub> hubs = new ArrayList<>();
         private MotorSpec defaultMotor = new MotorSpec(537.7, 312);
         private final List<Runnable> placements = new ArrayList<>();
+        private final Set<Sensor> optionalSensors = new LinkedHashSet<>();
         private WiringTable table;
+
+        /** Says that the robot has this sensor, which only some robots have (the OctoQuad); the others every robot has. */
+        public Builder sensor(Sensor kind) {
+            optionalSensors.add(kind);
+            return this;
+        }
 
         /** Declares a hub; the first one declared is the one the robot's sensors are on. */
         public Builder hub(int address, String name, boolean parent, boolean embedded) {
@@ -211,11 +229,28 @@ public final class WiringTable implements HardwareDirectory {
             return this;
         }
 
+        public Builder servo(String name, int hub, int port) {
+            placements.add(() -> {
+                if (port < 0 || port >= SERVO_PORTS) {
+                    throw new IllegalArgumentException("servo port " + port + " does not exist; there are " + SERVO_PORTS);
+                }
+                if (hubs.stream().noneMatch(declared -> declared.address() == hub)) {
+                    throw new IllegalArgumentException("a device is wired to hub " + hub + ", which the robot does not declare");
+                }
+                if (!table.usedServoPorts.add(new Slot(hub, port))) {
+                    throw new IllegalArgumentException(
+                            "\"" + name + "\" is wired to servo port " + port + " of hub " + hub + ", which another device already uses");
+                }
+                table.servos.put(name, new ServoWiring(hub, port, true));
+            });
+            return this;
+        }
+
         public WiringTable build() {
             if (hubs.isEmpty()) {
                 throw new IllegalStateException("a robot controller has at least its Control Hub");
             }
-            table = new WiringTable(hubs, defaultMotor);
+            table = new WiringTable(hubs, defaultMotor, optionalSensors);
             placements.forEach(Runnable::run);
             return table;
         }

@@ -57,11 +57,69 @@ class RobotMappingTest {
     @Test
     void theNumbersAndTheHubMountingAreChecked() {
         RobotMapping.CameraMount camera = RobotMapping.empty("x").camera();
-        RobotMapping heavy = new RobotMapping("Team", List.of(), 90, 96, "goBILDA-5203-435", 1, "UP", "FORWARD", camera);
+        RobotMapping heavy = new RobotMapping("Team", List.of(), 90, 96, "goBILDA-bare-6000", 1, "UP", "FORWARD", camera);
         assertEquals(List.of("Mass is 1 to 40 kg"), heavy.problems(false));
-        RobotMapping flat = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-5203-435", 1, "UP", "DOWN", camera);
+        RobotMapping flat = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-bare-6000", 1, "UP", "DOWN", camera);
         assertEquals(List.of("Hub logo and USB face at right angles"), flat.problems(false));
-        RobotMapping ratio = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-5203-435", 0, "UP", "FORWARD", camera);
+        RobotMapping ratio = new RobotMapping("Team", List.of(), 11, 96, "goBILDA-bare-6000", 0, "UP", "FORWARD", camera);
         assertEquals(List.of("Turret ratio is above 0"), ratio.problems(true));
+    }
+
+    private static RobotMapping.TurretEncoder encoder(int channel) {
+        return new RobotMapping.TurretEncoder(channel, "", 5.5, 0, false);
+    }
+
+    private static RobotMapping withParts(RobotMapping.ServoMapping servo, List<RobotMapping.TurretEncoder> encoders, double axisX, boolean camera) {
+        return RobotMapping.empty("Team").withTurretParts(new RobotMapping.TurretParts(servo, encoders, axisX, 0.0, camera));
+    }
+
+    @Test
+    void aTurretServoEncodersAndAxisBelongToARobotWithATurretAndAreChecked() {
+        RobotMapping.ServoMapping servo = new RobotMapping.ServoMapping("turretServo", "", false);
+
+        assertEquals(List.of(), RobotMapping.empty("Team").problems(false), "nothing mapped on the turret is nothing to check");
+        assertEquals(List.of(), withParts(servo, List.of(encoder(0), encoder(1)), 0.05, true).problems(true));
+        assertEquals(
+                List.of("This game's robot has no turret for a servo, encoders or an axis"),
+                withParts(servo, List.of(), 0, false).problems(false));
+        assertTrue(withParts(servo, List.of(encoder(0), encoder(0)), 0, false).problems(true).contains("OctoQuad port 0 has two encoders"));
+        assertTrue(withParts(null, List.of(encoder(8)), 0, false).problems(true).contains("An encoder is on OctoQuad port 8, which is 0 to 7"));
+        assertTrue(withParts(null, List.of(new RobotMapping.TurretEncoder(2, "", 0, 0, false)), 0, false).problems(true)
+                .contains("Encoder 2: turns per turret turn is above 0"));
+        assertTrue(withParts(null, List.of(), 0.9, false).problems(true).contains("The turret axis is within 0.5 m of the robot's centre"));
+    }
+
+    @Test
+    void theMechanismServosNeedNamesAreOneToARoleAndCannotClashWithMotorsOrEachOther() {
+        RobotMapping.ServoMapping hood = new RobotMapping.ServoMapping("hood", "", false);
+        RobotMapping.MechanismServo asHood = new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, hood);
+
+        RobotMapping fine = RobotMapping.empty("Team").withTurretParts(
+                new RobotMapping.TurretParts(null, List.of(), 0, 0, false, List.of(asHood)));
+        assertEquals(List.of(), fine.problems(true));
+        assertEquals(hood, fine.turretParts().servoFor(RobotMapping.ServoRole.HOOD));
+        assertEquals(null, fine.turretParts().servoFor(RobotMapping.ServoRole.STOPPER));
+
+        RobotMapping twice = RobotMapping.empty("Team").withTurretParts(new RobotMapping.TurretParts(
+                null, List.of(), 0, 0, false,
+                List.of(asHood, new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("other", "", false)))));
+        assertTrue(twice.problems(true).contains("Two servos are the hood"), twice.problems(true).toString());
+
+        RobotMapping shared = with(motor("hood", Slot.SHOOTER)).withTurretParts(new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("gate", "", false), List.of(), 0, 0, false,
+                List.of(asHood, new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("gate", "", false)))));
+        List<String> problems = shared.problems(true);
+        assertTrue(problems.contains("hood is mapped as a motor and as the hood servo"), problems.toString());
+        assertTrue(problems.contains("gate is the servo of two parts"), problems.toString());
+    }
+
+    @Test
+    void theTurretServoNeedsAFreeNameAndCannotShareTheTurretWithAMotor() {
+        RobotMapping clash = with(motor("turretServo", Slot.TURRET))
+                .withTurretParts(new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(), 0, 0, false));
+
+        List<String> problems = clash.problems(true);
+        assertTrue(problems.contains("turretServo is mapped as a motor and as the turret servo"), problems.toString());
+        assertTrue(problems.contains("The turret has a motor and a servo: map one of them"), problems.toString());
     }
 }

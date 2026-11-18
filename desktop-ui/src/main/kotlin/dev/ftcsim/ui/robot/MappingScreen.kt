@@ -161,6 +161,13 @@ private val SLOT_LABEL_WIDTH = 140.dp
 
 private val FORM_FIELD_WIDTH = 170.dp
 
+private val MECHANISM_SERVO_LABELS = listOf(
+    RobotMapping.ServoRole.HOOD to "Hood servo (name in code)",
+    RobotMapping.ServoRole.STOPPER to "Stopper servo (name in code)",
+    RobotMapping.ServoRole.COLIBRI_LEFT to "Left colibri servo (name in code)",
+    RobotMapping.ServoRole.COLIBRI_RIGHT to "Right colibri servo (name in code)",
+)
+
 @Composable
 private fun ScanLine(scan: ScanState, onCancel: () -> Unit) {
     when (scan) {
@@ -273,7 +280,12 @@ private fun SlotRow(slot: Slot, model: MappingModel, drag: DragState) {
     }
 }
 
-/** What a motor is and which way it is mounted. The four wheels share the drive motor, so changing it on one changes it on all. */
+private val RATIO_FIELD_WIDTH = 150.dp
+
+/**
+ * What a motor is, the reduction between it and what it drives, and which way it is mounted. The four wheels share the drive
+ * motor and its ratio, so changing either on one changes it on all.
+ */
 @Composable
 private fun MotorControls(name: String, model: MappingModel) {
     val current = model.model(name)
@@ -290,6 +302,10 @@ private fun MotorControls(name: String, model: MappingModel) {
         )
         Text("Mirrored", style = MaterialTheme.typography.bodyMedium)
     }
+    FormTextField(
+        model.ratio(name), { text -> model.setRatio(name, text) }, "Ratio", model.ratioError(name), "motor : mechanism, 1 if empty",
+        Modifier.width(RATIO_FIELD_WIDTH).semantics { contentDescription = "Gear ratio of $name, motor turns to one turn of what it drives" },
+    )
 }
 
 @OptIn(ExperimentalLayoutApi::class)
@@ -305,6 +321,33 @@ private fun RobotForm(model: MappingModel) {
         FormTextField(form.wheelDiameterMm, { text -> model.edit { it.copy(wheelDiameterMm = text) } }, "Wheel diameter (mm)", problems[MappingModel.WHEEL_DIAMETER], null, width)
         if (model.turret) {
             FormTextField(form.turretRatio, { text -> model.edit { it.copy(turretRatio = text) } }, "Turret ratio", problems[MappingModel.TURRET_RATIO], null, width)
+            FormTextField(
+                form.turretServo, { text -> model.edit { it.copy(turretServo = text) } }, "Turret servo (name in code)",
+                problems[MappingModel.SERVO], "Empty when a motor turns the turret", Modifier.width(240.dp),
+            )
+            for ((role, label) in MECHANISM_SERVO_LABELS) {
+                FormTextField(
+                    form.mechanismServos[role].orEmpty(),
+                    { text -> model.edit { it.copy(mechanismServos = it.mechanismServos + (role to text)) } },
+                    label, null, "Empty when the robot has none", Modifier.width(240.dp),
+                )
+            }
+        }
+    }
+    if (model.turret) {
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Switch(
+                checked = form.servoMirrored,
+                onCheckedChange = { checked -> model.edit { it.copy(servoMirrored = checked) } },
+                modifier = Modifier.semantics { contentDescription = "Turret servo is mounted mirrored" },
+            )
+            Text("Servo mirrored", style = MaterialTheme.typography.bodyMedium)
+            Switch(
+                checked = form.cameraOnTurret,
+                onCheckedChange = { checked -> model.edit { it.copy(cameraOnTurret = checked) } },
+                modifier = Modifier.semantics { contentDescription = "Limelight turns with the turret" },
+            )
+            Text("Limelight turns with the turret", style = MaterialTheme.typography.bodyMedium)
         }
     }
 }

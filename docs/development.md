@@ -14,6 +14,8 @@ How to set up, build, test and hand over work in this repository; read it before
 
 Hornet (`Overture-7421/FTC-Hornet-2026`) is the real team program the gated tests run; the tests are listed in [testing.md](testing.md).
 
+- Hornet acceptance and import tests are **optional**. Run them only when explicitly requested, not for routine iteration
+  or handover; leave the Hornet properties unset for normal checks.
 - `-Pftcsim.hornet=<checkout>`: your clone of Hornet. It is hashed before and after, never changed.
 - `-Pftcsim.hornetPackage=<folder>`: **a disposable folder that survives between runs.** The first run imports Hornet into it (about a minute, needs the Android SDK and a JDK 17 to 21); later runs reuse it. Never point it at anything you keep.
 - Without these properties the Hornet tests are **skipped, not failed**: read the skipped count before you claim anything about Hornet.
@@ -24,11 +26,11 @@ Hornet (`Overture-7421/FTC-Hornet-2026`) is the real team program the gated test
 Run from the repository root. Add `--console=plain` when a script or an agent reads the output.
 
 ```text
-.\gradlew.bat check                      # all tests, module rules, the distribution's tests (about 4 minutes)
+.\gradlew.bat check                      # routine tests, module rules, the distribution's tests (about 4 minutes)
 .\gradlew.bat checkModuleRules           # only the dependency rules
 .\gradlew.bat :sim-core:check            # one module
 .\gradlew.bat :sim-core:test --tests "dev.ftcsim.core.kernel.FixedRateWorldTest" --rerun   # one class, even if nothing changed
-.\gradlew.bat :acceptance-tests:test -PftcSdk=12.0.0     # fixture suite on another SDK (11.0.0 11.1.0 11.2.0 11.2.1 12.0.0)
+.\gradlew.bat :acceptance-tests:test -PftcSdk=12.0.0     # optional compatibility check on another SDK
 .\gradlew.bat :acceptance-tests:test -Pftcsim.hornetPackage=<folder> [-Pftcsim.hornet=<checkout>]   # with Hornet
 .\gradlew.bat :project-import:test -Pftcsim.hornet=<checkout> -Pftcsim.jdk=<JDK 17-21 home>        # Hornet import test only
 .\gradlew.bat :app:run                   # the real application: window, worker process, importer
@@ -40,6 +42,8 @@ app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test   # checks an installation withou
 ```
 
 - Results: XML in `<module>\build\test-results\test\`, HTML in `<module>\build\reports\tests\test\`. Read them, do not scrape the console.
+- Routine checks use the default SDK (11.1.0). The full SDK fixture matrix (11.0.0, 11.1.0, 11.2.0, 11.2.1, 12.0.0) is
+  optional: run it only when explicitly requested, not on every change.
 - Gradle skips tasks whose inputs did not change and restores results from its cache. To force a run, add `--rerun` to the task or `--no-build-cache` to the build.
 - `--continue` shows every failing task; `--configure-on-demand` configures only the projects a build needs.
 - Logs of a real run: `%LOCALAPPDATA%\FTC-Sim\logs\app-*.log` and `worker-*.log`.
@@ -104,13 +108,14 @@ Ask before going against a product-owner decision ([architecture/decisions.md](a
 | Support another FTC SDK release | [sdk-versions](sdk-versions.md) | Add an `ftcSdk...` version to `gradle\libs.versions.toml`, run the fixture suite on it, add it to the table. Keep any difference behind one seam |
 | Change the window-worker link | [link](architecture/link.md) | A message that gains, loses or reorders a field bumps `Protocol.VERSION`; update the codec, the package description table and `link.md` together |
 | Change what the importer does | [prepared-program](architecture/prepared-program.md) | A change that makes packages come out different or better raises `IMPORTER_REVISION`, so kept packages are made again |
-| Change the bundled runtime or the Java major version | [distribution](architecture/distribution.md), [decisions](architecture/decisions.md) | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, the real-host Hornet tests on the runtime, and the module list in `DistributionLayoutTest` |
-| Refit the fixed robot | [hornet-fit](robots/hornet-fit.md) | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted, do not move them; update the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep and `HornetAutoRunTest` |
+| Change the bundled runtime or the Java major version | [distribution](architecture/distribution.md), [decisions](architecture/decisions.md) | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, and the module list in `DistributionLayoutTest`. Real-host Hornet tests on the runtime are optional, only when requested |
+| Refit the fixed robot | [hornet-fit](robots/hornet-fit.md) | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted, do not move them; update the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep. `HornetAutoRunTest` is optional, only when requested |
 
 ## Hand-over checklist
 
 1. `.\gradlew.bat check` is green (it includes the module rules).
-2. Touched the robot world, SDK host, hardware, mechanisms, physics, a field, the importer or the link? Run the acceptance suite with Hornet on the default SDK, and the fixture suite on 11.0.0, 11.2.0, 11.2.1 and 12.0.0 (about 3.5 minutes each; Hornet about 7.5).
+2. Use the default SDK for routine validation. The full SDK fixture matrix and Hornet acceptance and import tests are
+   optional, only when explicitly requested.
 3. Touched `app`, the launcher or the window? Run `:app:dist`, then `FTC-Sim.cmd --self-test` from `app\build\dist\FTC-Sim` with no Java on the PATH and no `JAVA_HOME`: it must run on its own `runtime`.
 4. The pages that describe your change are updated, and [README.md](README.md) lists every page.
 5. You left no stray process, private build folder or temporary file, and `git status --ignored` shows no ignored file under a `src` folder (a package folder named `build` would be ignored).

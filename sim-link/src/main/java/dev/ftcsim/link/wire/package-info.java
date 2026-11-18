@@ -37,7 +37,10 @@
  *   <tr><td>0x10<td>Open<td>mapping (name (text); motors, each name (text), slot (one byte: front left, front right, rear left,
  *       rear right, intake, conveyor, shooter, turret), model (text), mirrored (flag); mass, wheel diameter (doubles); drive
  *       motor (text); turret ratio (double); hub logo and USB directions (text); camera x, y, z, yaw, pitch, roll
- *       (doubles)); program, field (text); alliance; seed (64 bits); startX, startY, startHeading, speed (doubles)
+ *       (doubles); turret parts: flag and, if set, the servo's name, model (text) and mirrored (flag); the encoders, each
+ *       OctoQuad port (32 bits), model (text), turns per turret turn, zero offset in degrees (doubles) and mirrored
+ *       (flag); the turret axis x, y (doubles); the camera on the turret (flag)); program, field (text); alliance; seed
+ *       (64 bits); startX, startY, startHeading, speed (doubles)
  *   <tr><td>0x11<td>Init<td>OpMode name (text)
  *   <tr><td>0x12<td>Start<td>-
  *   <tr><td>0x13<td>Stop<td>-
@@ -58,7 +61,7 @@
  *   <caption>Events</caption>
  *   <tr><th>kind<th>name<th>fields
  *   <tr><td>0x40<td>Opened<td>flag and field description; OpModes; robot info (see {@code SessionInfo})
- *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies (see {@code WorldSnapshot})
+ *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies; visible AprilTag ids (list of 32-bit ids)
  *   <tr><td>0x42<td>Status<td>see {@code SessionStatus}; the match is followed by the unplaced names, each a kind (one byte:
  *       motor, servo, I2C device, digital pin, analog pin) and the name (text)
  *   <tr><td>0x43<td>Failed<td>message (text): a session that was asked for could not be opened, or cannot go on
@@ -70,6 +73,8 @@
  *
  * Fields of records are written in declaration order. A kind that this version does not know, a payload that ends
  * early and a payload with bytes left over are all errors.
+ * A field part carries its shape, local pose, sRGB colour (32 bits) and opacity (float, 0 to 1); opacity affects
+ * presentation only, not the colour seen by sensors.
  *
  * <h2>Versions</h2>
  *
@@ -84,6 +89,14 @@
  *   <li>6: the {@code Log} event (0x46): batches of lines the robot program wrote
  *   <li>7: {@code Open} carries the robot mapping inline instead of a profile name or path; the {@code Catalogue} no longer
  *       lists profiles
+ *   <li>8: the mapping of {@code Open} ends with the turret parts (servo, absolute encoders, axis, camera on the turret),
+ *       and the robot info of {@code Opened} ends with the id of the model the window draws the robot with
+ *   <li>9: the turret parts end with the positional servos of the hood, the stopper and the colibri arms (a count, then a
+ *       role, a name, a model and a mirrored flag each)
+ *   <li>10: each mapped motor ends with its gear ratio (64 bits), and the mapping carries the drive ratio, after the drive motor
+ *   <li>11: every field part ends with its opacity (float), after its colour
+ *   <li>12: a field part's shape may also be a wedge (code 3: a triangular prism, three half extents)
+ *   <li>13: snapshots end with the AprilTag ids in the Limelight's latest completed frame
  * </ul>
  */
 package dev.ftcsim.link.wire;

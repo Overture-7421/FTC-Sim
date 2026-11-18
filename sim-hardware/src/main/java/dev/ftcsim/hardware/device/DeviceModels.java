@@ -1,6 +1,7 @@
 package dev.ftcsim.hardware.device;
 
 import dev.ftcsim.hardware.device.bosch.Bno055Model;
+import dev.ftcsim.hardware.device.digitalchickenlabs.OctoQuadModel;
 import dev.ftcsim.hardware.device.gobilda.GoBildaPinpointModel;
 import dev.ftcsim.hardware.device.rev.RevColorSensorV3Model;
 import dev.ftcsim.hardware.i2c.I2cPeripheral;
@@ -25,6 +26,9 @@ public final class DeviceModels {
     /** The type id of the REV Color Sensor V3. */
     public static final String COLOR_SENSOR = "rev-color-sensor-v3";
 
+    /** The type id of the Digital Chicken Labs OctoQuad. */
+    public static final String OCTOQUAD = "digitalchickenlabs-octoquad";
+
     private final Map<String, DeviceFactory> factories = new LinkedHashMap<>();
 
     /** A registry with no devices, for hosts and tests that bring their own. */
@@ -37,6 +41,7 @@ public final class DeviceModels {
         return new DeviceModels()
                 .register(PINPOINT, GoBildaPinpointModel::create)
                 .register(COLOR_SENSOR, RevColorSensorV3Model::create)
+                .register(OCTOQUAD, OctoQuadModel::create)
                 .register(BNO055_IMU, Bno055Model::create);
     }
 

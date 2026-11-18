@@ -17,7 +17,9 @@ import dev.ftcsim.ui.common.AwtFileChooser
 import dev.ftcsim.ui.common.AwtLogOpener
 import dev.ftcsim.ui.common.FAKE_HOST_TITLE
 import dev.ftcsim.ui.common.FtcSimTheme
+import dev.ftcsim.ui.common.rememberUpdateStatus
 import dev.ftcsim.ui.host.AppHost
+import dev.ftcsim.ui.host.UpdateService
 import dev.ftcsim.ui.settings.SettingsStore
 import dev.ftcsim.ui.settings.UserDirectories
 import java.awt.event.WindowAdapter
@@ -72,6 +74,16 @@ object App {
                     delay(it * 1_000)
                     close()
                 }
+            }
+            // Looking for a newer version waits on the network, so it is not done on the UI thread, and not at all for a scripted run
+            // that asked for none. An offer is made in the window; nothing is installed unasked.
+            LaunchedEffect(services.updates) {
+                if (options.checksForUpdates) withContext(Dispatchers.IO) { services.updates.checkNow() }
+            }
+            // Once the installer of the version the person chose is ready, the window goes: the installer replaces this installation.
+            val update by rememberUpdateStatus(services.updates)
+            LaunchedEffect(update.kind) {
+                if (update.kind == UpdateService.Kind.RESTARTING) close()
             }
             Window(
                 onCloseRequest = close,

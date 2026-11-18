@@ -62,10 +62,10 @@ File choosers and the build-log opener sit behind `FileChooser` and `LogOpener`;
 
 ### Robot
 
-`MappingScreen` / `MappingModel` (`dev.ftcsim.ui.robot`) map a project's motors, whether it has an `ftcsim.json` or not. The robot is fixed by the game ([fixed-robots.md](../robots/fixed-robots.md), which also holds the schema); this page only says which of the team's motors is which part.
+`MappingScreen` / `MappingModel` (`dev.ftcsim.ui.robot`) map a project's motors, whether it has an `ftcsim.json` or not. The robot is fixed by the game ([fixed-robots.md](../robots/fixed-robots.md), which also holds the schema); this page only says which of the team's motors is which part. Each motor row has its base motor (a dropdown of the catalogue: base motors only, each once), a Ratio field (motor turns to one turn of what it drives; a number or a fraction such as `43/30`, empty is 1) and Mirrored; the four wheels share their motor and ratio. A ratio that is not a number, or is outside 0.05 to 1000, is said under the field and blocks the save.
 
 - The person picks an OpMode; the app runs it to Init to read the names it asks the hub for (`HardwareScan`); each motor is dragged (or clicked) onto a part.
-- Only motors are mapped; the simulator provides servos, sensors and pins. Hub and port are not asked: the design gives each motor the next free port.
+- Only motors are mapped on the page, and the BIOBUZZ turret's servo: a name, **Servo mirrored**, and **Limelight turns with the turret**. The turret's OctoQuad encoders and axis are in `ftcsim.json` only; saving the page keeps them. The simulator provides the other servos, the sensors and the pins. Hub and port are not asked: the design gives each motor the next free port, and the turret servo Control Hub servo port 0.
 - Field errors appear under the field in the contract's words (`RobotMapping.problems`); `blockedReason` says why the button is off.
 - The button is **Create** (with **Skip**) without a usable file, **Save** with one.
 - Names the program asked for and the mapping does not place come from `SessionStatus.unmapped` ([link.md](link.md)); the window uses only the motors among them.
@@ -85,7 +85,7 @@ Nothing watches the source. After editing, **Restart code** (Simulator top bar; 
 - **Top bar**: an OpMode menu (the last choice, or the autonomous of the last match armed, is kept as `project.N.opMode`: `OpModeMemory`); one main button, **Init**, **Start** or **Stop**, enabled as the Driver Station enables them (`Controls.of` is the only place that says so); a **start position** menu (the field's poses, then the team's named ones, kept as `startPositions` in `ftcsim.json` so teammates share them; choosing one restarts the session from it); **Reset world** (stops the code and puts robot and field back in the same session, at once, without a question: `PracticeSession.reset`) with an arrow for **Restart code**; a **more** menu with Match, pause and speed (0.25x to 4x).
 - **Match.** The window has no clock: countdown and period come only from `SessionStatus.match`, so pause and speed move them. A scoreboard over the viewport shows state, seconds left and the final score.
 - **Hardware scan** (`HardwareScan`) sends Init through `PracticeSession.init(name)`, waits for Init, sends Stop, then counts `SessionStatus.unmapped`. It runs by itself after every session that opens (the first, Restart code, Reset world) with the OpMode remembered for the project, so it holds the run controls (`Hold.SCANNING`) from the moment the session opens until it ends; a scan the person asks for on the Robot page does the same. It follows `PracticeSession.openings`, a counter, because two sessions with equal descriptions are equal `SessionState`s and a flow would not tell them apart.
-- **Viewport**: field, robot (a box in its alliance colour with a yellow marker on its front edge), pieces and AprilTags, with camera presets floating over it. Dragging leaves any preset for Free: left drag orbits, right or middle drag pans, the wheel zooms.
+- **Viewport**: field, robot (a box in its alliance colour with a yellow marker on its front edge; the BIOBUZZ robot is its CAD ([biobuzz-cad](../robots/biobuzz-cad.md)): about 28 thousand triangles of fitted simple shapes in static GPU buffers, lexan drawn translucent, posed from the turret body and the joint bodies of the snapshot, with a box and solids as the fallback when the model is not in the build), pieces and AprilTags, with camera presets floating over it. Dragging leaves any preset for Free: left drag orbits, right or middle drag pans, the wheel zooms.
 
   | Preset | Stands |
   |---|---|
@@ -126,6 +126,12 @@ The window never blocks on any of them.
 The render thread draws into an offscreen framebuffer, reads it back and Compose shows it as a bitmap, so menus, dialogs and snackbars overlap it ([viewport-measurements.md](viewport-measurements.md) says why not a native canvas). The renderer is described in the Javadoc of `ui.render` and `ui.viewport`.
 
 - The loop interpolates one snapshot interval behind the newest and draws only when something changed, so a world at rest costs no render time.
+- AprilTags detected in the Limelight's latest completed frame have bright green outlines, including tags on moving
+  bodies. Detection changes redraw even a stationary world; the UI never recomputes camera visibility.
+- Field parts keep their RGB colour and opacity separately. Translucent panels are depth-tested and blended back to front
+  after opaque geometry and shadows, without writing depth or casting opaque shadows; pieces stay visible through them.
+- Besides boxes, cylinders and spheres, a field part may be a wedge (`Shape.Wedge`, a triangular prism with a unit mesh
+  scaled by its half extents), used for the BIOBUZZ CELL gable.
 - A pacer is used by one thread only: a changed frame cap puts a new pacer in place that the render thread takes before its next frame.
 - The viewport is shown only while the Simulator is composed. On leaving, `ViewportEngine.setShown(false)` stops drawing, releases held keys and tells the controllers' gate; on return `ShownFrame` already holds the last picture, so it is never blank.
 

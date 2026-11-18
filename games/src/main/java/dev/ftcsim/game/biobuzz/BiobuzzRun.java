@@ -49,8 +49,6 @@ public final class BiobuzzRun implements FieldRun {
     private final Pivot[] hives = new Pivot[2];
     private final PieceReserve preloads = new PieceReserve();
     private final PieceReserve nectarWithHumans = new PieceReserve();
-    private final PieceReserve pollenOutside = new PieceReserve();
-    private final Map<Integer, double[]> whereItLeft = new TreeMap<>();
     private final List<TipEvent> tips = new ArrayList<>();
     private final int[] autoTips = new int[2];
     private final int[] teleopTips = new int[2];
@@ -125,11 +123,6 @@ public final class BiobuzzRun implements FieldRun {
         return kind == BiobuzzIds.KIND_POLLEN ? preloads.count(kind) : nectarWithHumans.count(kind);
     }
 
-    /** How many POLLEN have left the field and wait for the field staff to put them back. */
-    public int pollenOutsideField() {
-        return pollenOutside.count(BiobuzzIds.KIND_POLLEN);
-    }
-
     @Override
     public void afterStep(WorldSnapshot snapshot) {
         nowNanos = snapshot.simTimeNanos();
@@ -145,6 +138,7 @@ public final class BiobuzzRun implements FieldRun {
             if (Assessment.isPiece(body.kind())) {
                 if (leftTheField(body)) {
                     sendOutside(body);
+                    moved = true;
                 } else {
                     moved |= stepDistance(body) > QUIET_MOVE_M;
                 }
@@ -166,13 +160,12 @@ public final class BiobuzzRun implements FieldRun {
         return Math.abs(body.x()) > OUTSIDE_M || Math.abs(body.y()) > OUTSIDE_M || body.z() < -0.15;
     }
 
-    /** Takes a piece that left the field out of the world: POLLEN wait for the staff, NECTAR go back to its humans. */
+    /** Returns escaped POLLEN at the same wall and escaped NECTAR to its humans. */
     private void sendOutside(BodyState body) {
         world.removePiece(body.entityId());
         lastPosition.remove(body.entityId());
         if (body.kind() == BiobuzzIds.KIND_POLLEN) {
-            pollenOutside.add(body.kind(), body.entityId());
-            whereItLeft.put(body.entityId(), new double[] {body.x(), body.y()});
+            returnPollen(body);
         } else {
             nectarWithHumans.add(body.kind(), body.entityId());
             nectarReturned[body.kind() == BiobuzzIds.KIND_NECTAR_RED ? RED : BLUE]++;
@@ -254,7 +247,6 @@ public final class BiobuzzRun implements FieldRun {
         switch (humanActionId) {
             case BiobuzzField.LOAD_NECTAR -> loadNectar(red ? RED : BLUE);
             case BiobuzzField.LOAD_OPPONENT_NECTAR -> loadNectar(red ? BLUE : RED);
-            case BiobuzzField.RETURN_POLLEN -> returnPollen();
             default -> throw new IllegalArgumentException("BIOBUZZ has no human action " + humanActionId);
         }
     }
@@ -288,20 +280,12 @@ public final class BiobuzzRun implements FieldRun {
         world.spawnPiece(id.getAsInt(), kind, PieceModel.NECTAR, new Vector3(in(x), side * in(64.8), 0.2), Vector3.ZERO);
     }
 
-    /** Field staff put the POLLEN that has been outside longest back in, just inside the wall where it left. */
-    private void returnPollen() {
-        if (phase == MatchPhase.ENDED) {
-            return;
-        }
-        OptionalInt id = pollenOutside.take(BiobuzzIds.KIND_POLLEN);
-        if (id.isEmpty()) {
-            return;
-        }
-        double[] left = whereItLeft.remove(id.getAsInt());
+    /** Puts escaped POLLEN just inside the wall where it left, without waiting for a human action. */
+    private void returnPollen(BodyState body) {
         double limit = FieldGeometry.HALF_M - 0.20;
-        double x = Math.max(-limit, Math.min(limit, left[0]));
-        double y = Math.max(-limit, Math.min(limit, left[1]));
-        world.spawnPiece(id.getAsInt(), BiobuzzIds.KIND_POLLEN, PieceModel.POLLEN, new Vector3(x, y, 0.25), Vector3.ZERO);
+        double x = Math.max(-limit, Math.min(limit, body.x()));
+        double y = Math.max(-limit, Math.min(limit, body.y()));
+        world.spawnPiece(body.entityId(), BiobuzzIds.KIND_POLLEN, PieceModel.POLLEN, new Vector3(x, y, 0.25), Vector3.ZERO);
     }
 
     /** Hands out one of the robot's four preload POLLEN; NECTAR is never handed out, it only enters through the humans. */
@@ -310,10 +294,10 @@ public final class BiobuzzRun implements FieldRun {
         return kind == BiobuzzIds.KIND_POLLEN ? preloads.take(kind) : OptionalInt.empty();
     }
 
-    /** Three of the robot's four preload POLLEN, which is what its magazine holds. */
+    /** The robot's four preload POLLEN, all of which its magazine holds. */
     @Override
     public int[] robotPreloads() {
-        return new int[] {BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN};
+        return new int[] {BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN};
     }
 
     @Override

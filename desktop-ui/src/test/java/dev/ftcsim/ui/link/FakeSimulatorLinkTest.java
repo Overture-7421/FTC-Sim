@@ -310,7 +310,7 @@ class FakeSimulatorLinkTest {
         assertTrue(first.catalogue().fields().get(0).startPoses().isEmpty(), "a bare floor offers no start pose");
         assertFalse(first.catalogue().fields().get(1).startPoses().isEmpty());
         assertFalse(first.catalogue().fields().get(1).humanActions().isEmpty());
-        assertEquals("goBILDA-5203-435", first.catalogue().motors().get(0).id());
+        assertEquals("goBILDA-bare-6000", first.catalogue().motors().get(0).id());
 
         Recorder late = new Recorder();
         link.addListener(late);

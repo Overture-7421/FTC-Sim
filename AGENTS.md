@@ -49,7 +49,7 @@ Ask the owner before going against any of these.
 ## Commands
 
 ```text
-.\gradlew.bat check                   all tests, module rules, distribution (about 4 min)
+.\gradlew.bat check                   routine tests, module rules, distribution (about 4 min)
 .\gradlew.bat :<module>:check         one module
 .\gradlew.bat :app:dist               app\build\dist\FTC-Sim and FTC-Sim.zip
 app\build\dist\FTC-Sim\FTC-Sim.cmd --self-test    checks an installation, no window
@@ -60,8 +60,8 @@ Other SDK releases, Hornet, the fake host and the private-build recipe: `docs/de
 ## Before you say you are done
 
 1. `.\gradlew.bat check` is green.
-2. If the SDK or a team program can see the change (robot world, SDK host, hardware, mechanisms, physics, fields, importer,
-   link): also the acceptance suite with Hornet and the fixture suite on the other SDK releases (`docs/development.md`).
+2. Routine validation uses the default SDK. Hornet acceptance and import tests and the full SDK fixture matrix are
+   optional: run them only when explicitly requested, not for routine iteration or handover (`docs/development.md`).
 3. If you changed `app`, the launcher or the window: `:app:dist` and `--self-test`.
 4. Report in about 500 words or less: what changed (by package), commands run with counts, what you could **not** verify,
    decisions the owner should know, open problems. Claim nothing you did not run.

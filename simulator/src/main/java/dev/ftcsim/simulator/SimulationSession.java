@@ -144,8 +144,11 @@ public final class SimulationSession implements AutoCloseable {
                     live.fieldRun.afterStep(afterStep);
                 }
                 mechanisms.step(STEP_SECONDS, rig.chassisView().sample(), afterStep, world);
-                snapshots.set(withCarriedPieces(world.snapshot(), mechanisms.carried()));
                 rig.stepDevices(nanos);
+                WorldSnapshot visible = withCarriedPieces(
+                        world.snapshot(), mechanisms.carried(), rig.viewBodies(rig.chassisView().sample()));
+                snapshots.set(new WorldSnapshot(
+                        visible.stepIndex(), visible.simTimeNanos(), visible.bodies(), rig.cameras().visibleTagIds(nanos)));
             });
             clockwork.every(HUB_TICKS_PER_SECOND, (index, nanos) -> rig.tick(nanos));
 
@@ -204,11 +207,13 @@ public final class SimulationSession implements AutoCloseable {
         return mechanisms == null ? List.of() : mechanisms.carried();
     }
 
-    private static WorldSnapshot withCarriedPieces(WorldSnapshot world, List<Mechanisms.Carried> carried) {
-        if (carried.isEmpty()) {
+    /** What a viewer sees besides the physics world: the pieces the robot carries, drawn where they are, and the robot's turret. */
+    private static WorldSnapshot withCarriedPieces(WorldSnapshot world, List<Mechanisms.Carried> carried, List<BodyState> robot) {
+        if (carried.isEmpty() && robot.isEmpty()) {
             return world;
         }
         List<BodyState> bodies = new ArrayList<>(world.bodies());
+        bodies.addAll(robot);
         for (Mechanisms.Carried piece : carried) {
             bodies.add(new BodyState(
                     piece.entityId(), piece.kind(), (float) piece.center().x(), (float) piece.center().y(), (float) piece.center().z(),
@@ -281,7 +286,7 @@ public final class SimulationSession implements AutoCloseable {
         live.mechanisms = config.robot().mechanisms(rig.plantView(), live.pieceSpecs);
         loadStartingPieces(live);
         match = new TimedMatch(kernel, station, live.fieldRun);
-        latest.set(withCarriedPieces(live.world.snapshot(), live.mechanisms.carried()));
+        latest.set(withCarriedPieces(live.world.snapshot(), live.mechanisms.carried(), rig.viewBodies(rig.chassisView().sample())));
         old.close();
     }
 

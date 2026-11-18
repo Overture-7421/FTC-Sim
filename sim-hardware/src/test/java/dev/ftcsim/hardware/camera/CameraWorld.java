@@ -7,6 +7,7 @@ import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.RayView;
 import dev.ftcsim.contracts.world.SurfaceHit;
 import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.hardware.device.TurretView;
 import dev.ftcsim.hardware.device.WorldRig;
 import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import java.util.HashMap;
@@ -32,8 +33,18 @@ final class CameraWorld {
     CameraWorld(
             ScriptedBody body, RayView rays, List<FieldTag> tags, Map<String, Object> settings, long seed,
             Map<Integer, LongFunction<BodyPose>> hosts) {
+        this(body, rays, tags, settings, seed, hosts, null);
+    }
+
+    /** As above, on a robot whose turret is {@code turret}, which a camera set to ride on it follows. */
+    CameraWorld(
+            ScriptedBody body, RayView rays, List<FieldTag> tags, Map<String, Object> settings, long seed,
+            Map<Integer, LongFunction<BodyPose>> hosts, TurretView turret) {
         this.body = body;
         this.rig = new WorldRig(body, rays);
+        if (turret != null) {
+            rig.host.provideTurret(turret);
+        }
         rig.host.provideFieldTags(tags);
         rig.host.provideGameMap("decode", tags);
         rig.host.provideEntities(id -> {

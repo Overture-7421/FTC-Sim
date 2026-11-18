@@ -94,6 +94,20 @@ class SceneModelTest {
     }
 
     @Test
+    void theBiobuzzRobotIsItsCadAndNotBoxesAndOtherRobotsAreBoxes() {
+        RobotInfo biobuzz = new RobotInfo("robot", 0.4, 0.3, 0.2, List.of(), List.of(), List.of(), RobotInfo.BIOBUZZ_MODEL);
+
+        SceneModel scene = SceneModel.of(null, biobuzz);
+
+        assertTrue(scene.robotModel() != null, "the build carries the model");
+        assertEquals(0, scene.parts(BodyKinds.CHASSIS).length, "the CAD stands in for the box");
+        assertEquals(0, scene.parts(BodyKinds.TURRET).length);
+        SceneModel plain = SceneModel.of(null, robot());
+        assertEquals(null, plain.robotModel());
+        assertTrue(plain.parts(BodyKinds.CHASSIS).length > 0);
+    }
+
+    @Test
     void aPartIsPlacedOnItsBodyByRotatingItsOffsetAndMultiplyingTheRotations() {
         FieldPart arm = new FieldPart(new Shape.Box(0.1, 0.1, 0.1), Pose3.at(1, 0, 0), 0);
         SceneModel scene = SceneModel.of(field(List.of(), List.of(new BodyKind(9, "arm", List.of(arm)))), null);

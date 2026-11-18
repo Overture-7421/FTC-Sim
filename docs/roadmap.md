@@ -11,12 +11,12 @@ Do not build these unless the product owner asks ([decisions](architecture/decis
 | Capability | Today | Where to begin |
 |---|---|---|
 | Webcams and `VisionPortal` | No camera frames: the lookup is refused by name and listed as unsupported. The Limelight 3A works (HTTP) | [limelight](devices/limelight.md). `hardware.camera` (`TagSight`, `PoseSolver`, `CameraRack`) already turns the world into tag detections; a webcam needs its own wire and the SDK camera API in `sdk-common` |
-| Other sensors: OctoQuad, external IMU, a second Pinpoint or colour sensor, REV 2 m distance sensor | Unsupported by decision: the lookup fails with a message, the device is unbound, the session lists a problem | [adding-a-device](architecture/adding-a-device.md); a distance sensor reads `DeviceContext.rays()` |
+| Other sensors: external IMU, a second Pinpoint or colour sensor, REV 2 m distance sensor | Unsupported by decision: the lookup fails with a message, the device is unbound, the session lists a problem. (The OctoQuad is supported, on a robot whose turret has encoders.) | [adding-a-device](architecture/adding-a-device.md); a distance sensor reads `DeviceContext.rays()` |
 | The Control Hub's newer BHI260AP IMU | A BNO055 model stands in, so `IMU` interface users cannot tell; `BHI260IMU` itself is refused | [bno055-imu](devices/bno055-imu.md) |
 | Motors beyond the goBILDA Yellow Jacket family | Only `MotorCatalog` entries can be named | Add entries (REV HD Hex and Core Hex are the usual ones): [fixed-robots](robots/fixed-robots.md) |
 | Servos and pins that do something | Servos accept commands with no effect, unmapped pins read idle, `hardwareMap.get(LED.class, ...)` is not made | [fixed-robots](robots/fixed-robots.md) |
 
-Per-device limits are in the "not modelled" part of each `devices\*.md` page; a field's are in [decode](fields/decode.md) and [biobuzz](fields/biobuzz.md). Hornet cannot score on BIOBUZZ (its camera map, intake and aim are DECODE's), so BIOBUZZ's turret has only a fixture OpMode to check it. The chassis constants are fitted to Hornet ([hornet-fit](robots/hornet-fit.md)) and are the fixed robot's for every team.
+Per-device limits are in the "not modelled" part of each `devices\*.md` page; a field's are in [decode](fields/decode.md) and [biobuzz](fields/biobuzz.md). Hornet cannot score on BIOBUZZ (its camera map, intake and aim are DECODE's), so BIOBUZZ has only stand-in programs: the red and blue driver TeleOps that tip a HIVE and a diagnostic stub ([biobuzz-stub](robots/biobuzz-stub.md)). The chassis constants are fitted to Hornet ([hornet-fit](robots/hornet-fit.md)) and are the fixed robot's for every team.
 
 ## Robot world: still open
 

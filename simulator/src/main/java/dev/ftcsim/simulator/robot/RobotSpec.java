@@ -2,6 +2,7 @@ package dev.ftcsim.simulator.robot;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.session.RobotMapping;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.mechanisms.CaptureSpec;
 import dev.ftcsim.mechanisms.LaunchSpec;
 import dev.ftcsim.mechanisms.Mechanisms;
@@ -24,31 +25,75 @@ import java.util.Map;
  * @param hubs        the REV hubs, the parent first
  * @param chassis     the drivetrain body, or null if the robot has no wheels
  * @param motors      by the name robot code uses, in the order they were mapped
+ * @param servos      the continuous-rotation servos, by the name robot code uses
+ * @param turret      the robot's turret, or null if it has none
  * @param storages    the paths pieces are carried along
  * @param captures    the intakes
  * @param launches    the launchers
  * @param imu         how the Control Hub's IMU is mounted
  * @param colorSensor where the colour sensor is
  * @param limelight   the Limelight's mount and pipeline
+ * @param joints      what the window's picture of the robot follows
  */
 public record RobotSpec(
         String name,
         List<HardwareDirectory.Hub> hubs,
         MecanumConfig chassis,
         Map<String, Motor> motors,
+        Map<String, Servo> servos,
+        Turret turret,
         List<StorageSpec> storages,
         List<CaptureSpec> captures,
         List<LaunchSpec> launches,
         ImuMount imu,
         ColorSensor colorSensor,
-        Limelight limelight) {
+        Limelight limelight,
+        Joints joints) {
 
     public RobotSpec {
         hubs = List.copyOf(hubs);
         motors = Collections.unmodifiableMap(new LinkedHashMap<>(motors));
+        servos = Collections.unmodifiableMap(new LinkedHashMap<>(servos));
         storages = List.copyOf(storages);
         captures = List.copyOf(captures);
         launches = List.copyOf(launches);
+        joints = joints == null ? Joints.NONE : joints;
+    }
+
+    /**
+     * What the window's picture of the robot follows: the motors whose shafts turn its rollers and flywheel, and the
+     * servos that move its hood, stopper and colibri arms.
+     *
+     * @param intake   the intake roller's motor, or null
+     * @param conveyor the indexer's motor, or null
+     * @param flywheel the flywheel's motor, or null
+     * @param intakeRatio, conveyorRatio, flywheelRatio motor turns to one turn of the roller, the rollers and the flywheel
+     * @param servos   the positional servos by the joint each moves
+     */
+    public record Joints(
+            String intake, int intakeSign, double intakeRatio, String conveyor, int conveyorSign, double conveyorRatio, String flywheel,
+            int flywheelSign, double flywheelRatio, List<ServoJoint> servos) {
+
+        /** A robot whose picture has nothing to follow. */
+        public static final Joints NONE = new Joints(null, 1, 1.0, null, 1, 1.0, null, 1, 1.0, List.of());
+
+        public Joints {
+            servos = List.copyOf(servos);
+        }
+    }
+
+    /**
+     * A positional servo and the joint it moves: the joint's value is {@code rest + servo angle / ratio}.
+     *
+     * @param ratio turns of the servo for one turn of the part; above 0
+     * @param rest  the joint's value in radians when the servo's shaft is at 0
+     * @param limit the most the joint can turn from {@code rest}, in radians (a hard stop), or infinity
+     */
+    public record ServoJoint(RobotJoint joint, String servo, double ratio, double rest, double limit) {
+        /** A joint with no stop short of the servo's travel. */
+        public ServoJoint(RobotJoint joint, String servo, double ratio, double rest) {
+            this(joint, servo, ratio, rest, Double.POSITIVE_INFINITY);
+        }
     }
 
     /**
@@ -75,6 +120,53 @@ public record RobotSpec(
      */
     public record Shaft(double loadInertiaKgM2, double frictionNmsPerRad) {}
 
+    /**
+     * A servo on a hub's servo port: the turret's is continuous-rotation, the mechanisms' go to positions.
+     *
+     * @param hub        the hub address
+     * @param port       0..5
+     * @param model      the catalogue id of the servo ({@link ServoCatalog})
+     * @param positional whether it goes to the position it is sent, and does not turn without end
+     * @param mirrored   for a positional servo, whether its travel runs the other way round
+     */
+    public record Servo(int hub, int port, String model, boolean positional, boolean mirrored) {
+
+        /** A continuous-rotation servo. */
+        public Servo(int hub, int port, String model) {
+            this(hub, port, model, false, false);
+        }
+    }
+
+    /**
+     * The robot's turret: what turns it, how, and what rides on it.
+     *
+     * @param shaft          the name of the motor or servo that turns it, as robot code names it
+     * @param ratio          turns of that shaft for one turn of the turret
+     * @param sign           +1 when the shaft turning forward turns the turret to the left (counter-clockwise seen from above)
+     * @param axisX          where the turret turns about, metres ahead of the chassis centre
+     * @param axisY          and metres to the left of it
+     * @param cameraOnTurret whether the Limelight turns with it
+     * @param encoders       the absolute encoders on the turret, with their models spelled out
+     */
+    public record Turret(
+            String shaft, double ratio, int sign, double axisX, double axisY, boolean cameraOnTurret,
+            List<RobotMapping.TurretEncoder> encoders) {
+
+        public Turret {
+            encoders = List.copyOf(encoders);
+        }
+
+        /** What turns the launcher, as the mechanisms know it. */
+        public LaunchSpec.Turret aim() {
+            return new LaunchSpec.Turret(shaft, ratio, sign);
+        }
+
+        /** The turret's yaw, counter-clockwise from facing forward, when its shaft has turned {@code shaftAngleRad}. */
+        public double yawRadians(double shaftAngleRad) {
+            return aim().yawRadians(shaftAngleRad);
+        }
+    }
+
     /** The directions the Control Hub's logo and USB ports face, as the SDK names them. */
     public record ImuMount(String logo, String usb) {
 
@@ -98,8 +190,14 @@ public record RobotSpec(
      *
      * @param fieldMap   the tags the pipeline believes in: {@code field} for the fixed tags of the field the robot stands on
      * @param resolution {@code 640x480} or {@code 1280x960}
+     * @param onTurret   whether the camera turns with the turret instead of staying on the chassis
      */
-    public record Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution) {
+    public record Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution, boolean onTurret) {
+
+        /** A Limelight fixed to the chassis. */
+        public Limelight(RobotMapping.CameraMount mount, String fieldMap, String resolution) {
+            this(mount, fieldMap, resolution, false);
+        }
 
         /** The settings of the camera's model. */
         public Map<String, Object> settings() {
@@ -113,6 +211,9 @@ public record RobotSpec(
             settings.put("pipeline0.type", "apriltag");
             settings.put("pipeline0.fieldMap", fieldMap);
             settings.put("pipeline0.resolution", resolution);
+            if (onTurret) {
+                settings.put("mount.on", "turret");
+            }
             return settings;
         }
     }

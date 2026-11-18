@@ -32,7 +32,8 @@ final class HornetMapping {
                 new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
                 new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
                 new MotorMapping("shooterRight", Slot.SHOOTER, "", false),
-                new MotorMapping("intake", Slot.INTAKE, "", false),
-                new MotorMapping("upMotor", Slot.CONVEYOR, "", true)));
+                // Hornet's intake and belt are 435 rpm Yellow Jackets: the 6000 rpm motor behind 13.7:1, as are its wheels (the default).
+                new MotorMapping("intake", Slot.INTAKE, "", false, 13.7),
+                new MotorMapping("upMotor", Slot.CONVEYOR, "", true, 13.7)));
     }
 }

@@ -32,7 +32,7 @@ import org.junit.jupiter.api.Test
 /** The Robot page with synthetic clicks: no real drag is made, so a motor is mapped by clicking it and then its place. */
 @OptIn(ExperimentalTestApi::class)
 class MappingScreenTest {
-    private val motors = listOf(MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"), MotorChoice("goBILDA-5203-1150", "goBILDA 5203, 1150 rpm"))
+    private val motors = listOf(MotorChoice("goBILDA-bare-6000", "Yellow Jacket"), MotorChoice("swyft-spike-6000", "SWYFT Spike"))
     private val found = listOf("frontLeft", "frontRight", "backLeft", "backRight", "flywheel").map { UnmappedDevice(Kind.MOTOR, it) } +
         listOf(UnmappedDevice(Kind.SERVO, "hood"), UnmappedDevice(Kind.I2C, "colour"))
 
@@ -244,13 +244,36 @@ class MappingScreenTest {
         show(model, unmapped = emptyList(), primary = "Save", onSkip = null)
         waitForIdle()
 
-        onNodeWithContentDescription("Motor of frontLeft: goBILDA 5203, 435 rpm").performClick()
-        onNodeWithText("goBILDA 5203, 1150 rpm").performClick()
+        onNodeWithContentDescription("Motor of frontLeft: Yellow Jacket").performClick()
+        onNodeWithText("SWYFT Spike").performClick()
         waitForIdle()
 
-        assertEquals("goBILDA-5203-1150", model.model("backRight"), "one motor on all four wheels")
-        onNodeWithContentDescription("Motor of backRight: goBILDA 5203, 1150 rpm").assertExists()
+        assertEquals("swyft-spike-6000", model.model("backRight"), "one motor on all four wheels")
+        onNodeWithContentDescription("Motor of backRight: SWYFT Spike").assertExists()
         assertEquals("goBILDA-bare-6000", model.model("shooterLeft"), "a mechanism's motor is its own")
+    }
+
+    @Test
+    fun theGearRatioOfAMotorIsTypedNextToItsMotorAndTheWheelsShareTheirs() = runComposeUiTest {
+        val model = model()
+        model.load(mapped())
+        show(model, unmapped = emptyList(), primary = "Save", onSkip = null)
+        waitForIdle()
+
+        onNodeWithContentDescription("Gear ratio of shooterLeft, motor turns to one turn of what it drives").performTextReplacement("43/30")
+        onNodeWithContentDescription("Gear ratio of frontLeft, motor turns to one turn of what it drives").performTextReplacement("12.7")
+        waitForIdle()
+
+        assertEquals("43/30", model.ratio("shooterLeft"))
+        assertEquals("", model.ratio("shooterRight"), "each mechanism motor has its own")
+        assertEquals("12.7", model.ratio("backRight"), "one drive ratio for all four wheels")
+        onNodeWithText("Save").assertIsEnabled()
+
+        onNodeWithContentDescription("Gear ratio of shooterLeft, motor turns to one turn of what it drives").performTextReplacement("two")
+        waitForIdle()
+
+        onNodeWithText("A number or a fraction, like 43/30").assertExists()
+        onNodeWithText("Save").assertIsNotEnabled()
     }
 
     @Test

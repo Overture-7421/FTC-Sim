@@ -42,7 +42,9 @@ import java.util.TreeSet;
  *
  * <p><b>Settings</b> (flat names, numbers and text): {@code mount.x}, {@code mount.y}, {@code mount.z} in
  * metres in the robot's frame (X forward, Y left, Z up, from the chassis reference), {@code mount.yawDegrees},
- * {@code mount.pitchDegrees} (positive looks up) and {@code mount.rollDegrees} (all default 0); then for each
+ * {@code mount.pitchDegrees} (positive looks up) and {@code mount.rollDegrees} (all default 0), and {@code mount.on}
+ * ({@code chassis}, the default, or {@code turret}: the camera is then mounted as if the turret faced forward and turns
+ * with it about the turret's axis, as the host says where that is); then for each
  * pipeline slot N in 0..9 that the camera has configured: {@code pipelineN.type} ({@code apriltag}),
  * {@code pipelineN.fieldMap}, {@code pipelineN.ids} (a comma-separated filter, default every tag),
  * {@code pipelineN.resolution} ({@code 640x480} or {@code 1280x960}, default the first) and
@@ -101,7 +103,7 @@ public final class LimelightModel implements CameraModel {
     record PipelineSpec(int index, String fieldMap, Set<Integer> ids, Resolution resolution, boolean sendCorners) {}
 
     /** What the settings say about one camera. */
-    record Settings(CameraMount mount, Map<Integer, PipelineSpec> pipelines) {}
+    record Settings(CameraMount mount, Map<Integer, PipelineSpec> pipelines, boolean onTurret) {}
 
     private record Pipeline(PipelineSpec spec, Map<Integer, SceneTag> map) {}
 
@@ -141,7 +143,7 @@ public final class LimelightModel implements CameraModel {
         this.cameraInRobot = mount.cameraInRobot();
         this.pipelines = pipelines;
         this.noise = new PixelNoise(seed);
-        this.chassis = context.body();
+        this.chassis = settings.onTurret() ? context.turretPlatform() : context.body();
 
         Map<Integer, Integer> bodies = new LinkedHashMap<>();
         List<BodyView> views = new ArrayList<>();
@@ -229,7 +231,11 @@ public final class LimelightModel implements CameraModel {
                 pipelines.put(index, readPipeline(config, index));
             }
         }
-        return new Settings(mount, pipelines);
+        String on = config.text("mount.on", "chassis");
+        if (!on.equals("chassis") && !on.equals("turret")) {
+            throw config.rejected("mount.on", "must be \"chassis\" or \"turret\", not \"" + on + "\"");
+        }
+        return new Settings(mount, pipelines, on.equals("turret"));
     }
 
     private static PipelineSpec readPipeline(DeviceConfig config, int index) {
@@ -409,16 +415,25 @@ public final class LimelightModel implements CameraModel {
         return null;
     }
 
-    /** The newest result the camera had finished by the instant, as the JSON the camera serves. */
-    private String resultsAt(long nowNanos) {
-        Frame newest = null;
+    private Frame frameAt(long nowNanos) {
         for (Iterator<Frame> it = frames.descendingIterator(); it.hasNext(); ) {
             Frame frame = it.next();
             if (frame.completionNanos() <= nowNanos) {
-                newest = frame;
-                break;
+                return frame;
             }
         }
+        return null;
+    }
+
+    @Override
+    public List<Integer> visibleTagIds(long nowNanos) {
+        Frame frame = frameAt(nowNanos);
+        return frame == null ? List.of() : frame.tags().stream().map(Frame.Reading::id).toList();
+    }
+
+    /** The newest result the camera had finished by the instant, as the JSON the camera serves. */
+    private String resultsAt(long nowNanos) {
+        Frame newest = frameAt(nowNanos);
         if (newest == null) {
             return LimelightJson.nothingYet(activePipeline, nowNanos, cameraPose());
         }

@@ -100,13 +100,14 @@ final class SessionFactory {
 
     /**
      * What is known about the robot before anything runs. A robot without a chassis has no body in the world, which
-     * is told by a box with no size. Servos and I2C devices are not mapped, so none are listed.
+     * is told by a box with no size. I2C devices are not mapped, so none are listed.
      */
     static RobotInfo robotInfo(RobotSpec robot) {
         MecanumConfig box = robot.chassis();
         return new RobotInfo(
                 robot.name(), box == null ? 0 : box.lengthM(), box == null ? 0 : box.widthM(), box == null ? 0 : box.heightM(),
-                List.copyOf(robot.motors().keySet()), List.of(), List.of());
+                List.copyOf(robot.motors().keySet()), List.copyOf(robot.servos().keySet()), List.of(),
+                robot.turret() == null ? "" : RobotInfo.BIOBUZZ_MODEL);
     }
 
     private static Path path(String what, String reference) throws IOException {

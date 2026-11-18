@@ -22,6 +22,7 @@ import dev.ftcsim.hardware.lynx.Datagram;
 import dev.ftcsim.hardware.lynx.DekaCommand;
 import dev.ftcsim.hardware.lynx.MalformedFrameException;
 import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.ServoCatalog;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.util.List;
@@ -102,6 +103,40 @@ class RobotRigTest {
         assertTrue(rig.hub(CONTROL_HUB).answersAt(HardwareDirectory.Sensor.PINPOINT.bus(), GoBildaPinpointModel.ADDRESS));
         assertTrue(rig.hub(CONTROL_HUB).answersAt(HardwareDirectory.Sensor.COLOR_SENSOR.bus(), RevColorSensorV3Model.ADDRESS));
         assertFalse(rig.hub(EXPANSION_HUB).answersAt(HardwareDirectory.EMBEDDED_IMU_BUS, Bno055Model.ADDRESS), "the Expansion Hub has no IMU of its own here");
+    }
+
+    @Test
+    void aTurretServoTurnsTheTurretWhileTheHubSendsItAPulseAndStopsWhenTheOutputIsSwitchedOff() {
+        RobotMapping base = RobotMapping.empty("servo");
+        RobotMapping mapping = new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
+                base.camera(), new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(), 0, 0, false));
+        RobotRig rig = RobotRig.build(
+                RobotDesign.biobuzz().spec(mapping), null, 1, 0, 0, 0, clock::get, (origin, direction, maxMeters) -> null, RobotRig.Vision.NONE);
+        assertEquals(new HardwareDirectory.ServoWiring(CONTROL_HUB, 0, true), rig.wiring().servo("turretServo"));
+        assertEquals(0.0, rig.turretYawRadians());
+
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, 0, 0x20, 0x4E);
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, 0, 0x08, 0x07);
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, 0, 1);
+        tickFor(rig, 1.0);
+
+        double settled = 0.3 * ServoCatalog.noLoadRadPerSec("axon-mini-plus");
+        assertEquals(settled * (1.0 - 0.03) / 2.75, rig.turretYawRadians(), 0.002, "a pulse of 1800 us is 0.3 of full speed, 2.75 servo turns to a turret turn");
+        assertEquals(settled, rig.plantView().shaftSpeedRadPerSec("turretServo"), 1e-3);
+
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, 0, 0);
+        tickFor(rig, 0.5);
+        double stopped = rig.turretYawRadians();
+        tickFor(rig, 0.5);
+        assertEquals(stopped, rig.turretYawRadians(), 1e-6, "with its output off the servo holds still");
+    }
+
+    private void tickFor(RobotRig rig, double seconds) {
+        for (int i = 0; i < Math.round(seconds * 1000); i++) {
+            clock.addAndGet(1_000_000L);
+            rig.tick(clock.get());
+        }
     }
 
     @Test

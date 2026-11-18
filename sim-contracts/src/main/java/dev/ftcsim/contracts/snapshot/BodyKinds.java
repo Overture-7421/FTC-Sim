@@ -6,5 +6,14 @@ public final class BodyKinds {
     /** The robot's chassis. */
     public static final int CHASSIS = 1;
 
+    /**
+     * The turret of a robot that has one, a body the simulator puts into the snapshot for viewers: its origin is the
+     * turret's axis and it is turned by the turret's yaw. It is not in the physics world and nothing collides with it.
+     */
+    public static final int TURRET = 2;
+
+    /** The first of the bodies that carry the values of {@link RobotJoint}s, one kind and one entity id each, up to 99. */
+    public static final int JOINT_BASE = 10;
+
     private BodyKinds() {}
 }

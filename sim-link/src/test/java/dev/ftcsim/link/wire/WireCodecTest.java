@@ -323,7 +323,7 @@ class WireCodecTest {
 
     @Test
     void aMappedMotorOfNoSuchSlotAndAMappingThatClaimsMoreMotorsThanItHasBytesForAreRefused() {
-        WireWriter unknownSlot = new WireWriter(32);
+        WireWriter unknownSlot = new WireWriter(40);
         unknownSlot.unsignedByte(Protocol.OPEN);
         unknownSlot.string("robot");
         unknownSlot.integer(1);
@@ -331,6 +331,7 @@ class WireCodecTest {
         unknownSlot.unsignedByte(8);
         unknownSlot.string("");
         unknownSlot.bool(false);
+        unknownSlot.doubleBits(0.0);
         WireWriter greedy = new WireWriter(16);
         greedy.unsignedByte(Protocol.OPEN);
         greedy.string("robot");
@@ -358,6 +359,7 @@ class WireCodecTest {
             }
         }
 
+        w.integer(0);
         WireException error = assertThrows(WireException.class, () -> WireCodec.decodeEvent(w.finish()));
 
         assertTrue(error.getMessage().contains("strictly ordered"), error.getMessage());
@@ -404,7 +406,7 @@ class WireCodecTest {
         alliance.integer(0);
         alliance.doubleBits(11.3);
         alliance.doubleBits(96);
-        alliance.string("goBILDA-5203-435");
+        alliance.string("goBILDA-bare-6000");
         alliance.doubleBits(1);
         alliance.string("UP");
         alliance.string("FORWARD");

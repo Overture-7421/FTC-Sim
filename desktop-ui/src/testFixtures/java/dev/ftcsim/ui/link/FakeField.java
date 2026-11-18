@@ -129,8 +129,8 @@ final class FakeField {
                         new FieldChoice("none", "Bare floor", List.of(), List.of()),
                         new FieldChoice("decode", "DECODE", startPoses(), humanActions()),
                         new FieldChoice("biobuzz", "BIOBUZZ", startPoses(), humanActions())),
-                List.of(new MotorChoice("goBILDA-5203-435", "goBILDA 5203 Yellow Jacket, 435 rpm"),
-                        new MotorChoice("goBILDA-5203-312", "goBILDA 5203 Yellow Jacket, 312 rpm")));
+                List.of(new MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
+                        new MotorChoice("rev-hd-hex-6000", "REV HD Hex")));
     }
 
     static RobotInfo robot() {

@@ -10,6 +10,7 @@ import dev.ftcsim.contracts.field.Scenery;
 import dev.ftcsim.contracts.field.Shape;
 import dev.ftcsim.contracts.session.RobotInfo;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
+import dev.ftcsim.ui.model.RobotModel;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -31,6 +32,9 @@ public final class SceneModel {
     private static final float SMALL_SPHERE_BELOW = 0.04f;
     private static final float MEDIUM_SPHERE_BELOW = 0.09f;
     private static final int ROBOT_FRONT_RGB = 0xFFC107;
+    private static final int TURRET_RING_RGB = 0x4A4F57;
+    private static final int LIMELIGHT_RGB = 0x202020;
+    private static final float TURRET_RING_RADIUS = 0.115f;
     private static final Part[] NO_PARTS = new Part[0];
     // A box this wide and flat whose top lies in the floor plane is the floor, which the renderer draws with tile seams.
     private static final float FLOOR_MIN_HALF = 0.9f;
@@ -43,11 +47,16 @@ public final class SceneModel {
     private static final float TAG_CORE_SHARE = 0.40f;
     private static final int TAG_BLACK_RGB = 0x101010;
     private static final int TAG_WHITE_RGB = 0xF2F2F2;
+    private static final int TAG_HIGHLIGHT_RGB = 0x39FF14;
+
+    /** A detected tag's outline, relative to its host body or the field when the host is -1. */
+    public record TagHighlight(int hostEntityId, Part[] parts) {}
 
     /** The meshes the renderer has; a sphere's detail follows its size. */
     public enum Mesh {
         BOX,
         CYLINDER,
+        WEDGE,
         SPHERE_COARSE,
         SPHERE_MEDIUM,
         SPHERE_FINE
@@ -56,6 +65,7 @@ public final class SceneModel {
     /**
      * One solid: where its centre is and how it is turned, its half extents along its own axes, and its colour.
      *
+     * @param alpha opacity, independent of the colour a sensor reads
      * @param floor whether it is the field's floor, which is drawn with the seams between its tiles
      */
     public record Part(
@@ -63,7 +73,7 @@ public final class SceneModel {
             float x, float y, float z,
             float qx, float qy, float qz, float qw,
             float halfX, float halfY, float halfZ,
-            float red, float green, float blue,
+            float red, float green, float blue, float alpha,
             boolean floor) {
 
         /** Writes the pose of this part when its parent sits at the pose found at {@code offset} of {@code parent}. */
@@ -123,16 +133,29 @@ public final class SceneModel {
     private final Part[][] hostParts;
     private final float floorHalf;
     private final boolean ownFloor;
+    private final RobotModel robotModel;
+    private final Map<Integer, TagHighlight> tagHighlights;
 
     private SceneModel(
-            List<Part> scenery, int[] kindIds, Part[][] kindParts, int[] hostIds, Part[][] hostParts, float floorHalf) {
+            List<Part> scenery, int[] kindIds, Part[][] kindParts, int[] hostIds, Part[][] hostParts, float floorHalf,
+            RobotModel robotModel, Map<Integer, TagHighlight> tagHighlights) {
         this.scenery = scenery;
         this.kindIds = kindIds;
         this.kindParts = kindParts;
         this.hostIds = hostIds;
         this.hostParts = hostParts;
         this.floorHalf = floorHalf;
+        this.robotModel = robotModel;
+        this.tagHighlights = Map.copyOf(tagHighlights);
         this.ownFloor = scenery.stream().anyMatch(part -> part.floor() && covers(part, floorHalf));
+    }
+
+    /**
+     * The robot's picture made from its CAD, which stands in for the chassis box and the turret solids, or null when the
+     * robot has none or this build does not carry it.
+     */
+    public RobotModel robotModel() {
+        return robotModel;
     }
 
     private static boolean covers(Part floor, float half) {
@@ -161,6 +184,7 @@ public final class SceneModel {
         List<Part> fixed = new ArrayList<>();
         Map<Integer, Part[]> kinds = new TreeMap<>();
         Map<Integer, List<Part>> hosted = new TreeMap<>();
+        Map<Integer, TagHighlight> highlights = new TreeMap<>();
         float half = BARE_FLOOR_HALF;
         if (field != null) {
             half = FIELD_FLOOR_HALF;
@@ -181,24 +205,59 @@ public final class SceneModel {
             for (FieldTag tag : field.tags()) {
                 List<Part> target = tag.hostEntityId() < 0 ? fixed : hosted.computeIfAbsent(tag.hostEntityId(), id -> new ArrayList<>());
                 float[] pose = poseOf(tag.local());
+                Part[] outline = tagOutline((float) tag.sizeMeters() / 2f);
+                for (int i = 0; i < outline.length; i++) {
+                    outline[i].placeOn(pose, 0, placed);
+                    outline[i] = withPose(outline[i], placed);
+                }
+                highlights.put(tag.id(), new TagHighlight(tag.hostEntityId(), outline));
                 for (Part layer : tagLayers((float) tag.sizeMeters() / 2f)) {
                     layer.placeOn(pose, 0, placed);
                     target.add(withPose(layer, placed));
                 }
             }
         }
+        RobotModel picture = null;
         if (robot != null) {
-            kinds.put(BodyKinds.CHASSIS, robotParts(robot, robotRgb));
+            if (RobotInfo.BIOBUZZ_MODEL.equals(robot.model())) {
+                picture = biobuzzPicture();
+            }
+            if (picture != null) {
+                kinds.put(BodyKinds.CHASSIS, NO_PARTS);
+            } else {
+                kinds.put(BodyKinds.CHASSIS, robotParts(robot, robotRgb));
+                if (RobotInfo.BIOBUZZ_MODEL.equals(robot.model())) {
+                    kinds.put(BodyKinds.TURRET, turretParts(robot, robotRgb));
+                }
+            }
         }
         int[] ids = kinds.keySet().stream().mapToInt(Integer::intValue).toArray();
         int[] hostIds = hosted.keySet().stream().mapToInt(Integer::intValue).toArray();
         Part[][] hostParts = hosted.values().stream().map(list -> list.toArray(new Part[0])).toArray(Part[][]::new);
-        return new SceneModel(List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half);
+        return new SceneModel(
+                List.copyOf(fixed), ids, kinds.values().toArray(new Part[0][]), hostIds, hostParts, half, picture, highlights);
+    }
+
+    private static RobotModel biobuzzModel;
+    private static boolean biobuzzModelRead;
+
+    /** The BIOBUZZ model, read from the class path once; null when the build has none. */
+    private static synchronized RobotModel biobuzzPicture() {
+        if (!biobuzzModelRead) {
+            biobuzzModel = RobotModel.fromResource(RobotModel.BIOBUZZ);
+            biobuzzModelRead = true;
+        }
+        return biobuzzModel;
     }
 
     /** The fixed scenery with every pose in field coordinates. */
     public List<Part> scenery() {
         return scenery;
+    }
+
+    /** The outline to draw for a detected tag, or null if this field has no such tag. */
+    public TagHighlight tagHighlight(int id) {
+        return tagHighlights.get(id);
     }
 
     /** The solids of one kind of body relative to the body; empty when the field does not describe the kind. */
@@ -237,8 +296,28 @@ public final class SceneModel {
         };
     }
 
+    /**
+     * The turret of the BIOBUZZ robot relative to the turret's axis, facing +X: a ring on the chassis, the launcher
+     * (flywheels and their feed) on the ring with a stripe at its muzzle, and the Limelight on the launcher's side.
+     * Placeholder solids until the robot's CAD is drawn.
+     */
+    private static Part[] turretParts(RobotInfo robot, int bodyRgb) {
+        float top = (float) robot.heightM() / 2f;
+        float ring = 0.03f;
+        float launcher = 0.055f;
+        float ringZ = top + ring;
+        float launcherZ = top + 2f * ring + launcher;
+        return new Part[] {
+            new Part(Mesh.CYLINDER, 0f, 0f, ringZ, 0f, 0f, 0f, 1f, TURRET_RING_RADIUS, TURRET_RING_RADIUS, ring,
+                    red(TURRET_RING_RGB), green(TURRET_RING_RGB), blue(TURRET_RING_RGB), 1f, false),
+            box(0.02f, 0f, launcherZ, 0.12f, 0.075f, launcher, bodyRgb),
+            box(0.14f, 0f, launcherZ, 0.01f, 0.06f, launcher * 0.6f, ROBOT_FRONT_RGB),
+            box(0.0f, -0.09f, launcherZ + launcher + 0.02f, 0.03f, 0.02f, 0.02f, LIMELIGHT_RGB),
+        };
+    }
+
     private static Part box(float x, float y, float z, float halfX, float halfY, float halfZ, int rgb) {
-        return new Part(Mesh.BOX, x, y, z, 0f, 0f, 0f, 1f, halfX, halfY, halfZ, red(rgb), green(rgb), blue(rgb), false);
+        return new Part(Mesh.BOX, x, y, z, 0f, 0f, 0f, 1f, halfX, halfY, halfZ, red(rgb), green(rgb), blue(rgb), 1f, false);
     }
 
     /** The layers of a tag lying on the XY plane of its own frame, facing along +Z. */
@@ -248,6 +327,18 @@ public final class SceneModel {
             box(0f, 0f, step, half, half, step, TAG_BLACK_RGB),
             box(0f, 0f, step + TAG_LAYER_STEP, half * TAG_WHITE_SHARE, half * TAG_WHITE_SHARE, step, TAG_WHITE_RGB),
             box(0f, 0f, step + 2 * TAG_LAYER_STEP, half * TAG_CORE_SHARE, half * TAG_CORE_SHARE, step, TAG_BLACK_RGB),
+        };
+    }
+
+    private static Part[] tagOutline(float half) {
+        float width = Math.max(0.008f, half * 0.12f);
+        float edge = half + width;
+        float z = 2f * TAG_LAYER_HALF_THICKNESS + 2f * TAG_LAYER_STEP;
+        return new Part[] {
+            box(-edge, 0f, z, width, half + 2f * width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(edge, 0f, z, width, half + 2f * width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(0f, -edge, z, half, width, 0.002f, TAG_HIGHLIGHT_RGB),
+            box(0f, edge, z, half, width, 0.002f, TAG_HIGHLIGHT_RGB),
         };
     }
 
@@ -263,7 +354,7 @@ public final class SceneModel {
     private static Part asFloor(Part part) {
         return new Part(
                 part.mesh(), part.x(), part.y(), part.z(), part.qx(), part.qy(), part.qz(), part.qw(),
-                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), true);
+                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), part.alpha(), true);
     }
 
     private static Part partOf(FieldPart part) {
@@ -285,15 +376,23 @@ public final class SceneModel {
             case Shape.Box shape -> new Part(
                     Mesh.BOX, (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
             case Shape.Sphere shape -> new Part(
                     sphereMesh((float) shape.radius()), (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.radius(), (float) shape.radius(), (float) shape.radius(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.radius(), (float) shape.radius(), (float) shape.radius(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
+            case Shape.Wedge shape -> new Part(
+                    Mesh.WEDGE, (float) local.x(), (float) local.y(), (float) local.z(),
+                    qx / length, qy / length, qz / length, qw / length,
+                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
             case Shape.Cylinder shape -> new Part(
                     Mesh.CYLINDER, (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.radius(), (float) shape.radius(), (float) shape.halfHeight(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.radius(), (float) shape.radius(), (float) shape.halfHeight(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
         };
     }
 
@@ -321,7 +420,8 @@ public final class SceneModel {
     private static Part withPose(Part part, float[] pose) {
         return new Part(
                 part.mesh(), pose[0], pose[1], pose[2], pose[3], pose[4], pose[5], pose[6],
-                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), part.floor());
+                part.halfX(), part.halfY(), part.halfZ(),
+                part.red(), part.green(), part.blue(), part.alpha(), part.floor());
     }
 
     private static float red(int rgb) {

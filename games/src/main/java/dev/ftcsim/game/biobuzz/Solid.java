@@ -30,6 +30,7 @@ record Solid(String name, Shape shape, Pose3 pose, int rgb, boolean visible, boo
             case Shape.Box box -> new ShapePart.Box(center, new Vector3(box.halfX(), box.halfY(), box.halfZ()), axis, angle);
             case Shape.Cylinder cylinder -> new ShapePart.Cylinder(center, cylinder.radius(), cylinder.halfHeight(), axis, angle);
             case Shape.Sphere sphere -> throw new IllegalArgumentException("a field solid is a box or a cylinder, not " + sphere);
+            case Shape.Wedge wedge -> throw new IllegalArgumentException("a field solid is a box or a cylinder, not " + wedge);
         };
     }
 }

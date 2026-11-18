@@ -11,7 +11,10 @@ import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.ServoMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
+import dev.ftcsim.contracts.session.RobotMapping.TurretEncoder;
+import dev.ftcsim.contracts.session.RobotMapping.TurretParts;
 import dev.ftcsim.ui.host.ProjectMappings;
 import dev.ftcsim.ui.host.RunDefaults;
 import dev.ftcsim.ui.host.StartPosition;
@@ -54,10 +57,16 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             Separators.createDefaultInstance().withObjectFieldValueSpacing(Separators.Spacing.AFTER));
 
     private static final Set<String> TOP_KEYS = Set.of(
-            "schema", "name", "motors", "massKg", "wheelDiameterMm", "driveMotor", "turretRatio", "hub", "camera", "run", "startPositions");
-    private static final Set<String> MOTOR_KEYS = Set.of("slot", "model", "mirrored");
+            "schema", "name", "motors", "massKg", "wheelDiameterMm", "driveMotor", "driveRatio", "turretRatio", "hub", "camera", "turret", "run",
+            "startPositions");
+    private static final Set<String> MOTOR_KEYS = Set.of("slot", "model", "mirrored", "ratio");
     private static final Set<String> HUB_KEYS = Set.of("logo", "usb");
     private static final Set<String> CAMERA_KEYS = Set.of("x", "y", "z", "yawDegrees", "pitchDegrees", "rollDegrees");
+    private static final Set<String> TURRET_KEYS = Set.of(
+            "servo", "encoders", "axis", "cameraOnTurret", "hood", "stopper", "colibriLeft", "colibriRight");
+    private static final Set<String> SERVO_KEYS = Set.of("name", "model", "mirrored");
+    private static final Set<String> ENCODER_KEYS = Set.of("channel", "model", "turnsPerTurretTurn", "zeroOffsetDegrees", "mirrored");
+    private static final Set<String> AXIS_KEYS = Set.of("x", "y");
     private static final Set<String> RUN_KEYS = Set.of("field", "alliance", "startPose");
     private static final Set<String> POSITION_KEYS = Set.of("name", "field", "x", "y", "headingDegrees");
 
@@ -203,7 +212,89 @@ public final class ProjectMappingsImpl implements ProjectMappings {
                         : new CameraMount(
                                 number(camera, "x", at.x()), number(camera, "y", at.y()), number(camera, "z", at.z()),
                                 number(camera, "yawDegrees", at.yawDegrees()), number(camera, "pitchDegrees", at.pitchDegrees()),
-                                number(camera, "rollDegrees", at.rollDegrees())));
+                                number(camera, "rollDegrees", at.rollDegrees())),
+                turretPartsOf(root.get("turret")),
+                ratio(root, "driveRatio", "the robot", defaults.driveRatio()));
+    }
+
+    private static TurretParts turretPartsOf(JsonNode turret) {
+        if (turret == null) {
+            return TurretParts.NONE;
+        }
+        if (!turret.isObject()) {
+            throw new IllegalArgumentException("turret is not an object");
+        }
+        noOtherKeys(turret, TURRET_KEYS, "turret");
+        ServoMapping servo = null;
+        JsonNode servoNode = object(turret, "servo", SERVO_KEYS);
+        if (servoNode != null) {
+            String name = text(servoNode, "name", null);
+            if (name == null) {
+                throw new IllegalArgumentException("the turret servo has no name");
+            }
+            servo = new ServoMapping(name, text(servoNode, "model", ""), flag(servoNode, "mirrored", "the turret servo"));
+        }
+        List<TurretEncoder> encoders = new ArrayList<>();
+        JsonNode encodersNode = turret.get("encoders");
+        if (encodersNode != null) {
+            if (!encodersNode.isArray()) {
+                throw new IllegalArgumentException("turret encoders is not a list");
+            }
+            for (JsonNode node : encodersNode) {
+                if (!node.isObject()) {
+                    throw new IllegalArgumentException("a turret encoder is not an object");
+                }
+                noOtherKeys(node, ENCODER_KEYS, "a turret encoder");
+                JsonNode channel = node.get("channel");
+                if (channel == null || !channel.isInt()) {
+                    throw new IllegalArgumentException("a turret encoder needs a whole-number channel");
+                }
+                JsonNode turns = node.get("turnsPerTurretTurn");
+                if (turns == null) {
+                    throw new IllegalArgumentException("turret encoder " + channel.asInt() + " has no turnsPerTurretTurn");
+                }
+                encoders.add(new TurretEncoder(
+                        channel.asInt(), text(node, "model", ""), number(node, "turnsPerTurretTurn", 0.0),
+                        number(node, "zeroOffsetDegrees", 0.0), flag(node, "mirrored", "turret encoder " + channel.asInt())));
+            }
+        }
+        JsonNode axis = object(turret, "axis", AXIS_KEYS);
+        List<RobotMapping.MechanismServo> mechanisms = new ArrayList<>();
+        for (RobotMapping.ServoRole role : RobotMapping.ServoRole.values()) {
+            JsonNode node = object(turret, roleKey(role), SERVO_KEYS);
+            if (node != null) {
+                String name = text(node, "name", null);
+                if (name == null) {
+                    throw new IllegalArgumentException("the " + roleKey(role) + " servo has no name");
+                }
+                mechanisms.add(new RobotMapping.MechanismServo(
+                        role, new ServoMapping(name, text(node, "model", ""), flag(node, "mirrored", "the " + roleKey(role) + " servo"))));
+            }
+        }
+        return new TurretParts(
+                servo, encoders, axis == null ? 0.0 : number(axis, "x", 0.0), axis == null ? 0.0 : number(axis, "y", 0.0),
+                flag(turret, "cameraOnTurret", "turret"), mechanisms);
+    }
+
+    /** The key of a mechanism servo in the turret object: {@code hood}, {@code stopper}, {@code colibriLeft}, {@code colibriRight}. */
+    private static String roleKey(RobotMapping.ServoRole role) {
+        return switch (role) {
+            case HOOD -> "hood";
+            case STOPPER -> "stopper";
+            case COLIBRI_LEFT -> "colibriLeft";
+            case COLIBRI_RIGHT -> "colibriRight";
+        };
+    }
+
+    private static boolean flag(JsonNode node, String key, String where) {
+        JsonNode value = node.get(key);
+        if (value == null) {
+            return false;
+        }
+        if (!value.isBoolean()) {
+            throw new IllegalArgumentException(where + ": " + key + " is not true or false");
+        }
+        return value.asBoolean();
     }
 
     private static MotorMapping motorOf(String name, JsonNode node) {
@@ -211,6 +302,7 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             throw new IllegalArgumentException("motor " + name + " is not an object");
         }
         noOtherKeys(node, MOTOR_KEYS, "motor " + name);
+        double ratio = ratio(node, "ratio", "motor " + name, 0.0);
         String slot = text(node, "slot", null);
         if (slot == null) {
             throw new IllegalArgumentException("motor " + name + " has no slot");
@@ -220,10 +312,31 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             throw new IllegalArgumentException("motor " + name + ": mirrored is not true or false");
         }
         try {
-            return new MotorMapping(name, Slot.valueOf(slot), text(node, "model", ""), mirrored != null && mirrored.asBoolean());
+            return new MotorMapping(name, Slot.valueOf(slot), text(node, "model", ""), mirrored != null && mirrored.asBoolean(), ratio);
         } catch (IllegalArgumentException unknownSlot) {
             throw new IllegalArgumentException("motor " + name + " has the unknown slot " + slot);
         }
+    }
+
+    /** The ratio of a motor or of the drive: a number, or a text such as "43/30" as a team writes it; 0 when the file gives none. */
+    private static double ratio(JsonNode parent, String key, String where, double absent) {
+        JsonNode node = parent.get(key);
+        if (node == null || node.isNull()) {
+            return absent;
+        }
+        if (node.isNumber()) {
+            return node.asDouble();
+        }
+        if (node.isTextual()) {
+            String text = node.asText().trim();
+            try {
+                int slash = text.indexOf('/');
+                return slash < 0 ? Double.parseDouble(text) : Double.parseDouble(text.substring(0, slash).trim()) / Double.parseDouble(text.substring(slash + 1).trim());
+            } catch (NumberFormatException notANumber) {
+                throw new IllegalArgumentException(where + ": " + key + " '" + text + "' is not a number or a fraction such as 43/30");
+            }
+        }
+        throw new IllegalArgumentException(where + ": " + key + " is not a number");
     }
 
     private static JsonNode object(JsonNode parent, String key, Set<String> keys) {
@@ -344,12 +457,18 @@ public final class ProjectMappingsImpl implements ProjectMappings {
             entry.put("slot", motor.slot().name());
             entry.put("model", motor.model());
             entry.put("mirrored", motor.mirrored());
+            if (motor.ratio() != 0.0) {
+                entry.put("ratio", finite(motor.ratio()));
+            }
             motors.put(motor.name(), entry);
         }
         root.put("motors", motors);
         root.put("massKg", finite(mapping.massKg()));
         root.put("wheelDiameterMm", finite(mapping.wheelDiameterMm()));
         root.put("driveMotor", mapping.driveMotor());
+        if (mapping.driveRatio() != 0.0) {
+            root.put("driveRatio", finite(mapping.driveRatio()));
+        }
         root.put("turretRatio", finite(mapping.turretRatio()));
         root.put("hub", Map.of("logo", mapping.hubLogo(), "usb", mapping.hubUsb()));
         CameraMount camera = mapping.camera();
@@ -361,6 +480,43 @@ public final class ProjectMappingsImpl implements ProjectMappings {
         mount.put("pitchDegrees", finite(camera.pitchDegrees()));
         mount.put("rollDegrees", finite(camera.rollDegrees()));
         root.put("camera", mount);
+        TurretParts parts = mapping.turretParts();
+        if (parts.mapped()) {
+            Map<String, Object> turret = new LinkedHashMap<>();
+            if (parts.servo() != null) {
+                Map<String, Object> servo = new LinkedHashMap<>();
+                servo.put("name", parts.servo().name());
+                servo.put("model", parts.servo().model());
+                servo.put("mirrored", parts.servo().mirrored());
+                turret.put("servo", servo);
+            }
+            if (!parts.encoders().isEmpty()) {
+                List<Map<String, Object>> encoders = new ArrayList<>();
+                for (TurretEncoder encoder : parts.encoders()) {
+                    Map<String, Object> entry = new LinkedHashMap<>();
+                    entry.put("channel", encoder.channel());
+                    entry.put("model", encoder.model());
+                    entry.put("turnsPerTurretTurn", finite(encoder.turnsPerTurretTurn()));
+                    entry.put("zeroOffsetDegrees", finite(encoder.zeroOffsetDegrees()));
+                    entry.put("mirrored", encoder.mirrored());
+                    encoders.add(entry);
+                }
+                turret.put("encoders", encoders);
+            }
+            Map<String, Object> axis = new LinkedHashMap<>();
+            axis.put("x", finite(parts.axisX()));
+            axis.put("y", finite(parts.axisY()));
+            turret.put("axis", axis);
+            turret.put("cameraOnTurret", parts.cameraOnTurret());
+            for (RobotMapping.MechanismServo mechanism : parts.mechanisms()) {
+                Map<String, Object> servo = new LinkedHashMap<>();
+                servo.put("name", mechanism.servo().name());
+                servo.put("model", mechanism.servo().model());
+                servo.put("mirrored", mechanism.servo().mirrored());
+                turret.put(roleKey(mechanism.role()), servo);
+            }
+            root.put("turret", turret);
+        }
         Map<String, Object> runEntry = new LinkedHashMap<>();
         if (run.field() != null) {
             runEntry.put("field", run.field());

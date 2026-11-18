@@ -64,6 +64,11 @@ public final class CameraRack implements CameraWire {
         return null;
     }
 
+    /** AprilTag ids the robot's camera currently reports, whether or not robot code polls it. */
+    public List<Integer> visibleTagIds(long nowNanos) {
+        return camera == null ? List.of() : camera.visibleTagIds(nowNanos);
+    }
+
     /**
      * Everything that weakens the claim that the robot's camera behaves as its code expects: cameras the code asked
      * for beyond the one the robot has, and requests the camera model does not honour.

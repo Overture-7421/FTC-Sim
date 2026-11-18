@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.field.MatchPhase;
+import dev.ftcsim.physics.Vector3;
 import java.util.function.Consumer;
 import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
@@ -152,6 +153,42 @@ class HiveTest {
             assertEquals(1, arena.run.tips().size());
             assertEquals(Alliance.BLUE, arena.run.tips().get(0).hive());
             assertEquals(0, arena.run.score().lines().get(3).count());
+        }
+    }
+
+    /** Lobs {@code count} POLLEN from the robot's muzzle height, from {@code (x, y)}, at the middle of a CELL's mouth, 69 degrees up. */
+    private static void lob(Arena arena, double x, double y, boolean audienceCell, int count) {
+        double angle = Math.toRadians(arena.hiveDegrees(true));
+        double side = audienceCell ? 1 : -1;
+        Vector3 aim = HiveModel.toField(true, angle, side * Solids.in(19.46), 0.0, Solids.in(5.04));
+        double bearing = Math.atan2(aim.y() - y, aim.x() - x);
+        double muzzleX = x + 0.2 * Math.cos(bearing);
+        double muzzleY = y + 0.2 * Math.sin(bearing);
+        double distance = Math.hypot(aim.x() - muzzleX, aim.y() - muzzleY);
+        double elevation = Math.toRadians(69.0);
+        double room = distance * Math.tan(elevation) - (aim.z() - 0.4074);
+        double speed = Math.sqrt(9.81 * distance * distance / (2.0 * Math.cos(elevation) * Math.cos(elevation) * room));
+        Vector3 velocity = new Vector3(
+                speed * Math.cos(elevation) * Math.cos(bearing), speed * Math.cos(elevation) * Math.sin(bearing), speed * Math.sin(elevation));
+        for (int i = 0; i < count; i++) {
+            arena.spawn(POLLEN, new Vector3(muzzleX, muzzleY, 0.4074), velocity);
+            arena.steps(96);
+        }
+        arena.steps(600);
+    }
+
+    @Test
+    void threePollenLobbedSteeplyIntoTheMouthOfTheCellThatFacesUpTipTheHiveAndTheSameLobAtTheCellFacingDownDoesNot() {
+        try (Arena arena = new Arena(7, Alliance.RED)) {
+            arena.steps(240);
+            lob(arena, 1.4, -1.0, true, 3);
+            assertEquals(1, arena.run.tips().size(), "the three NECTAR the CELL starts with and three POLLEN are more than it holds");
+            assertEquals(Alliance.RED, arena.run.tips().get(0).hive());
+        }
+        try (Arena arena = new Arena(7, Alliance.RED)) {
+            arena.steps(240);
+            lob(arena, 1.4, -1.0, false, 3);
+            assertEquals(0, arena.run.tips().size(), "a CELL that faces down takes nothing");
         }
     }
 }

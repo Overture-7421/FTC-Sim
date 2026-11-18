@@ -33,7 +33,8 @@ public final class SnapshotMailbox {
                 ? new Latest(snapshot, snapshot, publishedNanos, publishedNanos)
                 : new Latest(old.current(), snapshot, old.currentNanos(), publishedNanos);
         latest.setRelease(next);
-        return old == null || !old.current().bodies().equals(snapshot.bodies());
+        return old == null || !old.current().bodies().equals(snapshot.bodies())
+                || !old.current().visibleTagIds().equals(snapshot.visibleTagIds());
     }
 
     /** Returns the newest pair, or {@code null} before the first publish. */

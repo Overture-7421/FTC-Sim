@@ -28,6 +28,9 @@ sources). The real driver polls `http://<ip>:5807/...` from its own thread; the 
 - **The driver.** `setPollRateHz` (1..250, ignored while running), `getTimeSinceLastUpdate` and `isConnected` (250 ms) follow the
   SDK's `scheduleAtFixedRate` grid in virtual time. A request advances the robot's clock by its latency (an unanswered one by
   the SDK's 100 ms connect timeout).
+- **Viewport.** A bright green outline marks each tag in the newest completed frame, using the same detections as
+  `/results` (including tags absent from the camera's map). Highlights do not require robot code to poll the camera,
+  follow tags on moving bodies, and disappear when a completed frame no longer detects them.
 
 ## Numbers and sources
 
@@ -53,6 +56,7 @@ URLs are under docs.limelightvision.io/docs/docs-limelight/.
 - **Mount: the one setting a team has**, `RobotMapping.camera` (the Robot page's Limelight window): X forward, Y left, Z up in
   metres from the centre of the chassis's box (about 0.18 m above the floor), yaw (positive left), pitch (positive up) and roll
   (positive clockwise seen from behind) in degrees. Default 0.16 m ahead, 0.25 m up, yaw 0, pitch 20.
+- **On the turret:** on the BIOBUZZ robot (`turret.cameraOnTurret`) the camera turns with the turret about the turret's axis. The mount is then given with the turret facing forward and the camera's place in the world is the chassis's pose turned by the turret's yaw (`LimelightModel` setting `mount.on` = `chassis` or `turret`, `TurretPlatform`). Frames in flight keep the turret yaw they were taken with, as they keep the chassis pose. A botpose is then the turret's frame, not the chassis's (BIOBUZZ has no fixed tags, so it reports none). Left at the generic default, BIOBUZZ's mount is the one on its CAD's 45 degree panel (0.217 m ahead, 0.256 m up, pitch 45), see [biobuzz-cad](../robots/biobuzz-cad.md).
 - **Fixed by the design:** pipeline 0, AprilTags, the running field's fixed tags (`field`), 1280x960.
 - **Estimated:** Hornet's camera mount and 1280x960 pipeline (its repository does not say).
 

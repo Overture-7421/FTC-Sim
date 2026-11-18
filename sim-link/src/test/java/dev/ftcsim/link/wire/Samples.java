@@ -58,17 +58,28 @@ final class Samples {
                         new MotorMapping("fr", Slot.FRONT_RIGHT, "", false),
                         new MotorMapping("rl", Slot.REAR_LEFT, "", true),
                         new MotorMapping("rr", Slot.REAR_RIGHT, "", false),
-                        new MotorMapping("roller", Slot.INTAKE, "goBILDA-5202-1150", false),
+                        new MotorMapping("roller", Slot.INTAKE, "swyft-spike-6000", false, 2.0),
                         new MotorMapping("belt", Slot.CONVEYOR, "ünï", true),
-                        new MotorMapping("shooterA", Slot.SHOOTER, "", false),
-                        new MotorMapping("turret", Slot.TURRET, "goBILDA-5203-435", true)),
+                        new MotorMapping("shooterA", Slot.SHOOTER, "", false, 43.0 / 30.0),
+                        new MotorMapping("turret", Slot.TURRET, "goBILDA-bare-6000", true)),
                 11.3,
                 96,
-                "goBILDA-5203-435",
+                "goBILDA-bare-6000",
                 Double.longBitsToDouble(0x7FF8000000001234L),
                 "UP",
                 "BACKWARD",
-                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30));
+                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30),
+                new RobotMapping.TurretParts(
+                        new RobotMapping.ServoMapping("turrët ✓", "axon-mini-plus", true),
+                        List.of(
+                                new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, -12.5, false),
+                                new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0.0, true)),
+                        0.05, -0.02, true,
+                        List.of(
+                                new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
+                                new RobotMapping.MechanismServo(
+                                        RobotMapping.ServoRole.COLIBRI_RIGHT, new RobotMapping.ServoMapping("arm ✓", "gobilda-2000-torque", true)))),
+                12.7);
     }
 
     static GamepadState gamepad() {
@@ -83,14 +94,15 @@ final class Samples {
     }
 
     static FieldDescription field() {
-        FieldPart wall = new FieldPart(new Shape.Box(0.0125, 1.8, 0.15), Pose3.at(0.1, 0.2, 0.3), 0x336699);
+        FieldPart wall = new FieldPart(new Shape.Box(0.0125, 1.8, 0.15), Pose3.at(0.1, 0.2, 0.3), 0x336699, 0.25f);
         FieldPart ball = new FieldPart(new Shape.Sphere(0.0635), Pose3.IDENTITY, 0x7B2CBF);
         FieldPart post = new FieldPart(new Shape.Cylinder(0.02, 0.4), Pose3.turned(0, 0, 0.4, 0, 1, 0, 0.1), 0xFFFFFF);
+        FieldPart gable = new FieldPart(new Shape.Wedge(0.0125, 0.25, 0.1), Pose3.at(0.4, 0, 0.2), 0xCFD8DC, 0.25f);
         return new FieldDescription(
                 "decode",
                 "DECODE ✓ 2025–26",
                 List.of(new Scenery("north wall", wall, Pose3.at(0, 1.8, 0.15)), new Scenery("goal", post, Pose3.turned(1, 1, 0, 0, 0, 1, 2.5))),
-                List.of(new BodyKind(100, "purple ball", List.of(ball)), new BodyKind(200, "ramp gate", List.of(wall, post))),
+                List.of(new BodyKind(100, "purple ball", List.of(ball)), new BodyKind(200, "ramp gate", List.of(wall, post, gable))),
                 List.of(new FieldTag(20, 0.1651, -1, Pose3.at(-1.5, 1.4, 0.75)), new FieldTag(24, 0.1651, 1000, Pose3.IDENTITY)),
                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
                 List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")));
@@ -102,7 +114,9 @@ final class Samples {
                 List.of(
                         new OpModeDescriptor("Mecanum Drive", "Drive", OpModeKind.TELEOP, "dev.ftcsim.scenarios.opmodes.MecanumDriveTeleOp"),
                         new OpModeDescriptor("Two Ball Auto", "", OpModeKind.AUTONOMOUS, "org.team.TwoBallAuto")),
-                new RobotInfo("Hornet 2026", 0.4572, 0.4572, 0.3048, List.of("frontLeft", "frontRight"), List.of("hood"), List.of("odo")));
+                new RobotInfo(
+                        "Hornet 2026", 0.4572, 0.4572, 0.3048, List.of("frontLeft", "frontRight"), List.of("hood"), List.of("odo"),
+                        "biobuzz-robot"));
     }
 
     static WorldSnapshot snapshot() {
@@ -111,7 +125,7 @@ final class Samples {
         for (int i = 0; i < 40; i++) {
             bodies.add(new BodyState(1000 + 3 * i, 100 + i % 3, 0.01f * i, -0.02f * i, 0.0635f, 0f, 0f, 0.7071068f, 0.7071068f));
         }
-        return new WorldSnapshot(123_456_789L, 514_403_287_500L, bodies);
+        return new WorldSnapshot(123_456_789L, 514_403_287_500L, bodies, List.of(20, 24));
     }
 
     static SessionStatus status() {
@@ -142,7 +156,7 @@ final class Samples {
                                 "DECODE ✓ 2025–26",
                                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
                                 List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")))),
-                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-5203-435", "goBILDA 5203, 435 rpm"),
+                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
                         new dev.ftcsim.contracts.session.MotorChoice("ünï", "Ünïcode motor")));
     }
 

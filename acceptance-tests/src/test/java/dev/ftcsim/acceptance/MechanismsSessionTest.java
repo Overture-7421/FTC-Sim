@@ -38,7 +38,10 @@ class MechanismsSessionTest {
     // Piece kinds of the DECODE field: purple and green artifacts.
     private static final int PURPLE = 101;
     private static final int GREEN = 102;
+    /** The 13.7:1 of a 435 rpm Yellow Jacket, which these rigs have always had on the rollers. */
+    private static final double GEARED = 13.7;
     private static final double TURRET_RATIO = 3.0;
+    private static final double SERVO_TURRET_RATIO = 2.75;
 
     /** Hornet's robot but for the names its OpMode of the fixture uses: four wheels, the roller, the belt and two flywheels. */
     private static final RobotMapping MAPPING = RobotMapping.empty("mechanism test rig").withMotors(List.of(
@@ -46,8 +49,8 @@ class MechanismsSessionTest {
             new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
             new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
             new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-            new MotorMapping("intake", Slot.INTAKE, "", false),
-            new MotorMapping("up", Slot.CONVEYOR, "", false),
+            new MotorMapping("intake", Slot.INTAKE, "", false, GEARED),
+            new MotorMapping("up", Slot.CONVEYOR, "", false, GEARED),
             new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
             new MotorMapping("shooterRight", Slot.SHOOTER, "", false)));
 
@@ -200,5 +203,137 @@ class MechanismsSessionTest {
         RobotSpec mirrored = turretRobot(true);
 
         assertEquals(-45.0, launchHeadingDegrees(mirrored, 0.5f), 3.0);
+    }
+
+    /** The robot of the BIOBUZZ game whose turret a continuous-rotation servo turns, 2.75 servo turns to one of the turret's. */
+    private static RobotSpec servoTurretRobot(boolean mirrored) {
+        List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
+        RobotMapping geared = new RobotMapping(
+                "servo turret rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), SERVO_TURRET_RATIO,
+                MAPPING.hubLogo(), MAPPING.hubUsb(), MAPPING.camera(),
+                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", mirrored), List.of(), 0, 0, false));
+        return RobotDesign.biobuzz().spec(geared);
+    }
+
+    /** Turns the turret with the left stick pushed {@code stickX} for a second, then shoots; the heading the piece leaves along and the turret's yaw, in degrees. */
+    private static double[] servoLaunchHeadingDegrees(RobotSpec robot, float stickX) throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(robot, new TestField(), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(1, session.preload("magazine", TestField.PIECE_KIND, 1));
+            int id = TestField.IN_RESERVE.get(0);
+            session.init("Turret Servo");
+            session.start();
+            session.setGamepad(1, new GamepadState(
+                    stickX, 0f, 0f, 0f, 0f, 1f, false, false, false, false, false, false, false, false, false, false, false, false,
+                    false, false, false));
+            session.runFor(SECOND);
+            session.setGamepad(1, pad(1f, false));
+            session.runFor(3 * SECOND);
+            assertFalse(inWorld(session, id), "the piece waits in the robot until the belt feeds the flywheels");
+            double yaw = Math.toDegrees(session.rig().turretYawRadians());
+
+            session.setGamepad(1, pad(1f, true));
+            for (int i = 0; i < 300 && !inWorld(session, id); i++) {
+                session.runFor(SECOND / 100);
+            }
+            assertTrue(inWorld(session, id), "the piece was launched: " + handle.log);
+            BodyPose piece = session.world().bodyPose(id);
+            assertTrue(piece.velocity().length() > 1.0, "the flywheels were up to speed: " + piece.velocity());
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+            return new double[] {
+                Math.toDegrees(Math.atan2(piece.vy(), piece.vx())), yaw, piece.x(), piece.y(), piece.z(),
+                session.rig().chassisView().sample().position().z()};
+        }
+    }
+
+    @Test
+    void aShotLeavesFromTheOpeningInFrontOfTheFlywheelsAndTheOpeningTurnsWithTheTurret() throws IOException {
+        for (float stick : new float[] {0f, 0.5f, -0.5f}) {
+            double[] shot = servoLaunchHeadingDegrees(servoTurretRobot(false), stick);
+            double yaw = Math.toRadians(shot[1]);
+            // Without a hood the opening is where the wheels let a ball go at the fixed 55 degrees: 0.0737 m from the wheel axle (0.162 m
+            // ahead of the robot's centre, 0.2146 m above its middle), turned about the turret's axis 0.089 m ahead.
+            double ahead = 0.162 - 0.0737 * Math.sin(Math.toRadians(55.0));
+            double expectedX = 0.089 + (ahead - 0.089) * Math.cos(yaw);
+            double expectedY = (ahead - 0.089) * Math.sin(yaw);
+            assertEquals(expectedX, shot[2], 0.08, "x, turret at " + shot[1] + " degrees");
+            assertEquals(expectedY, shot[3], 0.08, "y, turret at " + shot[1] + " degrees");
+            assertEquals(shot[5] + 0.2146 + 0.0737 * Math.cos(Math.toRadians(55.0)), shot[4], 0.08, "the opening is above the robot, not inside it");
+        }
+    }
+
+    /** The BIOBUZZ robot with a hood and a stopper, each on a positional servo, and no turret. */
+    private static RobotSpec hoodRobot() {
+        List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                null, List.of(), 0, 0, false,
+                List.of(
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hoodServo", "", false)),
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopperServo", "", false))));
+        RobotMapping mapping = new RobotMapping(
+                "hood rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), 1.0, MAPPING.hubLogo(), MAPPING.hubUsb(),
+                MAPPING.camera(), parts);
+        return RobotDesign.biobuzz().spec(mapping);
+    }
+
+    private static GamepadState hoodPad(float stickX, boolean flywheels, boolean conveyor, boolean open) {
+        return new GamepadState(
+                stickX, 0f, 0f, 0f, 0f, flywheels ? 1f : 0f, false, false, false, false, conveyor, open, false, false, false, false, false,
+                false, false, false, false);
+    }
+
+    /** Spins up the flywheels, runs the belt for 3 seconds and reports whether the piece left, and how steeply when it did. */
+    private static double[] hoodShot(float stickX, boolean stopperOpen) throws IOException {
+        try (TestSessions.Handle handle = TestSessions.open(hoodRobot(), new TestField(), 0, 0, 0)) {
+            SimulationSession session = handle.session;
+            assertEquals(1, session.preload("magazine", TestField.PIECE_KIND, 1));
+            int id = TestField.IN_RESERVE.get(0);
+            session.init("Hood Stopper");
+            session.start();
+            session.setGamepad(1, hoodPad(stickX, true, false, stopperOpen));
+            session.runFor(3 * SECOND);
+            session.setGamepad(1, hoodPad(stickX, true, true, stopperOpen));
+            for (int i = 0; i < 300 && !inWorld(session, id); i++) {
+                session.runFor(SECOND / 100);
+            }
+            assertEquals(List.of(), session.problems(), handle.log.toString());
+            if (!inWorld(session, id)) {
+                return new double[] {0.0, 0.0};
+            }
+            BodyPose piece = session.world().bodyPose(id);
+            return new double[] {1.0, Math.toDegrees(Math.atan2(piece.vz(), Math.hypot(piece.vx(), piece.vy())))};
+        }
+    }
+
+    @Test
+    void theStopperHoldsThePieceUntilItsServoOpensAndTheHoodSetsHowSteeplyItLeaves() throws IOException {
+        double[] closed = hoodShot(-1f, false);
+        double[] low = hoodShot(-1f, true);
+        double[] mid = hoodShot(-0.6f, true);
+        double[] high = hoodShot(1f, true);
+
+        assertEquals(0.0, closed[0], "the belt cannot push the piece out past a closed stopper");
+        assertEquals(1.0, low[0], "and it leaves once the stopper is open");
+        assertEquals(1.0, high[0]);
+        assertEquals(45.0, low[1], 3.0, "the hood at its lowest, 1 degree, sends it up at 45 degrees (a little less by the time it is looked at)");
+        // The hood's servo has five turns: position 0.2 is 360 degrees of servo, 11.8 degrees of hood over the 30.4 to 1 gears.
+        assertEquals(45.0 + 360.0 / (730.0 / 24.0), mid[1], 3.0, "position 0.2 raises the hood 11.8 degrees");
+        // A piece leaving at 89 degrees has hardly any sideways speed, so by the time it is looked at (up to 10 ms later) gravity has taken
+        // it a long way down in angle: it reads over 70, which the old 24 degree stop (69 at launch) cannot. RobotDesignTest has the exact 89.
+        assertTrue(high[1] > 70.0 && high[1] > mid[1] + 10.0, "the servo's travel is more than the hood's: its stop holds it, 44 degrees up: " + high[1]);
+    }
+
+    @Test
+    void aBiobuzzPieceLeavesAlongTheHeadingAContinuousRotationServoTurnedTheTurretTo() throws IOException {
+        // Stick 0.25 is a pulse of 1725 us: 0.225 of the Axon Mini+'s 9.8 rad/s, for about a second, over 2.75 turns of servo.
+        double nominal = Math.toDegrees(0.25 * 0.9 * 9.82 / SERVO_TURRET_RATIO);
+
+        double[] left = servoLaunchHeadingDegrees(servoTurretRobot(false), 0.25f);
+        double[] right = servoLaunchHeadingDegrees(servoTurretRobot(true), 0.25f);
+
+        assertEquals(left[1], left[0], 3.0, "the piece leaves along the turret's yaw");
+        assertEquals(nominal, left[1], 0.12 * nominal, "positive power turns the turret to the left about as far as the servo's speed says");
+        assertEquals(-left[1], right[1], 0.5, "a mirrored servo turns it as far to the right");
+        assertEquals(right[1], right[0], 3.0);
     }
 }

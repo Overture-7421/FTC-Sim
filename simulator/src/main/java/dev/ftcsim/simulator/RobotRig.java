@@ -4,18 +4,25 @@ import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.robot.RobotEnvironment;
+import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
+import dev.ftcsim.contracts.snapshot.BodyState;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.BodyView;
 import dev.ftcsim.contracts.world.RayView;
+import dev.ftcsim.contracts.world.Vec3;
+import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.hardware.camera.CameraRack;
 import dev.ftcsim.hardware.camera.CameraModels;
 import dev.ftcsim.hardware.device.DeviceHost;
 import dev.ftcsim.hardware.device.DeviceModels;
+import dev.ftcsim.hardware.device.TurretView;
 import dev.ftcsim.hardware.lynx.HubConfig;
 import dev.ftcsim.hardware.lynx.LynxBus;
 import dev.ftcsim.hardware.lynx.LynxHub;
 import dev.ftcsim.hardware.wiring.WiringTable;
+import dev.ftcsim.mechanisms.ServoPlant;
 import dev.ftcsim.mechanisms.PlantView;
 import dev.ftcsim.mechanisms.ShaftPlant;
 import dev.ftcsim.physics.DcMotor;
@@ -25,8 +32,11 @@ import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.Vector3;
 import dev.ftcsim.physics.WheelPosition;
 import dev.ftcsim.simulator.robot.MotorCatalog;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotException;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.robot.ServoCatalog;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -76,6 +86,7 @@ public final class RobotRig {
     private final Map<String, MotorPlant> plants;
     private final Map<String, WheelPlant> wheelPlants;
     private final Map<String, ShaftPlant> shafts;
+    private final Map<String, ServoPlant> servoPlants;
     private final Map<String, WheelRef> wheels;
 
     private RobotRig(
@@ -93,6 +104,7 @@ public final class RobotRig {
             Map<String, MotorPlant> plants,
             Map<String, WheelPlant> wheelPlants,
             Map<String, ShaftPlant> shafts,
+            Map<String, ServoPlant> servoPlants,
             Map<String, WheelRef> wheels) {
         this.spec = spec;
         this.bus = bus;
@@ -108,6 +120,7 @@ public final class RobotRig {
         this.plants = plants;
         this.wheelPlants = wheelPlants;
         this.shafts = shafts;
+        this.servoPlants = servoPlants;
         this.wheels = wheels;
     }
 
@@ -130,6 +143,9 @@ public final class RobotRig {
         WiringTable.Builder wiring = WiringTable.builder();
         for (HardwareDirectory.Hub hub : spec.hubs()) {
             wiring.hub(hub.address(), hub.name(), hub.parent(), hub.embedded());
+        }
+        if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
+            wiring.sensor(HardwareDirectory.Sensor.OCTOQUAD);
         }
 
         MecanumConfig chassisConfig = spec.chassis();
@@ -161,6 +177,13 @@ public final class RobotRig {
             plants.put(entry.getKey(), plant);
         }
 
+        Map<String, ServoPlant> servoPlants = new LinkedHashMap<>();
+        for (Map.Entry<String, RobotSpec.Servo> entry : spec.servos().entrySet()) {
+            RobotSpec.Servo servo = entry.getValue();
+            servoPlants.put(entry.getKey(), servo.positional() ? ServoCatalog.positionPlant(servo.model(), servo.mirrored()) : ServoCatalog.plant(servo.model()));
+            wiring.servo(entry.getKey(), servo.hub(), servo.port());
+        }
+
         LynxBus bus = new LynxBus(clock);
         Map<Integer, LynxHub> hubs = new LinkedHashMap<>();
         for (HardwareDirectory.Hub hub : spec.hubs()) {
@@ -181,16 +204,57 @@ public final class RobotRig {
         DeviceHost devices = new DeviceHost(view, rays, clock);
         devices.provideFieldTags(vision.tags());
         devices.provideEntities(vision.entities());
+        devices.provideTurret(turretView(spec, shafts, servoPlants));
         CameraRack cameras = sensors(spec, parent, hubs, devices, vision.noiseSeed());
         return new RobotRig(
                 spec, bus, Collections.unmodifiableMap(hubs), wiring.build(), cameras, chassis, view, bodySource, chassisConfig,
                 chassisEntityId, devices, Collections.unmodifiableMap(plants), Collections.unmodifiableMap(wheelPlants),
-                Collections.unmodifiableMap(shafts), Collections.unmodifiableMap(wheels));
+                Collections.unmodifiableMap(shafts), Collections.unmodifiableMap(servoPlants), Collections.unmodifiableMap(wheels));
+    }
+
+    /** The turret as devices see it: how far the shaft that turns it has turned, and the axis it turns about. */
+    private static TurretView turretView(RobotSpec spec, Map<String, ShaftPlant> shafts, Map<String, ServoPlant> servoPlants) {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null) {
+            return TurretView.NONE;
+        }
+        return new TurretView() {
+            @Override
+            public double yawRadians() {
+                ShaftPlant shaft = turret.shaft() == null ? null : shafts.get(turret.shaft());
+                if (shaft != null) {
+                    return turret.yawRadians(shaft.angleRadians());
+                }
+                ServoPlant servo = turret.shaft() == null ? null : servoPlants.get(turret.shaft());
+                return servo == null ? 0.0 : turret.yawRadians(servo.angleRadians());
+            }
+
+            @Override
+            public double yawRateRadPerSec() {
+                ShaftPlant shaft = turret.shaft() == null ? null : shafts.get(turret.shaft());
+                if (shaft != null) {
+                    return turret.yawRadians(shaft.speedRadPerSec());
+                }
+                ServoPlant servo = turret.shaft() == null ? null : servoPlants.get(turret.shaft());
+                return servo == null ? 0.0 : turret.yawRadians(servo.speedRadPerSec());
+            }
+
+            @Override
+            public double axisX() {
+                return turret.axisX();
+            }
+
+            @Override
+            public double axisY() {
+                return turret.axisY();
+            }
+        };
     }
 
     /**
      * Attaches the robot's fixed sensors: the IMU inside every Control Hub on its bus 0, the Pinpoint and the colour
-     * sensor on the buses of the parent hub that are theirs, and plugs in the Limelight.
+     * sensor on the buses of the parent hub that are theirs, the OctoQuad with the turret's encoders if the design has
+     * them, and plugs in the Limelight.
      */
     private static CameraRack sensors(RobotSpec spec, int parent, Map<Integer, LynxHub> hubs, DeviceHost devices, long noiseSeed) {
         DeviceModels models = DeviceModels.standard();
@@ -208,11 +272,29 @@ public final class RobotRig {
             parentHub.attach(
                     HardwareDirectory.Sensor.COLOR_SENSOR.bus(),
                     models.create(DeviceModels.COLOR_SENSOR, "colour sensor", spec.colorSensor().settings(), devices));
+            if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
+                parentHub.attach(
+                        HardwareDirectory.Sensor.OCTOQUAD.bus(),
+                        models.create(DeviceModels.OCTOQUAD, "OctoQuad", octoQuadSettings(spec.turret()), devices));
+            }
             return new CameraRack().plug(
                     CameraModels.standard().create("limelight-3a", "Limelight", spec.limelight().settings(), devices, noiseSeed));
         } catch (IllegalArgumentException refused) {
             throw new RobotException("a sensor of the robot refused its settings: " + refused.getMessage(), refused);
         }
+    }
+
+    /** The OctoQuad's settings: the encoders of the turret on the ports the mapping gave them. */
+    private static Map<String, Object> octoQuadSettings(RobotSpec.Turret turret) {
+        Map<String, Object> settings = new LinkedHashMap<>();
+        for (RobotMapping.TurretEncoder encoder : turret.encoders()) {
+            String prefix = "encoder" + encoder.channel() + ".";
+            settings.put(prefix + "model", encoder.model());
+            settings.put(prefix + "turns", encoder.turnsPerTurretTurn());
+            settings.put(prefix + "zeroOffsetDegrees", encoder.zeroOffsetDegrees());
+            settings.put(prefix + "mirrored", encoder.mirrored() ? 1 : 0);
+        }
+        return settings;
     }
 
     /** A drivetrain motor as the hub's port sees it, which stays the same when the chassis is put into another world. */
@@ -340,15 +422,111 @@ public final class RobotRig {
         for (ShaftPlant shaft : shafts.values()) {
             shaft.step(SECONDS_PER_TICK);
         }
+        for (Map.Entry<String, ServoPlant> entry : servoPlants.entrySet()) {
+            RobotSpec.Servo servo = spec.servos().get(entry.getKey());
+            LynxHub hub = hubs.get(servo.hub());
+            entry.getValue().step(SECONDS_PER_TICK, hub.servoEnabled(servo.port()), hub.servoPulseWidthMicros(servo.port()));
+        }
         bus.advanceTo(nanos);
     }
 
-    /** The motors as mechanisms follow them: how fast and how far each shaft turns, and what a launch costs a flywheel. */
+    /**
+     * How far the turret has turned since the session began, counter-clockwise from facing forward, in radians; 0 for a
+     * robot without a turret, or whose turret nothing turns.
+     */
+    public double turretYawRadians() {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null || turret.shaft() == null) {
+            return 0.0;
+        }
+        return turret.yawRadians(plantView().shaftAngleRad(turret.shaft()));
+    }
+
+    /**
+     * The turret as a viewer draws it, or null for a robot without one: a body at the turret's axis, turned by the
+     * turret's yaw on top of the chassis's pose.
+     */
+    public BodyState turretBody(BodyPose chassis) {
+        RobotSpec.Turret turret = spec.turret();
+        if (turret == null) {
+            return null;
+        }
+        Vec3 axis = chassis.pointToField(new Vec3(turret.axisX(), turret.axisY(), 0.0));
+        double half = turretYawRadians() / 2.0;
+        double tw = StrictMath.cos(half);
+        double tz = StrictMath.sin(half);
+        return new BodyState(
+                EntityIds.TURRET, BodyKinds.TURRET, (float) axis.x(), (float) axis.y(), (float) axis.z(),
+                (float) (chassis.qx() * tw + chassis.qy() * tz), (float) (chassis.qy() * tw - chassis.qx() * tz),
+                (float) (chassis.qz() * tw + chassis.qw() * tz), (float) (chassis.qw() * tw - chassis.qz() * tz));
+    }
+
+    /** The bodies a window draws the robot's picture with: its turret, and the joints of its mechanisms. */
+    public List<BodyState> viewBodies(BodyPose chassisPose) {
+        List<BodyState> bodies = new ArrayList<>();
+        BodyState turret = turretBody(chassisPose);
+        if (turret != null) {
+            bodies.add(turret);
+        }
+        bodies.addAll(jointBodies());
+        return bodies;
+    }
+
+    /**
+     * The values of the picture's joints as bodies for the snapshot, one per {@link RobotJoint} with the value in radians
+     * as its X, or none for a robot that has no turret and so no picture. Angles that turn without end are kept within
+     * 64 turns so that a long session does not lose the float's precision.
+     */
+    public List<BodyState> jointBodies() {
+        RobotSpec.Turret turretSpec = spec.turret();
+        if (turretSpec == null) {
+            return List.of();
+        }
+        double[] values = new double[RobotJoint.values().length];
+        MecanumChassis current = chassis;
+        if (current != null) {
+            values[RobotJoint.WHEEL_FRONT_LEFT.ordinal()] = current.wheelAngleRadians(WheelPosition.FRONT_LEFT);
+            values[RobotJoint.WHEEL_FRONT_RIGHT.ordinal()] = current.wheelAngleRadians(WheelPosition.FRONT_RIGHT);
+            values[RobotJoint.WHEEL_REAR_LEFT.ordinal()] = current.wheelAngleRadians(WheelPosition.REAR_LEFT);
+            values[RobotJoint.WHEEL_REAR_RIGHT.ordinal()] = current.wheelAngleRadians(WheelPosition.REAR_RIGHT);
+        }
+        RobotSpec.Joints joints = spec.joints();
+        values[RobotJoint.INTAKE.ordinal()] = shaftTurns(joints.intake(), joints.intakeSign(), joints.intakeRatio());
+        values[RobotJoint.CONVEYOR.ordinal()] = shaftTurns(joints.conveyor(), joints.conveyorSign(), joints.conveyorRatio());
+        values[RobotJoint.FLYWHEEL.ordinal()] = shaftTurns(joints.flywheel(), joints.flywheelSign(), joints.flywheelRatio());
+        values[RobotJoint.HOOD.ordinal()] = RobotDesign.HOOD_REST_RADIANS;
+        for (RobotSpec.ServoJoint servoJoint : joints.servos()) {
+            ServoPlant servo = servoPlants.get(servoJoint.servo());
+            values[servoJoint.joint().ordinal()] = servoJoint.rest()
+                    + (servo == null ? 0.0 : Math.min(servoJoint.limit(), servo.angleRadians() / servoJoint.ratio()));
+        }
+        double yaw = turretYawRadians();
+        for (RobotMapping.TurretEncoder encoder : turretSpec.encoders()) {
+            if (encoder.channel() == 0) {
+                values[RobotJoint.ENCODER_A.ordinal()] = -yaw * encoder.turnsPerTurretTurn();
+            } else if (encoder.channel() == 1) {
+                values[RobotJoint.ENCODER_B.ordinal()] = -yaw * encoder.turnsPerTurretTurn();
+            }
+        }
+        double wrap = 2.0 * Math.PI * 64.0;
+        List<BodyState> bodies = new ArrayList<>();
+        for (RobotJoint joint : RobotJoint.values()) {
+            bodies.add(new BodyState(joint.kind(), joint.kind(), (float) (values[joint.ordinal()] % wrap), 0f, 0f, 0f, 0f, 0f, 1f));
+        }
+        return bodies;
+    }
+
+    private double shaftTurns(String motor, int sign, double ratio) {
+        ShaftPlant shaft = motor == null ? null : shafts.get(motor);
+        return shaft == null ? 0.0 : sign * shaft.angleRadians() / ratio;
+    }
+
+    /** The motors and servos as mechanisms follow them: how fast and how far each shaft turns, and what a launch costs a flywheel. */
     public PlantView plantView() {
         return new PlantView() {
             @Override
             public boolean hasShaft(String motor) {
-                return shafts.containsKey(motor) || wheels.containsKey(motor);
+                return shafts.containsKey(motor) || wheels.containsKey(motor) || servoPlants.containsKey(motor);
             }
 
             @Override
@@ -356,6 +534,10 @@ public final class RobotRig {
                 ShaftPlant shaft = shafts.get(motor);
                 if (shaft != null) {
                     return shaft.speedRadPerSec();
+                }
+                ServoPlant servo = servoPlants.get(motor);
+                if (servo != null) {
+                    return servo.speedRadPerSec();
                 }
                 WheelRef wheel = wheels.get(motor);
                 if (wheel == null) {
@@ -367,10 +549,14 @@ public final class RobotRig {
             @Override
             public double shaftAngleRad(String motor) {
                 ShaftPlant shaft = shafts.get(motor);
-                if (shaft == null) {
+                if (shaft != null) {
+                    return shaft.angleRadians();
+                }
+                ServoPlant servo = servoPlants.get(motor);
+                if (servo == null) {
                     throw new IllegalArgumentException("'" + motor + "' is not a shaft whose angle mechanisms can follow");
                 }
-                return shaft.angleRadians();
+                return servo.angleRadians();
             }
 
             @Override

@@ -261,6 +261,11 @@ class RealFieldViewportTest {
             camera.track(0.0, -0.3236, 0.0, 30.0);
             camera.set(0.0, 9.0, 1.7);
             shoot(shots, "real-biobuzz-hive-underside");
+            camera.setTarget(0, -0.3236, 1.15);
+            camera.set(45.0, 24.0, 2.0);
+            shoot(shots, "real-biobuzz-hive-cells");
+            camera.set(-135.0, 24.0, 2.0);
+            shoot(shots, "real-biobuzz-hive-cells-other");
         }
     }
 

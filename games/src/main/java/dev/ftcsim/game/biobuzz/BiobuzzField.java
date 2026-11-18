@@ -6,7 +6,6 @@ import dev.ftcsim.contracts.field.BodyKind;
 import dev.ftcsim.contracts.field.FieldDescription;
 import dev.ftcsim.contracts.field.FieldPart;
 import dev.ftcsim.contracts.field.FieldTag;
-import dev.ftcsim.contracts.field.HumanAction;
 import dev.ftcsim.contracts.field.Pose3;
 import dev.ftcsim.contracts.field.Scenery;
 import dev.ftcsim.contracts.field.Shape;
@@ -30,7 +29,6 @@ public final class BiobuzzField implements Field {
 
     public static final String LOAD_NECTAR = "load-nectar";
     public static final String LOAD_OPPONENT_NECTAR = "load-opponent-nectar";
-    public static final String RETURN_POLLEN = "return-pollen";
 
     private static final int POLLEN_RGB = 0xF2C500;
     private static final int NECTAR_RED_RGB = 0xC62828;
@@ -79,10 +77,7 @@ public final class BiobuzzField implements Field {
 
         return new FieldDescription(
                 "biobuzz", "BIOBUZZ presented by RTX (2026-27)", scenery, kinds, tags, startPoses(),
-                List.of(
-                        new HumanAction(LOAD_NECTAR, "Human enters a NECTAR of the robot's alliance through its LOADING ZONE"),
-                        new HumanAction(LOAD_OPPONENT_NECTAR, "Human enters a NECTAR of the other alliance through its LOADING ZONE"),
-                        new HumanAction(RETURN_POLLEN, "Field staff put a POLLEN that left the field back in")));
+                List.of());
     }
 
     private static FieldPart ball(double radius, int rgb) {

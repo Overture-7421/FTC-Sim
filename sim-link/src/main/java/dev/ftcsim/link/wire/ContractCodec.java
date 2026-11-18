@@ -27,7 +27,10 @@ import dev.ftcsim.contracts.session.RobotInfo;
 import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
 import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
+import dev.ftcsim.contracts.session.RobotMapping.ServoMapping;
 import dev.ftcsim.contracts.session.RobotMapping.Slot;
+import dev.ftcsim.contracts.session.RobotMapping.TurretEncoder;
+import dev.ftcsim.contracts.session.RobotMapping.TurretParts;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -47,7 +50,7 @@ final class ContractCodec {
     private static final int GAMEPAD_FLAGS = 15;
     private static final int POSE_BYTES = 7 * 8;
     private static final int STRING_BYTES = 4;
-    private static final int PART_BYTES = 1 + 8 + POSE_BYTES + 4;
+    private static final int PART_BYTES = 1 + 8 + POSE_BYTES + 4 + 4;
 
     private ContractCodec() {}
 
@@ -82,10 +85,12 @@ final class ContractCodec {
             w.unsignedByte(code(motor.slot()));
             w.string(motor.model());
             w.bool(motor.mirrored());
+            w.doubleBits(motor.ratio());
         }
         w.doubleBits(mapping.massKg());
         w.doubleBits(mapping.wheelDiameterMm());
         w.string(mapping.driveMotor());
+        w.doubleBits(mapping.driveRatio());
         w.doubleBits(mapping.turretRatio());
         w.string(mapping.hubLogo());
         w.string(mapping.hubUsb());
@@ -96,26 +101,75 @@ final class ContractCodec {
         w.doubleBits(camera.yawDegrees());
         w.doubleBits(camera.pitchDegrees());
         w.doubleBits(camera.rollDegrees());
+        TurretParts parts = mapping.turretParts();
+        w.bool(parts.servo() != null);
+        if (parts.servo() != null) {
+            w.string(parts.servo().name());
+            w.string(parts.servo().model());
+            w.bool(parts.servo().mirrored());
+        }
+        w.count(parts.encoders().size(), "the turret encoders");
+        for (TurretEncoder encoder : parts.encoders()) {
+            w.integer(encoder.channel());
+            w.string(encoder.model());
+            w.doubleBits(encoder.turnsPerTurretTurn());
+            w.doubleBits(encoder.zeroOffsetDegrees());
+            w.bool(encoder.mirrored());
+        }
+        w.doubleBits(parts.axisX());
+        w.doubleBits(parts.axisY());
+        w.bool(parts.cameraOnTurret());
+        w.count(parts.mechanisms().size(), "the mechanism servos");
+        for (RobotMapping.MechanismServo mechanism : parts.mechanisms()) {
+            w.integer(mechanism.role().ordinal());
+            w.string(mechanism.servo().name());
+            w.string(mechanism.servo().model());
+            w.bool(mechanism.servo().mirrored());
+        }
     }
 
     private static RobotMapping readMapping(WireReader r) throws WireException {
         String name = r.string("the robot name");
-        int count = r.count(2 * STRING_BYTES + 2, "the mapped motors");
+        int count = r.count(2 * STRING_BYTES + 2 + 8, "the mapped motors");
         List<MotorMapping> motors = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             String motorName = r.string("a mapped motor name");
             Slot slot = slot(r.unsignedByte());
-            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool()));
+            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool(), r.doubleBits()));
         }
         double massKg = r.doubleBits();
         double wheelDiameterMm = r.doubleBits();
         String driveMotor = r.string("the drive motor");
+        double driveRatio = r.doubleBits();
         double turretRatio = r.doubleBits();
         String hubLogo = r.string("the hub logo direction");
         String hubUsb = r.string("the hub USB direction");
         CameraMount camera =
                 new CameraMount(r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
-        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera);
+        ServoMapping servo = r.bool() ? new ServoMapping(r.string("the turret servo name"), r.string("the turret servo model"), r.bool()) : null;
+        int encoderCount = r.count(STRING_BYTES + 4 + 2 * 8 + 1, "the turret encoders");
+        List<TurretEncoder> encoders = new ArrayList<>(encoderCount);
+        for (int i = 0; i < encoderCount; i++) {
+            int channel = r.integer();
+            String model = r.string("a turret encoder model");
+            encoders.add(new TurretEncoder(channel, model, r.doubleBits(), r.doubleBits(), r.bool()));
+        }
+        double axisX = r.doubleBits();
+        double axisY = r.doubleBits();
+        boolean cameraOnTurret = r.bool();
+        int mechanismCount = r.count(4 + 2 * STRING_BYTES + 1, "the mechanism servos");
+        List<RobotMapping.MechanismServo> mechanisms = new ArrayList<>(mechanismCount);
+        RobotMapping.ServoRole[] roles = RobotMapping.ServoRole.values();
+        for (int i = 0; i < mechanismCount; i++) {
+            int role = r.integer();
+            if (role < 0 || role >= roles.length) {
+                throw new WireException("unknown servo role " + role);
+            }
+            mechanisms.add(new RobotMapping.MechanismServo(
+                    roles[role], new ServoMapping(r.string("a mechanism servo name"), r.string("a mechanism servo model"), r.bool())));
+        }
+        TurretParts parts = new TurretParts(servo, encoders, axisX, axisY, cameraOnTurret, mechanisms);
+        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts, driveRatio);
     }
 
     static void writeInfo(WireWriter w, SessionInfo info) {
@@ -138,6 +192,7 @@ final class ContractCodec {
         writeStrings(w, robot.motors(), "the motors");
         writeStrings(w, robot.servos(), "the servos");
         writeStrings(w, robot.devices(), "the devices");
+        w.string(robot.model());
     }
 
     static SessionInfo readInfo(WireReader r) throws WireException {
@@ -152,7 +207,7 @@ final class ContractCodec {
         }
         RobotInfo robot = new RobotInfo(
                 r.string("the robot name"), r.doubleBits(), r.doubleBits(), r.doubleBits(), readStrings(r, "the motors"),
-                readStrings(r, "the servos"), readStrings(r, "the devices"));
+                readStrings(r, "the servos"), readStrings(r, "the devices"), r.string("the robot model"));
         return new SessionInfo(field, opModes, robot);
     }
 
@@ -306,9 +361,16 @@ final class ContractCodec {
                 w.doubleBits(cylinder.radius());
                 w.doubleBits(cylinder.halfHeight());
             }
+            case Shape.Wedge wedge -> {
+                w.unsignedByte(3);
+                w.doubleBits(wedge.halfX());
+                w.doubleBits(wedge.halfY());
+                w.doubleBits(wedge.halfZ());
+            }
         }
         writePose(w, part.local());
         w.integer(part.rgb());
+        w.floatBits(part.alpha());
     }
 
     private static FieldPart readPart(WireReader r) throws WireException {
@@ -318,10 +380,11 @@ final class ContractCodec {
                     case 0 -> new Shape.Box(r.doubleBits(), r.doubleBits(), r.doubleBits());
                     case 1 -> new Shape.Sphere(r.doubleBits());
                     case 2 -> new Shape.Cylinder(r.doubleBits(), r.doubleBits());
+                    case 3 -> new Shape.Wedge(r.doubleBits(), r.doubleBits(), r.doubleBits());
                     default -> throw new WireException("unknown shape code " + tag);
                 };
         Pose3 local = readPose(r);
-        return new FieldPart(shape, local, r.integer());
+        return new FieldPart(shape, local, r.integer(), r.floatBits());
     }
 
     private static void writePose(WireWriter w, Pose3 pose) {
@@ -355,6 +418,10 @@ final class ContractCodec {
             w.floatBits(body.qz());
             w.floatBits(body.qw());
         }
+        w.count(snapshot.visibleTagIds().size(), "the visible tags");
+        for (int id : snapshot.visibleTagIds()) {
+            w.integer(id);
+        }
     }
 
     static WorldSnapshot readSnapshot(WireReader r) throws WireException {
@@ -367,7 +434,12 @@ final class ContractCodec {
                     r.integer(), r.integer(), r.floatBits(), r.floatBits(), r.floatBits(), r.floatBits(), r.floatBits(),
                     r.floatBits(), r.floatBits()));
         }
-        return new WorldSnapshot(stepIndex, simTimeNanos, bodies);
+        int tagCount = r.count(4, "the visible tags");
+        List<Integer> visibleTags = new ArrayList<>(tagCount);
+        for (int i = 0; i < tagCount; i++) {
+            visibleTags.add(r.integer());
+        }
+        return new WorldSnapshot(stepIndex, simTimeNanos, bodies, visibleTags);
     }
 
     static void writeStatus(WireWriter w, SessionStatus status) {
