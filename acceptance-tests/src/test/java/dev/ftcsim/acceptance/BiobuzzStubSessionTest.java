@@ -10,9 +10,6 @@ import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.field.StartPose;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.snapshot.RobotJoint;
@@ -20,17 +17,13 @@ import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.biobuzz.BiobuzzField;
-import dev.ftcsim.game.biobuzz.BiobuzzIds;
 import dev.ftcsim.scenarios.opmodes.BiobuzzHive;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -45,41 +38,11 @@ import org.junit.jupiter.api.Timeout;
 class BiobuzzStubSessionTest {
     private static final long SECOND = 1_000_000_000L;
     private static final String OPMODE = "BIOBUZZ Stub";
-    private static final Pattern NUMBER = Pattern.compile("(\\w+)=(-?\\d+(?:\\.\\d+)?)");
     private static final double FOUR_BAR_POD_TICKS_PER_MM = 19.89436789;
     private static final BiobuzzField FIELD = new BiobuzzField();
 
-    /**
-     * The robot as the stub names it: four wheels mounted as a team mounts a mecanum robot (its left side reversed in
-     * code), a continuous-rotation servo that turns the turret 2.75 turns to its one, the two absolute encoders on the
-     * OctoQuad's ports 0 and 1, and the Limelight on the turret.
-     */
     private static RobotSpec robot() {
-        RobotMapping wheels = RobotMapping.empty("BIOBUZZ stub").withMotors(List.of(
-                new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
-                new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
-                new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-                new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-                // The team's table: 6000 rpm Yellow Jacket motors, 2:1 to the intake and indexer, a 43:30 belt to the flywheels.
-                new MotorMapping("intake", Slot.INTAKE, "goBILDA-bare-6000", false, 2.0),
-                new MotorMapping("up", Slot.CONVEYOR, "goBILDA-bare-6000", false, 2.0),
-                new MotorMapping("shooterLeft", Slot.SHOOTER, "goBILDA-bare-6000", false, 43.0 / 30.0),
-                new MotorMapping("shooterRight", Slot.SHOOTER, "goBILDA-bare-6000", false, 43.0 / 30.0)))
-                .withDrive("swyft-spike-6000", 12.7);
-        RobotMapping.TurretParts turret = new RobotMapping.TurretParts(
-                new RobotMapping.ServoMapping("turretServo", "", false),
-                List.of(new RobotMapping.TurretEncoder(0, "", 5.5, 0, false), new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0, false)),
-                0.089, 0, true,
-                List.of(
-                        servo(RobotMapping.ServoRole.HOOD, "hood"), servo(RobotMapping.ServoRole.STOPPER, "stopper"),
-                        servo(RobotMapping.ServoRole.COLIBRI_LEFT, "colibriLeft"), servo(RobotMapping.ServoRole.COLIBRI_RIGHT, "colibriRight")));
-        return RobotDesign.biobuzz().spec(new RobotMapping(
-                wheels.name(), wheels.motors(), wheels.massKg(), wheels.wheelDiameterMm(), wheels.driveMotor(), 2.75,
-                wheels.hubLogo(), wheels.hubUsb(), wheels.camera(), turret, wheels.driveRatio()));
-    }
-
-    private static RobotMapping.MechanismServo servo(RobotMapping.ServoRole role, String name) {
-        return new RobotMapping.MechanismServo(role, new RobotMapping.ServoMapping(name, "", false));
+        return BiobuzzTestRobot.spec();
     }
 
     private static StartPose redCentre() {
@@ -100,13 +63,7 @@ class BiobuzzStubSessionTest {
     }
 
     private static double value(String line, String key) {
-        Matcher matcher = NUMBER.matcher(line);
-        while (matcher.find()) {
-            if (matcher.group(1).equals(key)) {
-                return Double.parseDouble(matcher.group(2));
-            }
-        }
-        throw new AssertionError("no " + key + " in " + line);
+        return BiobuzzTestRobot.value(line, key);
     }
 
     /** What the Pinpoint says, and what the chassis really did, both in the robot's frame at the start. */
@@ -440,139 +397,16 @@ class BiobuzzStubSessionTest {
     }
 
     @Test
-    void theStubHasNoPoseUntilItSeesTwoTagsTogetherAndAimsOnlyWhenItHasOne() throws IOException {
+    void theStubHasNoPoseUntilItSeesTwoTagsTogether() throws IOException {
         StartPose start = redCentre();
         // Facing the wall, the camera sees nothing.
         try (TestSessions.Handle handle = open(start.x(), start.y(), start.headingRadians() + Math.PI)) {
             SimulationSession session = handle.session;
             initAndStart(session);
-            session.setGamepad(1, turretPad(false, false, true));
             session.runFor(SECOND);
 
             assertEquals("none", text(session, "Tags"), "facing the wall the camera sees no tag");
             assertTrue(text(session, "Estimate").startsWith("none"), text(session, "Estimate"));
-            assertEquals("no pose yet", text(session, "Aim"));
-            assertEquals(0.0, Math.toDegrees(session.rig().turretYawRadians()), 0.5, "so the turret has not moved");
-        }
-    }
-
-    /** Where the blue CELL is, in the field, for a robot on the given side of the centre line: 0.41 m out, on the pivot axis, 1.04 m up. */
-    private static double[] blueCell(double side) {
-        return new double[] {side * 0.41, 0.3236, 1.0415};
-    }
-
-    /** Backs the robot away from the red HIVE, on the odometry, to where a shot at the blue CELL has the room and the way is clear. */
-    private static void backAway(SimulationSession session) {
-        session.setGamepad(1, GamepadState.sticks(0f, 0.6f, 0f, 0f));
-        session.runFor(SECOND / 2);
-        session.setGamepad(1, GamepadState.NEUTRAL);
-        session.runFor(SECOND * 3 / 2);
-    }
-
-    @Test
-    void pressingAAimsTheTurretSpinsTheFlywheelsAndShootsTheBallsHeldAtTheStopperIntoTheBlueCell() throws IOException {
-        double[] spot;
-        StartPose start = redCentre();
-        try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
-            spot = standingBefore(probe.session, tag(31), 1.0);
-        }
-        // The red HIVE is in the way of a shot at the blue one from where its tags can be seen, so the robot finds its place there
-        // and backs away on the odometry to where the way is clear.
-        try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(10))) {
-            SimulationSession session = handle.session;
-            initAndStart(session);
-            session.runFor(SECOND / 2);
-            assertEstimateIsTrue(session, "at the HIVE");
-            backAway(session);
-            assertEstimateIsTrue(session, "after backing away");
-
-            BodyPose chassis = session.world().bodyPose(EntityIds.CHASSIS);
-            long heldAtTheStopper = session.snapshot().bodies().stream()
-                    .filter(body -> body.kind() == BiobuzzIds.KIND_POLLEN && Math.abs(body.z() - chassis.z() - 0.06) < 0.06
-                            && Math.hypot(body.x() - chassis.x() - 0.089 * Math.cos(chassis.yaw()),
-                                    body.y() - chassis.y() - 0.089 * Math.sin(chassis.yaw())) < 0.05)
-                    .count();
-            assertTrue(heldAtTheStopper >= 1, "the preloads wait low in the column against the shut stopper, not in the shooter");
-
-            double[] cell = blueCell(Math.signum(chassis.x()));
-            session.setGamepad(1, turretPad(false, false, true));
-            session.runFor(SECOND / 5);
-            session.setGamepad(1, GamepadState.NEUTRAL);
-
-            double closest = Double.MAX_VALUE;
-            double highest = 0.0;
-            String state = "";
-            String lastAiming = "";
-            double maxFlywheel = 0.0;
-            for (int i = 0; i < 1200 && !state.startsWith("DONE") && !state.startsWith("FAILED"); i++) {
-                session.runFor(SECOND / 100);
-                state = text(session, "AutoShoot");
-                if (state.startsWith("AIMING")) {
-                    lastAiming = state;
-                }
-                maxFlywheel = Math.max(maxFlywheel, value(text(session, "Mechanisms"), "flywheels"));
-                for (BodyState body : session.snapshot().bodies()) {
-                    if (body.kind() == BiobuzzIds.KIND_POLLEN && body.z() > 0.6) {
-                        highest = Math.max(highest, body.z());
-                        closest = Math.min(closest, Math.sqrt(Math.pow(body.x() - cell[0], 2) + Math.pow(body.y() - cell[1], 2)
-                                + Math.pow(body.z() - cell[2], 2)));
-                    }
-                }
-            }
-            session.runFor(SECOND / 2);
-
-            assertTrue(state.startsWith("DONE"), "the shot ran to its end: " + state + " (last while aiming: " + lastAiming + ") " + text(session, "Estimate"));
-            assertTrue(maxFlywheel > 800, "the flywheels were spun up: " + maxFlywheel);
-            assertTrue(highest > 0.8, "balls were shot up towards the CELL: " + highest);
-            // The ball is looked at every 10 ms and flies 6 cm in that time, so the nearest look can be 3 cm off its nearest point; the CELL is 0.5 m wide.
-            assertTrue(closest < 0.25, "a ball passed within " + closest + " m of the CELL " + java.util.Arrays.toString(cell) + " truth x="
-                    + chassis.x() + " y=" + chassis.y() + " yaw=" + Math.toDegrees(chassis.yaw()) + " turret=" + Math.toDegrees(session.rig().turretYawRadians())
-                    + " " + text(session, "Estimate"));
-            assertEquals("shut", text(session, "Mechanisms").replaceAll(".*stopper=(\\w+).*", "$1"), "the stopper is shut again");
-            assertEquals(List.of(), session.problems(), handle.log.toString());
-        }
-    }
-
-    @Test
-    void theTurretFollowsTheBearingOfTheBlueCellWhileTheShotWaitsForEverythingToBeReady() throws IOException {
-        double[] spot;
-        StartPose start = redCentre();
-        try (TestSessions.Handle probe = open(start.x(), start.y(), start.headingRadians())) {
-            spot = standingBefore(probe.session, tag(31), 1.0);
-        }
-        try (TestSessions.Handle handle = open(spot[0], spot[1], spot[2] + Math.toRadians(20))) {
-            SimulationSession session = handle.session;
-            initAndStart(session);
-            session.runFor(SECOND / 2);
-            backAway(session);
-            session.setGamepad(1, turretPad(false, false, true));
-            session.runFor(SECOND / 5);
-            session.setGamepad(1, GamepadState.NEUTRAL);
-            // Until the turret is on the bearing (it turns about 80 degrees a second), which comes before the shot is ready.
-            for (int i = 0; i < 400 && Math.abs(value(text(session, "Aim").replace("error=", "err="), "err")) > 1.5; i++) {
-                session.runFor(SECOND / 100);
-            }
-            session.runFor(SECOND / 20);
-
-            BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
-            double side = Math.signum(truth.x());
-            double axisX = truth.x() + 0.089 * Math.cos(truth.yaw());
-            double axisY = truth.y() + 0.089 * Math.sin(truth.yaw());
-            double expected = Math.toDegrees(Math.atan2(0.3236 - axisY, side * 0.41 - axisX) - truth.yaw());
-            double yaw = Math.toDegrees(session.rig().turretYawRadians());
-            assertEquals(0.0, Math.IEEEremainder(yaw - expected, 360.0), 4.0, "the turret faces the blue CELL: " + text(session, "Aim"));
-            assertEquals(0.0, Math.IEEEremainder(turretDegrees(session) - yaw, 360.0), 1.0, "and the encoders agree");
-            assertTrue(text(session, "Aim").startsWith("blue CELL"), text(session, "Aim"));
-            assertTrue(text(session, "AutoShoot").startsWith("AIMING") || text(session, "AutoShoot").startsWith("FEEDING"),
-                    text(session, "AutoShoot"));
-
-            session.setGamepad(1, turretPad(false, false, true));
-            session.runFor(SECOND / 5);
-            session.setGamepad(1, GamepadState.NEUTRAL);
-            session.runFor(SECOND / 5);
-            assertTrue(text(session, "AutoShoot").contains("cancelled"), "a second press cancels: " + text(session, "AutoShoot"));
-            assertEquals("off", text(session, "Aim"));
-            assertEquals(List.of(), session.problems(), handle.log.toString());
         }
     }
 }

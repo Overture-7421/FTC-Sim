@@ -17,6 +17,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import javax.tools.JavaCompiler;
 import javax.tools.ToolProvider;
 import org.junit.jupiter.api.Test;
@@ -27,40 +28,12 @@ import org.junit.jupiter.api.Test;
  * mistake in one direction of the frame change shows up.
  */
 class BiobuzzPoseEstimatorTest {
-    private static final double BODY_CENTRE_HEIGHT = 0.1824;
-    private static final double CAMERA_Z = 0.256;
-
-    /** What the camera sees of a tag, as X right, Y down, Z ahead, from a robot at {@code truth} with the turret at {@code turret}. */
-    private static Sighting see(int id, Pose truth, double turret) {
-        BiobuzzHive.Tag tag = BiobuzzHive.TAGS.get(id);
-        double c = Math.cos(-truth.heading());
-        double s = Math.sin(-truth.heading());
-        double rx = c * (tag.x() - truth.x()) - s * (tag.y() - truth.y());
-        double ry = s * (tag.x() - truth.x()) + c * (tag.y() - truth.y());
-        double rz = tag.z() - BODY_CENTRE_HEIGHT;
-        // Undo the turret's turn about its axis.
-        double dx = rx - BiobuzzPoseEstimator.TURRET_AXIS_X;
-        double dy = ry - BiobuzzPoseEstimator.TURRET_AXIS_Y;
-        double tc = Math.cos(-turret);
-        double ts = Math.sin(-turret);
-        double px = BiobuzzPoseEstimator.TURRET_AXIS_X + dx * tc - dy * ts;
-        double py = BiobuzzPoseEstimator.TURRET_AXIS_Y + dx * ts + dy * tc;
-        // From the camera, in the robot's axes; then undo the camera's upward tilt.
-        double forward = px - BiobuzzPoseEstimator.CAMERA_X;
-        double left = py - BiobuzzPoseEstimator.CAMERA_Y;
-        double up = rz - CAMERA_Z;
-        double pitch = BiobuzzPoseEstimator.CAMERA_PITCH_RADIANS;
-        double along = forward * Math.cos(pitch) + up * Math.sin(pitch);
-        double above = -forward * Math.sin(pitch) + up * Math.cos(pitch);
-        return new Sighting(id, -left, -above, along);
+    private static Sighting see(Map<Integer, BiobuzzHive.Tag> tags, int id, Pose truth, double turret) {
+        return BiobuzzSightings.see(tags, id, truth, turret);
     }
 
     private static List<Sighting> cluster(Pose truth, double turret, int... ids) {
-        List<Sighting> sightings = new ArrayList<>();
-        for (int id : ids) {
-            sightings.add(see(id, truth, turret));
-        }
-        return sightings;
+        return BiobuzzSightings.cluster(BiobuzzHive.TAGS, truth, turret, ids);
     }
 
     private static void assertPose(Pose expected, Pose actual, double metres, double radians, String message) {
@@ -160,6 +133,70 @@ class BiobuzzPoseEstimatorTest {
     }
 
     @Test
+    void anApproximateStartGivesWayToTheFirstFixOfTwoTagsWhateverItSaysAndOneTagDoesNotConfirmIt() {
+        Pose seed = new Pose(0.0, -1.557, Math.PI / 2);
+        Pose truth = new Pose(1.2, -0.9, 2.3);
+        BiobuzzPoseEstimator estimator = new BiobuzzPoseEstimator(seed, true);
+        estimator.update(0.0, 0.0, 0.0);
+        assertFalse(estimator.confirmed());
+        assertPose(seed, estimator.pose(), 1e-9, 1e-9, "the start until the camera says otherwise");
+
+        assertFalse(estimator.correct(cluster(truth, 0.0, 34), 0.0), "one tag cannot place a robot that is not where it was said to be");
+        assertFalse(estimator.confirmed());
+        assertTrue(estimator.correct(cluster(truth, 0.0, 34, 35), 0.0));
+
+        assertTrue(estimator.confirmed());
+        assertPose(truth, estimator.pose(), 1e-9, 1e-9, "placed whole, with no blend and no jump limit");
+        assertFalse(estimator.correct(cluster(new Pose(-1.0, -0.9, 2.3), 0.0, 34, 35), 0.0), "once placed, a fix a metre and more away is ignored");
+    }
+
+    @Test
+    void severalFramesInARowThatAgreeWithOneAnotherReplaceAnEstimateTheyAllDisagreeWith() {
+        Pose truth = new Pose(1.2, -0.9, 2.3);
+        Pose pushedTo = new Pose(2.6, -0.3, 2.3);
+        BiobuzzPoseEstimator estimator = new BiobuzzPoseEstimator(truth);
+        estimator.update(0.0, 0.0, 0.0);
+
+        // The same frame again is not another frame.
+        List<Sighting> frame = cluster(pushedTo, 0.0, 34, 35);
+        for (int i = 0; i < 20; i++) {
+            assertFalse(estimator.correct(frame, 0.0));
+        }
+        for (int i = 1; i <= 6; i++) {
+            List<Sighting> next = cluster(pushedTo, 0.0, 34, 35);
+            Sighting first = next.get(0);
+            next.set(0, new Sighting(first.id(), first.x() + i * 1e-4, first.y(), first.z()));
+            assertFalse(estimator.correct(next, 0.0), "frame " + (i + 1));
+        }
+        List<Sighting> last = cluster(pushedTo, 0.0, 34, 35);
+        Sighting first = last.get(0);
+        last.set(0, new Sighting(first.id(), first.x() + 7e-4, first.y(), first.z()));
+        assertTrue(estimator.correct(last, 0.0), "the eighth different frame");
+        assertPose(pushedTo, estimator.pose(), 0.03, 0.02, "is believed");
+    }
+
+    @Test
+    void theTagsOfATippedHiveMatchTheCameraOnlyWithTheMapForItsTilt() {
+        Pose truth = new Pose(-1.2, -0.9, 0.5);
+        Map<Integer, BiobuzzHive.Tag> tipped = BiobuzzHive.tags(BiobuzzHive.Alliance.RED, BiobuzzHive.Tilt.SCORING_UP);
+        List<Sighting> frame = new ArrayList<>();
+        frame.add(see(tipped, 30, truth, 0.0));
+        frame.add(see(tipped, 31, truth, 0.0));
+
+        BiobuzzPoseEstimator estimator = new BiobuzzPoseEstimator(null);
+        estimator.update(0.0, 0.0, 0.0);
+        estimator.setTags(tipped);
+        assertTrue(estimator.correct(frame, 0.0));
+        assertPose(truth, estimator.pose(), 1e-9, 1e-9, "with the map of the tipped HIVE");
+
+        BiobuzzPoseEstimator untipped = new BiobuzzPoseEstimator(null);
+        untipped.update(0.0, 0.0, 0.0);
+        untipped.correct(frame, 0.0);
+        assertTrue(untipped.pose() == null || Math.hypot(untipped.pose().x() - truth.x(), untipped.pose().y() - truth.y()) > 0.02,
+                "with the map of the start the tags are a few centimetres off, and so is the pose");
+    }
+
+    @Test
     void thePlainClassesCompileAsJava8BecauseARobotProjectDoesNotGetAnythingNewer() throws IOException {
         Path folder = Path.of("src", "scenarios", "java", "dev", "ftcsim", "scenarios", "opmodes");
         Path out = Files.createTempDirectory("java8-check");
@@ -170,23 +207,13 @@ class BiobuzzPoseEstimatorTest {
             int status = compiler.run(
                     null, null, errors, "--release", "8", "-d", out.toString(),
                     folder.resolve("BiobuzzHive.java").toString(), folder.resolve("BiobuzzPoseEstimator.java").toString(),
-                    folder.resolve("BiobuzzAutoShoot.java").toString());
+                    folder.resolve("BiobuzzShotSolver.java").toString(), folder.resolve("BiobuzzHiveTracker.java").toString(),
+                    folder.resolve("BiobuzzHoldShooter.java").toString());
             assertEquals(0, status, errors.toString());
         } finally {
             try (var files = Files.walk(out)) {
                 files.sorted(Comparator.reverseOrder()).forEach(path -> path.toFile().delete());
             }
         }
-    }
-
-    @Test
-    void theBlueCellToAimAtIsOnTheSideOfTheHiveNearerTheRobot() {
-        BiobuzzHive.Tag audience = BiobuzzHive.nearestBlueCell(0.8);
-        BiobuzzHive.Tag scoring = BiobuzzHive.nearestBlueCell(-0.8);
-
-        assertEquals(0.410, audience.x(), 0.002, "the middle of the CELL with its side tipped down, 15.45 in along the arm");
-        assertEquals(-0.410, scoring.x(), 0.002);
-        assertEquals(0.3236, audience.y(), 0.001, "on the blue HIVE's pivot axis, 12.74 in from the centre line");
-        assertEquals(1.0415, audience.z(), 0.002);
     }
 }

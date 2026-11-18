@@ -36,22 +36,53 @@ public record LaunchSpec(
      *
      * @param ratio turns of the servo for one turn of the hood; above 0
      * @param maxHoodRadians the hood's stop: how far it turns from its rest, whatever the servo is told
+     * @param exit where the piece leaves as the hood sets the angle, or null to leave from the launcher's {@code muzzle}
      */
-    public record Hood(String servo, double ratio, double baseElevationRadians, double maxHoodRadians) {
+    public record Hood(String servo, double ratio, double baseElevationRadians, double maxHoodRadians, Exit exit) {
         public Hood {
             if (!(ratio > 0) || !(maxHoodRadians > 0)) {
                 throw new IllegalArgumentException("a hood needs a gear ratio and a range above 0: " + servo);
             }
         }
 
+        /** A hood whose piece leaves from the launcher's muzzle. */
+        public Hood(String servo, double ratio, double baseElevationRadians, double maxHoodRadians) {
+            this(servo, ratio, baseElevationRadians, maxHoodRadians, null);
+        }
+
         /** A hood with no stop short of the servo's travel. */
         public Hood(String servo, double ratio, double baseElevationRadians) {
-            this(servo, ratio, baseElevationRadians, Double.POSITIVE_INFINITY);
+            this(servo, ratio, baseElevationRadians, Double.POSITIVE_INFINITY, null);
         }
 
         /** The launch elevation when the servo's shaft has turned {@code servoAngleRad}. */
         public double elevationRadians(double servoAngleRad) {
             return baseElevationRadians + Math.min(maxHoodRadians, servoAngleRad / ratio);
+        }
+    }
+
+    /**
+     * Where a piece leaves a launcher whose hood sets the launch angle: the piece rides round a wheel (or any round part) and is let
+     * go where its path points along the launch, so it leaves on the circle of {@code radiusM} about {@code pivot}, on the side that
+     * the launch points away from. With the launch {@code elevation} above the horizontal and heading {@code (hx, hy)} (a unit vector)
+     * that is {@code pivot + radius * (-sin(elevation) * h, cos(elevation))}: low and forward for a flat launch, back over the wheel's
+     * axle for a steep one.
+     *
+     * @param pivot   the centre of the round part, in the robot frame with the turret facing forward
+     * @param radiusM the distance from it to the piece's centre as it leaves: the part's radius and the piece's
+     */
+    public record Exit(Vec3 pivot, double radiusM) {
+        public Exit {
+            if (!(radiusM > 0)) {
+                throw new IllegalArgumentException("an exit needs a radius above 0");
+            }
+        }
+
+        /** The piece's centre as it leaves, for a launch at {@code elevationRadians} along the unit heading {@code (hx, hy)}. */
+        public Vec3 at(double elevationRadians, double hx, double hy) {
+            double sin = StrictMath.sin(elevationRadians);
+            return new Vec3(
+                    pivot.x() - radiusM * sin * hx, pivot.y() - radiusM * sin * hy, pivot.z() + radiusM * StrictMath.cos(elevationRadians));
         }
     }
 

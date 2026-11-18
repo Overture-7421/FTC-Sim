@@ -60,6 +60,7 @@ The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of
   entry is open. The gable skin is one triangular prism (`Shape.Wedge`); the roof is solid for collisions and the collision gable wall is stepped, as colliders are boxes; a piece inside the CELL counts only while
   it is under the roof line. The coloured ribs outline the house outside the skins rather than sharing their exposed planes,
   and the white tag backings sit behind the tag planes, avoiding Z-fighting. The tag poses and the load calibration are unchanged.
+- **Where a ball can go in.** A CELL is open only at the far end of its arm, so one that faces up opens outward and 30 degrees up, its mouth about 0.47 m out from the pivot and 1.4 m up (red audience CELL at the start). A ball goes in only on a steep lob (55 to 85 degrees) from that side; from the other side the HIVE is in the way. Lobbed from a robot's exit height (about 0.4 m) at about 6 m/s, three POLLEN tip the HIVE from places on that side from x 0.4 m (red, audience side) out to the field's end (`HiveTest`, [biobuzz-stub](../robots/biobuzz-stub.md)). The CELL that faces down takes nothing.
 - **Calibration.** The checklist wants 7 POLLEN not to tip and 8 to tip; 3 NECTAR with 2 POLLEN not to tip and 3 to tip. Both
   hold if a NECTAR weighs about 5/3 of a POLLEN (AndyMark weights: 1.65). The centre of mass height was swept until all eight
   loads of `HiveTest` came out as the checklist says, set down gently or tossed in at 1.5 m/s, for both HIVES. The window is

@@ -227,7 +227,7 @@ class RobotDesignTest {
     }
 
     @Test
-    void theHoodsServoHasFiveTurnsAndItsStopHoldsItAt25Degrees() {
+    void theHoodsServoHasFiveTurnsAndItsStopHoldsItAt45Degrees() {
         RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
                 new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
         RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
@@ -244,9 +244,10 @@ class RobotDesignTest {
         LaunchSpec.Hood hood = spec.launches().get(0).hood();
         assertEquals(Math.toRadians(45.0), hood.elevationRadians(0.0), 1e-9, "the servo at 0: 45 degrees");
         assertEquals(Math.toRadians(45.0 + 730.0 / (730.0 / 24.0)), hood.elevationRadians(Math.toRadians(730.0)), 1e-9,
-                "730 degrees of servo are the hood's 24 degrees, the CAD's range: 69 degrees");
-        assertEquals(hood.elevationRadians(Math.toRadians(730.0)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
-        assertEquals(Math.toRadians(24.0), spec.joints().servos().get(0).limit(), 1e-12, "and the drawn hood stops there too");
+                "730 degrees of servo are 24 degrees of hood: 69 degrees");
+        assertEquals(Math.toRadians(89.0), hood.elevationRadians(Math.toRadians(44.0 * 730.0 / 24.0)), 1e-9, "the stop is 44 degrees of hood: 89");
+        assertEquals(hood.elevationRadians(Math.toRadians(44.0 * 730.0 / 24.0)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
+        assertEquals(Math.toRadians(44.0), spec.joints().servos().get(0).limit(), 1e-12, "and the drawn hood stops there too");
     }
 
     @Test

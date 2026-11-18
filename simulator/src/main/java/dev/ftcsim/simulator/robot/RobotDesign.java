@@ -155,8 +155,12 @@ public final class RobotDesign {
     /** How high a piece leaves with the servo's shaft at 0, the hood at its 1 degree: 45 degrees, and the hood's angle adds to it. Estimated. */
     public static final double HOOD_BASE_ELEVATION_RADIANS = Math.toRadians(45.0);
 
-    /** How far the hood turns from its rest to its stop: the CAD allows 1 to 25 degrees. The servo (5 turns) can turn it further, but the stop holds it. */
-    public static final double HOOD_RANGE_RADIANS = Math.toRadians(24.0);
+    /**
+     * How far the hood turns from its rest to its stop: 44 degrees, which sends a piece up at 45 to 89 degrees. The CAD allows only
+     * 1 to 25 degrees; the range is widened so that a CELL can be reached from near and from far, which a HIVE's open end needs
+     * steep lobs for (65 to 85 degrees from close to the HIVE, 55 degrees from far). The servo (5 turns) reaches it at position 0.74.
+     */
+    public static final double HOOD_RANGE_RADIANS = Math.toRadians(44.0);
 
     /** How far the stopper's servo must have turned for pieces to pass, 60 degrees. Estimated. */
     public static final double STOPPER_OPEN_RADIANS = Math.toRadians(60.0);
@@ -325,22 +329,40 @@ public final class RobotDesign {
     /** The turret's axis in the CAD, ahead of the wheels' centre; the column the pieces climb is on it. */
     public static final double BIOBUZZ_TURRET_AXIS_X = 0.089;
 
+    /** The shooter wheels' axle in the CAD (robot frame, metres), under the hood's pivot. */
+    public static final Vec3 BIOBUZZ_WHEEL_AXLE = new Vec3(0.162, 0.0, 0.2146);
+
+    /** How far from the axle a POLLEN's centre is as it rides round the wheels' rim: the wheel's radius and the piece's (1.40 in). */
+    public static final double BIOBUZZ_EXIT_RADIUS_M = BIOBUZZ_FLYWHEEL_RADIUS_M + 0.0356;
+
+    /**
+     * Where a piece waits for the shot: pinched between the feeder roller (axis x 0.045, z 0.245, radius 0.013) and the wheels, so
+     * 0.0485 m from the roller's axis and {@link #BIOBUZZ_EXIT_RADIUS_M} from the wheels'. From the CAD.
+     */
+    private static final Vec3 BIOBUZZ_WAIT = new Vec3(0.092, 0.0, 0.233);
+
     /**
      * BIOBUZZ's path in the CAD, for the centre of a POLLEN (robot frame, metres): in at the intake roller, back and up the
      * curve of compliant wheels between the front wheels, up the column between the three cross shafts (x 0.042 and 0.137, under
-     * the turret's axis) and through the turret, then forward between the two flywheels. The last two points are inside the turret
-     * and turn with it, and the piece waits for the shot between the wheels. The coordinates come from the CAD's rollers, shafts
-     * and the flywheel.
+     * the turret's axis) and through the turret, to where the piece waits for the shot ({@link #BIOBUZZ_WAIT}). The last two points
+     * are inside the turret and turn with it. The coordinates come from the CAD's rollers, shafts and wheels.
      */
     private static final List<Vec3> BIOBUZZ_PATH = List.of(
             new Vec3(0.27, 0.0, -0.14), new Vec3(0.15, 0.0, -0.10), new Vec3(0.115, 0.0, -0.05), new Vec3(0.098, 0.0, 0.0),
-            new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.06), new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.215), new Vec3(0.162, 0.0, 0.215));
+            new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.06), new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.215), BIOBUZZ_WAIT);
     private static final int BIOBUZZ_TURNED_FROM_POINT = 5;
     /** The stopper holds the pieces at the foot of the column, path point 4. */
     private static final int BIOBUZZ_GATE_POINT = 4;
 
-    /** The opening in front of the flywheels, in the CAD, where a shot leaves with the turret facing forward. */
-    private static final Vec3 BIOBUZZ_MUZZLE = new Vec3(0.20, 0.0, 0.225);
+    /**
+     * Where the BIOBUZZ shot leaves, from the CAD's shooter: the two 3 in wheels side by side on an axle at x 0.162, z 0.2146, the
+     * feeder rollers behind them at x 0.045, and the hood's side plates, which carry both and turn about the axle. A piece rides
+     * round the wheels' upper rim, held by the plates, and is let go where the hood's end is, so it leaves on the circle round the axle
+     * at the angle the hood sets: about (0.110, 0.267) for the 45 degrees of the hood at rest, and back over the axle, nearly above
+     * the column, for a steep launch. A launcher with no hood leaves at its fixed 55 degrees.
+     */
+    private static final LaunchSpec.Exit BIOBUZZ_EXIT = new LaunchSpec.Exit(BIOBUZZ_WHEEL_AXLE, BIOBUZZ_EXIT_RADIUS_M);
+    private static final double BIOBUZZ_FIXED_ELEVATION_RADIANS = Math.atan2(0.8192, 0.5736);
 
     private void mechanisms(
             RobotMapping mapping, RobotSpec.Turret turret, List<StorageSpec> storages, List<CaptureSpec> captures, List<LaunchSpec> launches) {
@@ -379,10 +401,12 @@ public final class RobotDesign {
                     .map(motor -> new LaunchSpec.Wheel(motor.name(), wheelRadius / ratioOf(motor), sign(motor))).toList();
             List<Condition> feed = new ArrayList<>(conveyor.isEmpty() ? List.of() : List.of(turning(conveyor.get(0), 20.0)));
             RobotMapping.ServoMapping hood = mapping.turretParts().servoFor(RobotMapping.ServoRole.HOOD);
-            LaunchSpec.Hood tilt = hood == null ? null : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS, HOOD_RANGE_RADIANS);
+            LaunchSpec.Hood tilt = hood == null ? null
+                    : new LaunchSpec.Hood(hood.name(), HOOD_RATIO, HOOD_BASE_ELEVATION_RADIANS, HOOD_RANGE_RADIANS, cad ? BIOBUZZ_EXIT : null);
             LaunchSpec.Turret aim = turret == null || turret.shaft() == null ? null : turret.aim();
+            Vec3 muzzle = cad ? BIOBUZZ_EXIT.at(BIOBUZZ_FIXED_ELEVATION_RADIANS, 1.0, 0.0) : null;
             launches.add(new LaunchSpec(
-                    LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim, tilt, cad ? BIOBUZZ_MUZZLE : null));
+                    LAUNCHER, STORAGE, feed, wheels, 0.49, new Vec3(0.5736, 0.0, 0.8192), 0.3, aim, tilt, muzzle));
         }
     }
 }

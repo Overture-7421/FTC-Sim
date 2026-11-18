@@ -2,6 +2,7 @@ package dev.ftcsim.scenarios.opmodes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * A pose estimator for the BIOBUZZ robot: the Pinpoint's odometry, which is smooth and drifts, corrected by the Limelight's 3D
@@ -83,6 +84,8 @@ public final class BiobuzzPoseEstimator {
     public static final double CAMERA_X = 0.217;
     public static final double CAMERA_Y = 0.0035;
     public static final double CAMERA_PITCH_RADIANS = Math.toRadians(45.0);
+    /** The camera's height above the floor (the robot's body is 0.1824 m up at its centre, the Limelight 0.256 m above that). */
+    public static final double CAMERA_HEIGHT_M = 0.4384;
     /** The turret's axis; the camera turns about it with the turret. */
     public static final double TURRET_AXIS_X = 0.089;
     public static final double TURRET_AXIS_Y = 0.0;
@@ -100,25 +103,55 @@ public final class BiobuzzPoseEstimator {
     public static final double MAX_HEADING_JUMP_RADIANS = Math.toRadians(30.0);
     /** Tags closer together than this say nothing about the heading. */
     private static final double MIN_SPREAD_M = 0.05;
+    /** This many different frames in a row that agree with one another, though not with the estimate, replace the estimate. */
+    private static final int RECOVERY_FRAMES = 8;
+    private static final double RECOVERY_AGREEMENT_M = 0.15;
+    private static final double RECOVERY_AGREEMENT_RADIANS = Math.toRadians(5.0);
 
     private double odoX;
     private double odoY;
     private double odoHeading;
     private boolean haveOdometry;
     private boolean havePose;
+    private boolean confirmed;
     private double correctionTurn;
     private double correctionX;
     private double correctionY;
     private int fixes;
+    private Map<Integer, BiobuzzHive.Tag> tagMap = BiobuzzHive.TAGS;
+    private int rejectedRun;
+    private double rejectedX;
+    private double rejectedY;
+    private double rejectedHeading;
 
-    /** @param start where the robot starts on the field, or null to wait for the camera */
+    /** @param start where the robot starts on the field, exactly, or null to wait for the camera */
     public BiobuzzPoseEstimator(Pose start) {
+        this(start, false);
+    }
+
+    /**
+     * @param start       where the robot starts on the field, or null to wait for the camera
+     * @param approximate the start is only roughly right (the robot may stand anywhere on its wall): the first fix from two tags or
+     *                    more replaces it whatever it says, and until then the estimate is not {@link #confirmed}
+     */
+    public BiobuzzPoseEstimator(Pose start, boolean approximate) {
         if (start != null) {
             havePose = true;
+            confirmed = !approximate;
             correctionTurn = start.heading();
             correctionX = start.x();
             correctionY = start.y();
         }
+    }
+
+    /** The tags the camera is matched with; change it when a HIVE tips and its tags move. */
+    public void setTags(Map<Integer, BiobuzzHive.Tag> tags) {
+        this.tagMap = tags;
+    }
+
+    /** Whether the camera has placed the robot: false while the estimate is only the start the program was given. */
+    public boolean confirmed() {
+        return confirmed;
     }
 
     /** Takes the Pinpoint's pose, in its own frame: metres and radians. Call it every loop, before {@link #correct}. */
@@ -167,7 +200,7 @@ public final class BiobuzzPoseEstimator {
         List<double[]> seen = new ArrayList<>();
         List<double[]> known = new ArrayList<>();
         for (Sighting sighting : sightings) {
-            BiobuzzHive.Tag tag = BiobuzzHive.TAGS.get(sighting.id());
+            BiobuzzHive.Tag tag = tagMap.get(sighting.id());
             if (tag != null) {
                 seen.add(inRobot(sighting, turretRadians));
                 known.add(new double[] {tag.x(), tag.y()});
@@ -225,13 +258,19 @@ public final class BiobuzzPoseEstimator {
             return false;
         }
 
-        if (current == null) {
+        if (current == null || !confirmed) {
+            // The camera places the robot for the first time. An approximate start gives way to the first fix of two tags or more.
+            if (!headingKnown) {
+                return false;
+            }
             place(new Pose(x, y, heading));
+            confirmed = true;
         } else {
             if (Math.hypot(x - current.x(), y - current.y()) > MAX_JUMP_M
                     || (headingKnown && Math.abs(normalize(heading - current.heading())) > MAX_HEADING_JUMP_RADIANS)) {
-                return false;
+                return headingKnown && recover(x, y, heading);
             }
+            rejectedRun = 0;
             boolean close = nearest < CLOSE_DISTANCE_M;
             double positionBlend = close ? CLOSE_POSITION_BLEND : FAR_POSITION_BLEND;
             double headingBlend = close ? CLOSE_HEADING_BLEND : FAR_HEADING_BLEND;
@@ -240,6 +279,30 @@ public final class BiobuzzPoseEstimator {
                     current.y() + positionBlend * (y - current.y()),
                     headingKnown ? normalize(current.heading() + headingBlend * normalize(heading - current.heading())) : current.heading()));
         }
+        fixes++;
+        return true;
+    }
+
+    /**
+     * A fix too far from the estimate is ignored, but when several different frames in a row agree with one another the estimate is
+     * what is wrong (the robot was pushed, or the odometry slipped): the last of them replaces it.
+     */
+    private boolean recover(double x, double y, double heading) {
+        boolean sameAsLast = rejectedRun > 0 && Math.hypot(x - rejectedX, y - rejectedY) < RECOVERY_AGREEMENT_M
+                && Math.abs(normalize(heading - rejectedHeading)) < RECOVERY_AGREEMENT_RADIANS;
+        if (!sameAsLast) {
+            rejectedRun = 1;
+        } else if (x != rejectedX || y != rejectedY || heading != rejectedHeading) {
+            rejectedRun++;
+        }
+        rejectedX = x;
+        rejectedY = y;
+        rejectedHeading = heading;
+        if (rejectedRun < RECOVERY_FRAMES) {
+            return false;
+        }
+        rejectedRun = 0;
+        place(new Pose(x, y, heading));
         fixes++;
         return true;
     }

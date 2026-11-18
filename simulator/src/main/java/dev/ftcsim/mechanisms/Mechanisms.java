@@ -256,7 +256,7 @@ public final class Mechanisms {
         double fromWheels = launch.efficiency() * surface;
         double exitSpeed = Math.max(launch.dribbleSpeed(), fromWheels);
 
-        Vec3 exit = launch.muzzle() == null ? place(storage, storage.length) : turn(storage, launch.muzzle());
+        Vec3 exit = exitPoint(launch, storage);
         Vec3 velocity = chassis.velocityOfPoint(exit).plus(chassis.directionToField(aim(launch)).times(exitSpeed));
         world.spawnPiece(piece.id, piece.kind, spec, vector(chassis.pointToField(exit)), vector(velocity));
         storage.pieces.remove(0);
@@ -265,6 +265,22 @@ public final class Mechanisms {
         for (LaunchSpec.Wheel wheel : launch.wheels()) {
             plants.extractEnergy(wheel.motor(), energyPerWheel);
         }
+    }
+
+    /**
+     * Where the piece leaves in the robot frame: the hood's exit for the angle it has set, else the launcher's muzzle, else the end of
+     * the path, turned with the turret where the path is inside it.
+     */
+    private Vec3 exitPoint(LaunchSpec launch, Storage storage) {
+        LaunchSpec.Hood hood = launch.hood();
+        if (hood != null && hood.exit() != null) {
+            Vec3 direction = launch.direction();
+            double horizontal = StrictMath.hypot(direction.x(), direction.y());
+            double hx = horizontal > 0 ? direction.x() / horizontal : 1.0;
+            double hy = horizontal > 0 ? direction.y() / horizontal : 0.0;
+            return turn(storage, hood.exit().at(hood.elevationRadians(plants.shaftAngleRad(hood.servo())), hx, hy));
+        }
+        return launch.muzzle() == null ? place(storage, storage.length) : turn(storage, launch.muzzle());
     }
 
     /** Records a problem when one wheel of a launcher spins against the others as a piece goes out: its Mirrored is likely wrong. */
