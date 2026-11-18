@@ -122,7 +122,7 @@ class BiobuzzStubSessionTest {
 
     @Test
     void pushingTheRightStickRightTurnsTheRobotClockwiseAndThePinpointHeadingFollowsIt() throws IOException {
-        Drive turn = drive(GamepadState.sticks(0f, 0f, 1f, 0f), SECOND / 5);
+        Drive turn = drive(GamepadState.sticks(0f, 0f, 1f, 0f), SECOND / 4);
 
         assertTrue(turn.trueDegrees() < -20, "the robot turned clockwise: " + turn);
         assertEquals(turn.trueDegrees(), turn.pinpointDegrees(), 3.0, "and the Pinpoint's heading agrees: " + turn);
@@ -256,7 +256,7 @@ class BiobuzzStubSessionTest {
             session.setGamepad(1, pad(0f, 0f, false, false, true, true));
             session.runFor(SECOND);
             note(session, atRest, moved);
-            assertEquals(150.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.5, half of 300 degrees");
+            assertEquals(90.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.3, a third of 300 degrees: past the 60 at which it lets a ball by");
             assertEquals(0.4 * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
             assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
 

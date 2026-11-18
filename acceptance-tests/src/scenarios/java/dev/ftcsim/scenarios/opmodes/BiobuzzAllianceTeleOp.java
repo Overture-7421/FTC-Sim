@@ -17,10 +17,13 @@ import org.firstinspires.ftc.robotcore.external.navigation.Position;
  * nothing about the simulator, so the same files run on the real robot once its names and offsets are checked: copy them into
  * {@code TeamCode} with {@link BiobuzzHardware} and the classes it uses, and change the package line.
  *
- * <p>The left stick drives and strafes and the right stick turns the robot. <b>Hold the left bumper to take balls in</b>: the intake
- * runs, and the indexer slowly, so that the balls come up against the shut stopper and wait there, preloaded. <b>Hold the right
- * bumper to shoot</b>: the flywheels spin to the speed that reaches the HIVE, and when everything is ready the stopper opens and
- * the indexer feeds the balls; let go and it all stops. Nothing stays on without the button.
+ * <p>The left stick drives the robot <b>as the driver sees the field from their wall</b>, whichever way the robot faces: up is away from
+ * the driver (red looks towards +Y, blue towards -Y), and the heading it needs is the pose estimate's. The right stick turns the robot.
+ * <b>Hold the left bumper to take balls in</b>: the intake runs, and the indexer slowly, so that the balls come up against the shut
+ * stopper and wait there, preloaded. <b>Hold the right bumper to shoot</b>: the stopper opens and, when everything is ready, the
+ * indexer feeds the balls; let go and the stopper shuts and the indexer stops. The flywheels are never off: they idle at the speed of
+ * the shot (or, with no shot from where the robot stands, at about the speed of one from near it), so there is no spin-up when the
+ * button goes down.
  *
  * <p>The turret always points at the CELL of the alliance's HIVE that faces up, the only one that can be loaded to tip the HIVE, and
  * the hood always sits at the angle for it ({@link BiobuzzShotSolver}); it is a steep lob that has to come down into a CELL that is
@@ -79,8 +82,6 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
 
     @Override
     public void loop() {
-        hw.drive(-gamepad1.left_stick_y, gamepad1.left_stick_x, gamepad1.right_stick_x);
-
         hw.odo.update();
         Pose2D pose = hw.odo.getPosition();
         int[] pulses = hw.readPulses();
@@ -112,9 +113,10 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
             }
         }
         BiobuzzPoseEstimator.Pose estimate = estimator.pose();
+        driveFieldOriented(estimate.heading());
 
         double flywheelTicks = hw.flywheelTicks();
-        boolean intaking = gamepad1.left_bumper;
+        boolean intakeButton = gamepad1.left_bumper;
         BiobuzzHoldShooter.Command command = shooter.update(
                 getRuntime(), gamepad1.right_bumper, estimate, estimator.confirmed(), tracker.tilt(), turretDegrees, flywheelTicks,
                 speed, turnRate);
@@ -122,10 +124,13 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
         hw.hood.setPosition(command.hoodPosition);
         hw.stopper.setPosition(command.stopperOpen ? BiobuzzHardware.STOPPER_OPEN : BiobuzzHardware.STOPPER_SHUT);
         hw.setFlywheels(command.flywheelPower);
+        // The intake roller also moves the balls along the lowest part of the path, where the indexer does not reach: the last of four
+        // balls stays there unless the roller runs, so it runs whenever the shooter feeds.
+        boolean intaking = intakeButton || command.indexerPower > 0.0;
         // Balls come in against the shut stopper: while the intake runs the indexer carries them slowly up to it, and they wait there.
         hw.intake.setPower(intaking ? BiobuzzHardware.INTAKE_POWER : 0.0);
         double indexerPower = command.indexerPower > 0.0 ? command.indexerPower
-                : intaking && !command.stopperOpen ? BiobuzzHardware.STAGING_POWER : 0.0;
+                : intakeButton && !command.stopperOpen ? BiobuzzHardware.STAGING_POWER : 0.0;
         hw.indexer.setPower(indexerPower);
 
         telemetry.addData("Alliance", String.format(Locale.ROOT, "%s: aims at the %s HIVE's %s CELL, the one facing up",
@@ -149,6 +154,25 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
             telemetry.addData("Tags", "none");
         }
         telemetry.update();
+    }
+
+    /**
+     * Drives with the sticks as the driver sees the field from their wall: up on the left stick is away from the driver, towards the
+     * far wall, whichever way the robot faces, and right is to the driver's right. The red driver stands at the red wall (negative Y)
+     * and looks towards +Y, so their right is +X; the blue driver looks towards -Y, and their right is -X. The right stick turns the
+     * robot, clockwise when pushed right.
+     */
+    private void driveFieldOriented(double headingRadians) {
+        double forward = -gamepad1.left_stick_y;
+        double right = gamepad1.left_stick_x;
+        double side = -alliance.sign();
+        // Where the driver wants to go on the field: +1 for the red driver, who looks towards +Y, -1 for the blue one.
+        double fieldX = side * right;
+        double fieldY = side * forward;
+        // The same, on the robot's own axes.
+        double ahead = fieldX * Math.cos(headingRadians) + fieldY * Math.sin(headingRadians);
+        double toTheLeft = -fieldX * Math.sin(headingRadians) + fieldY * Math.cos(headingRadians);
+        hw.drive(ahead, -toTheLeft, gamepad1.right_stick_x);
     }
 
     private static List<BiobuzzPoseEstimator.Sighting> sightings(LLResult result) {

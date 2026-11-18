@@ -35,12 +35,12 @@ public final class BiobuzzHardware {
     private static final double TURNS_B = 44.0 / 7.0;
 
     /** Intake roller power, the indexer's power while it carries balls up to the shut stopper, and its power to feed a shot. */
-    public static final double INTAKE_POWER = 0.8;
-    public static final double STAGING_POWER = 0.35;
+    public static final double INTAKE_POWER = 1.0;
+    public static final double STAGING_POWER = 0.6;
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
-    /** Servo positions: the stopper shut and open, the colibri arms down and up. */
+    /** Servo positions: the stopper shut and open (past the 60 degrees at which it lets a ball by, no further, so it is quick), the colibri arms down and up. */
     public static final double STOPPER_SHUT = 0.0;
-    public static final double STOPPER_OPEN = 0.5;
+    public static final double STOPPER_OPEN = 0.3;
     public static final double COLIBRI_DOWN = 0.0;
     public static final double COLIBRI_UP = 0.4;
 
@@ -71,6 +71,8 @@ public final class BiobuzzHardware {
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         for (DcMotor motor : new DcMotor[] {frontLeft, backLeft, frontRight, backRight}) {
             motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
+            // The robot stops when the stick is let go instead of coasting on.
+            motor.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         }
 
         odo = hardwareMap.get(GoBildaPinpointDriver.class, "odopods");
@@ -98,6 +100,9 @@ public final class BiobuzzHardware {
         for (DcMotor motor : new DcMotor[] {intake, indexer, shooterLeft, shooterRight}) {
             motor.setMode(DcMotor.RunMode.RUN_WITHOUT_ENCODER);
         }
+        // The roller and the indexer stop at once when the power goes (brake), instead of running on for a second; the flywheels coast.
+        intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         hood = hardwareMap.get(Servo.class, "hood");
         stopper = hardwareMap.get(Servo.class, "stopper");
         colibriLeft = hardwareMap.get(Servo.class, "colibriLeft");
@@ -108,7 +113,7 @@ public final class BiobuzzHardware {
         hood.setPosition(0.0);
     }
 
-    /** Mecanum drive on the robot's own axes: forward, strafe to the left, turn to the left, each from -1 to 1. */
+    /** Mecanum drive on the robot's own axes: forward, strafe to the right, turn to the right (clockwise), each from -1 to 1. */
     public void drive(double forward, double strafe, double turn) {
         double scale = Math.max(1.0, Math.abs(forward) + Math.abs(strafe) + Math.abs(turn));
         frontLeft.setPower((forward + strafe + turn) / scale);

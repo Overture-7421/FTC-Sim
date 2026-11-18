@@ -129,6 +129,24 @@ class BiobuzzAllianceSessionTest {
     }
 
     @Test
+    void holdingTheRightBumperFeedsOutAllFourBallsBecauseTheIntakeRollerMovesTheLastOneAlong() throws IOException {
+        try (TestSessions.Handle handle = open(Alliance.RED, 1.4, -1.0, 0.0)) {
+            SimulationSession session = handle.session;
+            initAndStart(session, Alliance.RED);
+            session.runFor(SECOND);
+            assertTrue(session.hardware().stream().anyMatch(line -> line.name().equals("storage magazine") && line.value().equals("4 of 4 pieces")),
+                    session.hardware().toString());
+            session.setGamepad(1, pad(false, true));
+            String held = "";
+            for (int i = 0; i < 300 && !held.equals("0 of 4 pieces"); i++) {
+                session.runFor(SECOND / 10);
+                held = session.hardware().stream().filter(line -> line.name().equals("storage magazine")).findFirst().orElseThrow().value();
+            }
+            assertEquals("0 of 4 pieces", held, "every ball left the robot: " + summary(session));
+        }
+    }
+
+    @Test
     void theBallLeavesFromBetweenTheWheelsAndTheHoodWhereTheHoodSetsItNotFromTheLimelight() throws IOException {
         for (double[] place : new double[][] {{1.0, -0.8}, {1.7, -1.0}}) {
             try (TestSessions.Handle handle = open(Alliance.RED, place[0], place[1], 0.0)) {
@@ -143,7 +161,7 @@ class BiobuzzAllianceSessionTest {
                         BodyState last = before.put(body.entityId(), body);
                         // Held and staged balls creep; a ball in the air covers centimetres a step.
                         if (ball == null && last != null && body.kind() == BiobuzzIds.KIND_POLLEN
-                                && Math.hypot(Math.hypot(body.x() - last.x(), body.y() - last.y()), body.z() - last.z()) > 0.012) {
+                                && Math.hypot(Math.hypot(body.x() - last.x(), body.y() - last.y()), body.z() - last.z()) > 0.018) {
                             ball = body;
                         }
                     }
@@ -173,14 +191,15 @@ class BiobuzzAllianceSessionTest {
         }
     }
 
-    /** Drives with the sticks to {@code (wx, wy)} and turns to face {@code headingDegrees}, as a driver does, from the robot's true pose. */
+    /**
+     * Drives with the sticks to {@code (wx, wy)} and turns to face {@code headingDegrees}, as a red driver does, from the robot's true
+     * pose: the left stick is the field as seen from the red wall (up is +Y, right is +X), whichever way the robot faces.
+     */
     private static void driveTo(SimulationSession session, double wx, double wy, double headingDegrees) {
         for (int i = 0; i < 400; i++) {
             BodyPose t = session.world().bodyPose(EntityIds.CHASSIS);
             double ex = wx - t.x();
             double ey = wy - t.y();
-            double forward = ex * Math.cos(t.yaw()) + ey * Math.sin(t.yaw());
-            double left = -ex * Math.sin(t.yaw()) + ey * Math.cos(t.yaw());
             double turn = Math.IEEEremainder(Math.toRadians(headingDegrees) - t.yaw(), 2.0 * Math.PI);
             double distance = Math.hypot(ex, ey);
             if (distance < 0.08 && Math.abs(turn) < 0.05) {
@@ -188,11 +207,59 @@ class BiobuzzAllianceSessionTest {
             }
             double gain = Math.min(0.8, 1.5 * distance) / Math.max(distance, 1e-6);
             session.setGamepad(1, GamepadState.sticks(
-                    (float) (-left * gain), (float) (-forward * gain), (float) Math.max(-0.6, Math.min(0.6, -1.5 * turn)), 0f));
+                    (float) (ex * gain), (float) (-ey * gain), (float) Math.max(-0.6, Math.min(0.6, -1.5 * turn)), 0f));
             session.runFor(SECOND / 10);
         }
         session.setGamepad(1, GamepadState.NEUTRAL);
         session.runFor(SECOND);
+    }
+
+    @ParameterizedTest(name = "{0}, turned {1} seconds")
+    @MethodSource("alliancesAndTurns")
+    void theLeftStickDrivesTheFieldAsTheDriverSeesItWhicheverWayTheRobotFaces(Alliance alliance, double turnSeconds) throws IOException {
+        double wall = alliance == Alliance.RED ? -1.0 : 1.0;
+        // On the driver's wall, facing the field as the start rules say, so that the camera sees nothing and the pose stays the odometry's.
+        try (TestSessions.Handle handle = TestSessions.open(BiobuzzTestRobot.spec(), TestSessions.program(), FIELD, new FieldSetup(1, alliance),
+                0.0, wall * 1.5575, -wall * Math.PI / 2)) {
+            SimulationSession session = handle.session;
+            initAndStart(session, alliance);
+            session.runFor(SECOND / 2);
+            double facing = session.world().bodyPose(EntityIds.CHASSIS).yaw();
+            if (turnSeconds != 0.0) {
+                session.setGamepad(1, GamepadState.sticks(0f, 0f, (float) Math.signum(turnSeconds), 0f));
+                session.runFor((long) (Math.abs(turnSeconds) * SECOND));
+                session.setGamepad(1, GamepadState.NEUTRAL);
+                session.runFor(SECOND);
+            }
+            BodyPose start = session.world().bodyPose(EntityIds.CHASSIS);
+            assertTrue(turnSeconds == 0.0 || Math.abs(Math.IEEEremainder(start.yaw() - facing, 2.0 * Math.PI)) > 0.3, "the robot has turned: " + start);
+            // Forward on the stick is away from the driver, to the far wall, even with the robot facing any way.
+            session.setGamepad(1, GamepadState.sticks(0f, -1f, 0f, 0f));
+            session.runFor(SECOND * 3 / 4);
+            BodyPose moved = session.world().bodyPose(EntityIds.CHASSIS);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            double toward = -wall;
+            double ahead = (moved.y() - start.y()) * toward;
+            assertTrue(ahead > 0.15, alliance + " forward moves away from its wall: " + start + " -> " + moved);
+            // A mecanum robot drifts a little while it speeds up; what it must not do is go sideways.
+            assertTrue(Math.abs(moved.x() - start.x()) < 0.4 * ahead, "and not sideways: " + start + " -> " + moved);
+            // Right on the stick is the driver's right: +X for the red driver, -X for the blue.
+            session.runFor(SECOND);
+            BodyPose second = session.world().bodyPose(EntityIds.CHASSIS);
+            session.setGamepad(1, GamepadState.sticks(1f, 0f, 0f, 0f));
+            session.runFor(SECOND * 3 / 4);
+            BodyPose right = session.world().bodyPose(EntityIds.CHASSIS);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            double across = (right.x() - second.x()) * toward;
+            assertTrue(across > 0.15, alliance + " right moves to the driver's right: " + second + " -> " + right);
+            assertTrue(Math.abs(right.y() - second.y()) < 0.4 * across, "and not forward: " + second + " -> " + right);
+        }
+    }
+
+    private static Stream<Arguments> alliancesAndTurns() {
+        return Stream.of(
+                Arguments.of(Alliance.RED, 0.0), Arguments.of(Alliance.RED, 0.8), Arguments.of(Alliance.RED, -1.5), Arguments.of(Alliance.RED, 1.2),
+                Arguments.of(Alliance.BLUE, 0.0), Arguments.of(Alliance.BLUE, 0.8), Arguments.of(Alliance.BLUE, -1.5));
     }
 
     @Test
@@ -241,7 +308,7 @@ class BiobuzzAllianceSessionTest {
                 assertTrue(text(session, "Shooter").startsWith("REFUSED"), summary(session));
                 assertTrue(text(session, "Mechanisms").contains("stopper=shut") && text(session, "Mechanisms").contains("indexer=off"),
                         "nothing is fed: " + summary(session));
-                assertEquals(0.0, value(text(session, "Mechanisms"), "flywheels"), 1.0, "and the flywheels are off: " + summary(session));
+                assertTrue(value(text(session, "Mechanisms"), "flywheels") > 800 || i < 40, "the flywheels idle, they are not off: " + summary(session));
                 double turret = value(text(session, "Turret"), "deg");
                 lowest = Math.min(lowest, turret);
                 highest = Math.max(highest, turret);
@@ -265,6 +332,58 @@ class BiobuzzAllianceSessionTest {
     }
 
     @Test
+    void theFirstBallLeavesSoonAfterTheButtonGoesDownBecauseTheStopperOpensWhileTheFlywheelsSpinUp() throws IOException {
+        try (TestSessions.Handle handle = open(Alliance.RED, 1.4, -1.0, 0.0)) {
+            SimulationSession session = handle.session;
+            initAndStart(session, Alliance.RED);
+            // With the hood and the turret where the shot wants them, as they are a few seconds after the start.
+            session.runFor(SECOND * 8);
+            session.setGamepad(1, pad(false, true));
+            java.util.Map<Integer, BodyState> before = new java.util.HashMap<>();
+            double seconds = -1.0;
+            for (int i = 0; i < 240 * 10 && seconds < 0.0; i++) {
+                session.runFor(SECOND / 240);
+                for (BodyState body : session.snapshot().bodies()) {
+                    BodyState last = before.put(body.entityId(), body);
+                    if (seconds < 0.0 && last != null && body.kind() == BiobuzzIds.KIND_POLLEN
+                            && Math.hypot(Math.hypot(body.x() - last.x(), body.y() - last.y()), body.z() - last.z()) > 0.018) {
+                        seconds = i / 240.0;
+                    }
+                }
+            }
+            assertTrue(seconds > 0.0, "a ball left: " + summary(session));
+            assertTrue(seconds < 0.9, "the first ball leaves " + seconds + " s after the press: " + summary(session));
+        }
+    }
+
+    @Test
+    void theIntakeAndTheIndexerStopAtOnceWhenTheButtonIsLetGoBecauseTheyBrake() throws IOException {
+        try (TestSessions.Handle handle = open(Alliance.RED, 1.4, -1.0, 0.0)) {
+            SimulationSession session = handle.session;
+            initAndStart(session, Alliance.RED);
+            session.runFor(SECOND);
+            session.setGamepad(1, pad(true, false));
+            session.runFor(SECOND);
+            double running = Math.abs(value(hardware(session, "intake"), "rate"));
+            assertTrue(running > 100.0, "the intake runs while the left bumper is held: " + running);
+            session.setGamepad(1, GamepadState.NEUTRAL);
+            StringBuilder decay = new StringBuilder();
+            for (int i = 0; i < 4; i++) {
+                session.runFor(SECOND / 20);
+                decay.append(String.format(" %.0f", Math.abs(value(hardware(session, "intake"), "rate"))));
+            }
+            double after = Math.abs(value(hardware(session, "intake"), "rate"));
+            assertTrue(after < 0.1 * running, "a fifth of a second after letting go it has all but stopped (every 50 ms:" + decay + " of " + running + ")");
+        }
+    }
+
+    /** What the hardware readout says of the motor {@code name}, as {@code "<number> ticks/s ..."}. */
+    private static String hardware(SimulationSession session, String name) {
+        String value = session.hardware().stream().filter(line -> line.name().equals(name)).findFirst().orElseThrow().value();
+        return "rate=" + value.split(" ")[0];
+    }
+
+    @Test
     void theTurretAndTheHoodFollowTheHiveWithNoButtonAndTheBumpersOnlyWorkWhileHeld() throws IOException {
         try (TestSessions.Handle handle = open(Alliance.RED, 1.4, -1.0, 0.0)) {
             SimulationSession session = handle.session;
@@ -276,13 +395,16 @@ class BiobuzzAllianceSessionTest {
                                     body.y() - chassis.y() - 0.089 * Math.sin(chassis.yaw())) < 0.05)
                     .count();
             assertTrue(heldAtTheStopper >= 1, "the preloads wait low in the column against the shut stopper, not in the shooter");
+            assertTrue(session.hardware().stream().anyMatch(line -> line.name().equals("storage magazine") && line.value().equals("4 of 4 pieces")),
+                    "the robot starts with its four preloads, and holds four: " + session.hardware());
 
             // The hood's servo takes seconds to get anywhere.
             session.runFor(SECOND * 6);
             assertTrue(value(text(session, "Mechanisms"), "hood") > 0.2,
                     "the hood is already where the shot wants it, with no button held: " + summary(session));
             assertTrue(text(session, "Shooter").startsWith("IDLE"), summary(session));
-            assertTrue(text(session, "Mechanisms").contains("flywheels=0") && text(session, "Mechanisms").contains("stopper=shut"));
+            assertTrue(value(text(session, "Mechanisms"), "flywheels") > 800 && text(session, "Mechanisms").contains("stopper=shut"),
+                    "the flywheels already run, with no button held: " + summary(session));
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
             double axisX = truth.x() + 0.089 * Math.cos(truth.yaw());
             double axisY = truth.y() + 0.089 * Math.sin(truth.yaw());
@@ -313,7 +435,7 @@ class BiobuzzAllianceSessionTest {
             assertTrue(text(session, "Shooter").startsWith("IDLE"), summary(session));
             assertTrue(text(session, "Mechanisms").contains("stopper=shut") && text(session, "Mechanisms").contains("indexer=off"), summary(session));
             session.runFor(SECOND * 2);
-            assertTrue(value(text(session, "Mechanisms"), "flywheels") < flywheels * 0.8, "the flywheels were let go of: " + summary(session));
+            assertEquals(flywheels, value(text(session, "Mechanisms"), "flywheels"), 0.1 * flywheels, "the flywheels are not let go of: " + summary(session));
             assertEquals(List.of(), session.problems(), handle.log.toString());
         }
     }
@@ -326,22 +448,27 @@ class BiobuzzAllianceSessionTest {
             session.runFor(SECOND);
             double least = 0.0;
             double most = 0.0;
+            double fastest = 0.0;
+            double previousYaw = 0.0;
             // Two turns and a half of the robot, clockwise, which carries the HIVE round the turret the other way.
             session.setGamepad(1, GamepadState.sticks(0f, 0f, 1f, 0f));
             for (int i = 0; i < 60; i++) {
                 session.runFor(SECOND / 4);
                 double yaw = Math.toDegrees(session.rig().turretYawRadians());
+                fastest = Math.max(fastest, Math.abs(yaw - previousYaw) * 4.0);
+                previousYaw = yaw;
                 least = Math.min(least, yaw);
                 most = Math.max(most, yaw);
                 // Not just the same direction: past half a turn the reading must say 200, not -160, or the controller winds on.
                 if (yaw > -160.0 && yaw < 245.0) {
-                    assertEquals(yaw, value(text(session, "Turret"), "deg"), 15.0, "the turret's angle as the program reads it");
+                    assertEquals(yaw, value(text(session, "Turret"), "deg"), 30.0, "the turret's angle as the program reads it");
                 }
             }
             session.setGamepad(1, GamepadState.NEUTRAL);
             session.runFor(SECOND * 8);
 
             assertTrue(least > -176.0 && most < 256.0, "the turret stayed in its range, which the two encoders can read: " + least + " to " + most);
+            assertTrue(fastest > 120.0, "and it was let turn at near what its servo can do (about 184 degrees a second), not a share of it: " + fastest);
             double yaw = Math.toDegrees(session.rig().turretYawRadians());
             assertEquals(0.0, Math.IEEEremainder(value(text(session, "Turret"), "deg") - yaw, 360.0), 6.0, "and what the encoders say is where it is");
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);

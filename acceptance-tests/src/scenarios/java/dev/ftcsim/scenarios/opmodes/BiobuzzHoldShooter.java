@@ -3,11 +3,12 @@ package dev.ftcsim.scenarios.opmodes;
 import java.util.Locale;
 
 /**
- * The BIOBUZZ robot's shooter, for a driver who holds a button to shoot. The turret and the hood follow the alliance's HIVE all the
- * time, button or no button, so that a shot is ready when it is asked for. While the button is held (and only then) it spins the
- * flywheels to the speed that reaches the CELL, and once the turret, the flywheels and the hood are where they should be and the
- * robot is still, it opens the stopper and feeds the balls; it stops feeding while any of them is not where it should be and
- * resumes when it is again. Letting go shuts the stopper, stops the indexer and the flywheels.
+ * The BIOBUZZ robot's shooter, for a driver who holds a button to shoot. The turret, the hood and the flywheels follow the alliance's
+ * HIVE all the time, button or no button: the turret and the hood point at the CELL, and the flywheels stay at the speed that reaches
+ * it, so that a shot is ready the moment it is asked for, with no spin-up. While the button is held (and only then) the stopper opens
+ * and, once the turret, the flywheels and the hood are where they should be and the robot is still, the indexer feeds the balls; it
+ * stops feeding while any of them is not where it should be and resumes when it is again. Letting go shuts the stopper and stops the
+ * indexer; the flywheels stay at their speed.
  *
  * <p>It refuses to feed, and says why, while the pose is only the approximate start the program was given (the camera has not seen
  * the HIVE yet: the turret then sweeps about where the HIVE should be until it does), and while no throw from where the robot
@@ -37,9 +38,12 @@ public final class BiobuzzHoldShooter {
 
     /** Flywheel control: feed-forward from the target speed and a correction from the error, in power per tick per second. */
     static final double FLYWHEEL_KF = 1.0 / BiobuzzShotSolver.MOTOR_MAX_TICKS_PER_SECOND;
-    static final double FLYWHEEL_KP = 0.0006;
-    static final double AIM_GAIN = 0.02;
-    static final double AIM_LIMIT = 0.4;
+    static final double FLYWHEEL_KP = 0.01;
+    /** Where the flywheels idle when there is nothing at all to work a speed out from (an estimate that cannot reach the CELL). */
+    static final double IDLE_TICKS_PER_SECOND = 1500.0;
+    static final double AIM_GAIN = 0.03;
+    /** The turret's servo (an Axon Mini+ behind 2.75:1) turns about 184 degrees a second at full power: nothing here holds it back. */
+    static final double AIM_LIMIT = 1.0;
     /**
      * While the pose is not confirmed the turret sweeps this far either side of where the HIVE should be, once in this many seconds:
      * the robot may be anywhere along its wall, so the HIVE may be far from where the start says. The fastest the turret turns in the
@@ -65,11 +69,11 @@ public final class BiobuzzHoldShooter {
     /** A hood that is only a little off stays where it is: the estimate wanders a little, and every move costs the servo its time. */
     static final double HOOD_DEADBAND = 0.02;
     /** The stopper's servo takes this long to open. */
-    public static final double STOPPER_OPEN_SECONDS = 0.6;
+    public static final double STOPPER_OPEN_SECONDS = 0.35;
     /** Ready has to hold this long before the stopper opens. */
-    static final double READY_HOLD_SECONDS = 0.3;
+    static final double READY_HOLD_SECONDS = 0.05;
     /** The indexer's power to feed a shot. */
-    public static final double FEED_POWER = 0.7;
+    public static final double FEED_POWER = 1.0;
     /** The shot is worked out again when the robot has moved this far, or this often. */
     static final double RESOLVE_DISTANCE_M = 0.02;
     static final double RESOLVE_SECONDS = 0.5;
@@ -87,10 +91,12 @@ public final class BiobuzzHoldShooter {
     private double hoodSettledAt = -1e9;
     private double readySince = Double.NaN;
     private double feedingStartedAt;
+    private double stopperOpenedAt;
     private double fedSeconds;
     private double lastUpdate = Double.NaN;
     private double aimTarget = Double.NaN;
     private boolean confirmed;
+    private double flywheelTarget;
 
     public BiobuzzHoldShooter(BiobuzzHive.Alliance alliance) {
         this.alliance = alliance;
@@ -154,7 +160,19 @@ public final class BiobuzzHoldShooter {
                 hoodKnown = true;
             }
             command.hoodPosition = hood;
+            flywheelTarget = solution.flywheelTicksPerSecond;
+        } else {
+            // No shot from here (or no pose to trust yet): idle at about the speed of one from near here, never at a stop.
+            double nominal = BiobuzzShotSolver.nominalTicks(pose, alliance, tilt);
+            if (!Double.isNaN(nominal)) {
+                flywheelTarget = nominal;
+            } else if (flywheelTarget <= 0.0) {
+                flywheelTarget = IDLE_TICKS_PER_SECOND;
+            }
         }
+        // The flywheels stay at the speed of the shot, button or no button, so that there is no spin-up when it is asked for.
+        command.flywheelPower = Math.max(0.0, Math.min(1.0,
+                FLYWHEEL_KF * flywheelTarget + FLYWHEEL_KP * (flywheelTarget - flywheelTicks)));
 
         if (!held) {
             state = State.IDLE;
@@ -171,7 +189,6 @@ public final class BiobuzzHoldShooter {
         }
 
         double ticks = solution.flywheelTicksPerSecond;
-        command.flywheelPower = Math.max(0.0, Math.min(1.0, FLYWHEEL_KF * ticks + FLYWHEEL_KP * (ticks - flywheelTicks)));
         double speedError = Math.abs(flywheelTicks - ticks) / ticks;
         boolean aimed = Math.abs(aimError) < TURRET_TOLERANCE_DEGREES;
         boolean still = speed < STILL_SPEED_MPS && turnRate < STILL_TURN_DEGREES_PER_SECOND;
@@ -184,7 +201,11 @@ public final class BiobuzzHoldShooter {
             state = State.SPINNING_UP;
             readySince = Double.NaN;
             fedSeconds = 0.0;
+            stopperOpenedAt = now;
         }
+        // The stopper (a servo that takes a little over half a second) opens as soon as the button goes down, while the flywheels spin
+        // up, so that it is open by the time they are ready; the balls only move when the indexer runs.
+        command.stopperOpen = true;
         if (state == State.SPINNING_UP) {
             readySince = ready ? (Double.isNaN(readySince) ? now : readySince) : Double.NaN;
             status = "spinning up: " + detail;
@@ -194,8 +215,7 @@ public final class BiobuzzHoldShooter {
             }
             return command;
         }
-        command.stopperOpen = true;
-        boolean open = now - feedingStartedAt >= STOPPER_OPEN_SECONDS;
+        boolean open = now - stopperOpenedAt >= STOPPER_OPEN_SECONDS;
         if (open && ready) {
             command.indexerPower = FEED_POWER;
             fedSeconds += dt;

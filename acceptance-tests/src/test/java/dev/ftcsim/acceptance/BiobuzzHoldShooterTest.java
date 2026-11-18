@@ -51,7 +51,7 @@ class BiobuzzHoldShooterTest {
             command = step(false);
         }
         assertEquals(State.IDLE, shooter.state());
-        assertEquals(0.0, command.flywheelPower, 0.0);
+        assertTrue(command.flywheelPower > 0.5, "the flywheels already run at the speed of the shot, with no button held");
         assertEquals(0.0, command.indexerPower, 0.0);
         assertFalse(command.stopperOpen);
         assertEquals(shooter.solution().hoodPosition, command.hoodPosition, 1e-9, "the hood is sent to the angle for the shot");
@@ -68,7 +68,7 @@ class BiobuzzHoldShooterTest {
             most = Math.max(most, command.turretPower);
             least = Math.min(least, command.turretPower);
             assertEquals(State.REFUSED, shooter.state());
-            assertEquals(0.0, command.flywheelPower, 0.0);
+            assertTrue(command.flywheelPower > 0.3, "the flywheels idle at about the speed of a shot from near here, not off");
             assertFalse(command.stopperOpen);
             assertEquals(0.0, command.indexerPower, 0.0);
             assertEquals(0.0, command.hoodPosition, 0.0, "the hood waits for a pose it can trust");
@@ -78,11 +78,12 @@ class BiobuzzHoldShooterTest {
     }
 
     @Test
-    void itSpinsUpFirstAndOpensTheStopperOnlyOnceEverythingHasBeenReadyForAWhileThenFeedsAfterTheStopperHasHadTimeToOpen() {
+    void itSpinsUpAndOpensTheStopperAtOnceThenFeedsOnceEverythingHasBeenReadyForAWhileAndTheStopperHasHadTimeToOpen() {
         Command command = step(true);
         assertEquals(State.SPINNING_UP, shooter.state());
         assertTrue(command.flywheelPower > 0.5, "the flywheels are on while the button is held");
-        assertFalse(command.stopperOpen);
+        assertTrue(command.stopperOpen, "the stopper starts opening with the flywheels, so it is open when they are ready");
+        assertEquals(0.0, command.indexerPower, 0.0, "but nothing is pushed yet");
 
         // The turret is on the bearing and the flywheels at speed, but the hood's servo has only just been sent: not ready.
         flywheelTicks = shooter.solution().flywheelTicksPerSecond;
@@ -90,23 +91,44 @@ class BiobuzzHoldShooterTest {
             command = step(true);
         }
         assertEquals(State.SPINNING_UP, shooter.state(), "the hood is still moving: " + shooter.status());
-        assertFalse(command.stopperOpen);
+        assertEquals(0.0, command.indexerPower, 0.0);
 
-        double opened = -1.0;
         double fed = -1.0;
         for (double t = 0.0; t < 15.0 && fed < 0.0; t += DT) {
             command = step(true);
-            if (command.stopperOpen && opened < 0.0) {
-                opened = now;
-            }
             if (command.indexerPower > 0.0) {
                 fed = now;
             }
         }
-        assertTrue(opened > 0.0 && fed > 0.0, shooter.status());
-        assertEquals(BiobuzzHoldShooter.STOPPER_OPEN_SECONDS, fed - opened, 2 * DT, "the stopper has its time before the indexer pushes");
+        assertTrue(fed > 0.0, shooter.status());
+        assertTrue(command.stopperOpen);
         assertEquals(BiobuzzHoldShooter.FEED_POWER, command.indexerPower, 0.0);
         assertEquals(State.FEEDING, shooter.state());
+    }
+
+    @Test
+    void theIndexerWaitsForTheStopperToOpenEvenWhenTheShotIsReadyAtOnce() {
+        // A hood that is already where the shot wants it and flywheels already at speed: only the stopper's servo is left to wait for.
+        step(false);
+        for (int i = 0; i < 2000; i++) {
+            step(false);
+        }
+        flywheelTicks = shooter.solution().flywheelTicksPerSecond;
+        double pressed = now;
+        double fed = -1.0;
+        for (double t = 0.0; t < 15.0 && fed < 0.0; t += DT) {
+            Command command = step(true);
+            assertTrue(command.stopperOpen || state() == State.REFUSED);
+            if (command.indexerPower > 0.0) {
+                fed = now;
+            }
+        }
+        assertTrue(fed - pressed >= BiobuzzHoldShooter.STOPPER_OPEN_SECONDS - DT, "fed " + (fed - pressed) + " s after the press");
+        assertTrue(fed - pressed < BiobuzzHoldShooter.STOPPER_OPEN_SECONDS + 0.5, "and not much later: " + (fed - pressed));
+    }
+
+    private State state() {
+        return shooter.state();
     }
 
     @Test
@@ -134,7 +156,7 @@ class BiobuzzHoldShooterTest {
     }
 
     @Test
-    void lettingGoOfTheButtonStopsTheFeedShutsTheStopperAndSwitchesTheFlywheelsOffAtOnce() {
+    void lettingGoOfTheButtonStopsTheFeedAndShutsTheStopperButTheFlywheelsKeepTheirSpeed() {
         holdUntilFeeding(30.0);
         for (int i = 0; i < 60; i++) {
             step(true);
@@ -143,13 +165,14 @@ class BiobuzzHoldShooterTest {
         assertEquals(State.IDLE, shooter.state());
         assertFalse(command.stopperOpen);
         assertEquals(0.0, command.indexerPower, 0.0);
-        assertEquals(0.0, command.flywheelPower, 0.0);
+        assertTrue(command.flywheelPower > 0.5, "the flywheels stay at the speed of the shot");
         assertEquals(shooter.solution().hoodPosition, command.hoodPosition, 1e-9, "the hood and the turret stay on the target");
 
-        // Pressing again starts over: spin up first, the stopper shut.
+        // Pressing again starts over: spin up first, the stopper opening with it, nothing fed.
         command = step(true);
         assertEquals(State.SPINNING_UP, shooter.state());
-        assertFalse(command.stopperOpen);
+        assertTrue(command.stopperOpen);
+        assertEquals(0.0, command.indexerPower, 0.0);
         assertEquals(0.0, shooter.fedSeconds(), 0.0);
     }
 
@@ -193,7 +216,7 @@ class BiobuzzHoldShooterTest {
         assertEquals(State.REFUSED, shooter.state());
         assertFalse(command.stopperOpen);
         assertEquals(0.0, command.indexerPower, 0.0);
-        assertEquals(0.0, command.flywheelPower, 0.0);
+        assertTrue(command.flywheelPower > 0.5, "with no shot the flywheels stay about where they were, not off");
         assertTrue(shooter.status().contains("other side"), shooter.status());
 
         tilt = Tilt.AUDIENCE_UP;
@@ -201,6 +224,6 @@ class BiobuzzHoldShooterTest {
         command = step(true);
         assertEquals(State.REFUSED, shooter.state());
         assertTrue(shooter.status().contains("other side"), shooter.status());
-        assertEquals(0.0, command.flywheelPower, 0.0);
+        assertTrue(command.flywheelPower > 0.3, "nor on the wrong side of the HIVE");
     }
 }

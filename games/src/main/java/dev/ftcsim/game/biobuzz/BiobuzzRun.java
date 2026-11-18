@@ -294,10 +294,10 @@ public final class BiobuzzRun implements FieldRun {
         return kind == BiobuzzIds.KIND_POLLEN ? preloads.take(kind) : OptionalInt.empty();
     }
 
-    /** Three of the robot's four preload POLLEN, which is what its magazine holds. */
+    /** The robot's four preload POLLEN, all of which its magazine holds. */
     @Override
     public int[] robotPreloads() {
-        return new int[] {BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN};
+        return new int[] {BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN, BiobuzzIds.KIND_POLLEN};
     }
 
     @Override

@@ -290,14 +290,16 @@ public final class RobotDesign {
         return new RobotSpec.Motor(hub, port, null, new RobotSpec.Wheel(WheelPosition.valueOf(motor.slot().name()), sign(motor)), null);
     }
 
-    private static RobotSpec.Motor shaft(MotorMapping motor, int hub, int port) {
+    private RobotSpec.Motor shaft(MotorMapping motor, int hub, int port) {
         String model = motor.model().isEmpty() ? RobotMapping.USUAL_MOTOR : motor.model();
         DcMotor catalogue = MotorCatalog.motor(model);
         // Inertia and friction at the motor's shaft, estimated. A roller's inertia is on the far side of the reduction, so the motor
         // sees it divided by the ratio squared; its friction is 5 percent of what the motor's own curve is (stall torque over free speed).
+        // BIOBUZZ's intake is a light roller on the compliant wheels of the CAD, which a braked motor stops in well under a tenth of a second.
         double ratio = ratioOf(motor);
+        double intakeInertia = game == Game.BIOBUZZ ? 4.0e-5 : 2.0e-4;
         double[] load = switch (motor.slot()) {
-            case INTAKE -> new double[] {2.0e-4 / (ratio * ratio), 0.05 * catalogue.stallTorqueNm() / catalogue.freeSpeedRadPerSec()};
+            case INTAKE -> new double[] {intakeInertia / (ratio * ratio), 0.05 * catalogue.stallTorqueNm() / catalogue.freeSpeedRadPerSec()};
             case CONVEYOR -> new double[] {1.0e-4 / (ratio * ratio), 0.05 * catalogue.stallTorqueNm() / catalogue.freeSpeedRadPerSec()};
             case SHOOTER -> new double[] {2.5e-4, 8.0e-5};
             default -> new double[] {1.0e-3, 5.0e-3};
@@ -350,6 +352,9 @@ public final class RobotDesign {
     private static final List<Vec3> BIOBUZZ_PATH = List.of(
             new Vec3(0.27, 0.0, -0.14), new Vec3(0.15, 0.0, -0.10), new Vec3(0.115, 0.0, -0.05), new Vec3(0.098, 0.0, 0.0),
             new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.06), new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.215), BIOBUZZ_WAIT);
+    /** BIOBUZZ's robot holds four POLLEN, its preloads (the manual allows four), in a column that is long enough for them to queue; DECODE's three. */
+    public static final int BIOBUZZ_CAPACITY = 4;
+    private static final int DECODE_CAPACITY = 3;
     private static final int BIOBUZZ_TURNED_FROM_POINT = 5;
     /** The stopper holds the pieces at the foot of the column, path point 4. */
     private static final int BIOBUZZ_GATE_POINT = 4;
@@ -374,7 +379,8 @@ public final class RobotDesign {
         }
         boolean cad = game.turret;
         List<Vec3> path = cad ? BIOBUZZ_PATH : DECODE_PATH;
-        double length = new StorageSpec(STORAGE, 3, path, List.of()).lengthMeters();
+        int capacity = cad ? BIOBUZZ_CAPACITY : DECODE_CAPACITY;
+        double length = new StorageSpec(STORAGE, capacity, path, List.of()).lengthMeters();
         List<StorageSpec.Drive> drives = new ArrayList<>();
         for (MotorMapping motor : intake) {
             drives.add(new StorageSpec.Drive(motor.name(), 0.025 / ratioOf(motor), sign(motor), 0.0, 0.20));
@@ -387,7 +393,7 @@ public final class RobotDesign {
         // The stopper holds the pieces at the foot of the column, so the preloads wait there until it opens.
         StorageSpec.Gate gate = cad && stopper != null
                 ? new StorageSpec.Gate(BIOBUZZ_GATE_POINT, stopper.name(), STOPPER_OPEN_RADIANS) : null;
-        storages.add(new StorageSpec(STORAGE, 3, path, drives, turned, gate));
+        storages.add(new StorageSpec(STORAGE, capacity, path, drives, turned, gate));
         if (!intake.isEmpty()) {
             captures.add(new CaptureSpec(
                     INTAKE, STORAGE, new Volume(new Vec3(0.30, 0.0, -0.12), new Vec3(0.06, 0.20, 0.07)),

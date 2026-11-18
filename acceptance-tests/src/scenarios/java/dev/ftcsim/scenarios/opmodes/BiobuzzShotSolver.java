@@ -105,6 +105,8 @@ public final class BiobuzzShotSolver {
      * position 0.74. The code keeps its commands under that.
      */
     static final double ELEVATION_BASE_DEGREES = 45.0;
+    /** The lob the idle flywheel speed is worked out for: the middle of the steep lobs that work. */
+    static final double NOMINAL_ELEVATION_DEGREES = 65.0;
     static final double HOOD_DEGREES_PER_POSITION = 1800.0 / (730.0 / 24.0);
     static final double HOOD_RANGE_DEGREES = 44.0;
     public static final double HOOD_MAX_POSITION = HOOD_RANGE_DEGREES / HOOD_DEGREES_PER_POSITION;
@@ -197,6 +199,23 @@ public final class BiobuzzShotSolver {
         double hood = (elevation - ELEVATION_BASE_DEGREES) / HOOD_DEGREES_PER_POSITION;
         return new Solution(true, Reason.NONE, bearing, distance, elevation, Math.max(0.0, Math.min(HOOD_MAX_POSITION, hood)),
                 ticksFor(speed), bestLength, aim);
+    }
+
+    /**
+     * A flywheel speed to idle at when there is no shot to be had from {@code pose} (the wrong side of the HIVE, too near, or the pose
+     * only the start): the speed for a lob of {@link #NOMINAL_ELEVATION_DEGREES} to the CELL's mouth from here, within what the
+     * flywheels give. It is close to what a shot from nearby needs, so the flywheels never have far to go. NaN if there is none.
+     */
+    public static double nominalTicks(BiobuzzPoseEstimator.Pose pose, BiobuzzHive.Alliance alliance, BiobuzzHive.Tilt tilt) {
+        double[] aim = BiobuzzHive.upCell(alliance, tilt).aimPoint();
+        double axisX = pose.x() + Math.cos(pose.heading()) * TURRET_AXIS_M;
+        double axisY = pose.y() + Math.sin(pose.heading()) * TURRET_AXIS_M;
+        double theta = Math.toRadians(NOMINAL_ELEVATION_DEGREES);
+        double speed = speedFor(Math.hypot(aim[0] - axisX, aim[1] - axisY), aim[2] - exitHeight(theta), theta);
+        if (Double.isNaN(speed)) {
+            return Double.NaN;
+        }
+        return Math.min(ticksFor(speed), MAX_SHARE_OF_TOP_SPEED * MOTOR_MAX_TICKS_PER_SECOND);
     }
 
     /** Degrees left of the robot's front that the turret must point to put the shot into the up CELL, from {@code pose}. */
