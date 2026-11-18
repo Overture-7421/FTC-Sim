@@ -28,10 +28,17 @@ tasks.withType<JavaCompile>().configureEach {
 val runtimeOptionsFile = layout.projectDirectory.file("src/dist/runtime-options")
 val jdkMajor = libs.versions.jdk.get()
 
+// The version of a release is given on the command line (-PappVersion=1.2.3, which the release workflow does) and ends up in
+// version.properties inside the jar; every other build is 0.0.0-dev, which never looks for updates.
+val appVersion = providers.gradleProperty("appVersion").orElse("0.0.0-dev").get()
+require(Regex("""\d+\.\d+\.\d+(-[0-9A-Za-z.]+)?""").matches(appVersion)) { "appVersion must look like 1.2.3 or 1.2.3-rc.1: $appVersion" }
+
 tasks.processResources {
     from(runtimeOptionsFile) { into("dev/ftcsim/app") }
     inputs.property("jdkMajor", jdkMajor)
+    inputs.property("appVersion", appVersion)
     filesMatching("**/runtime.properties") { expand("jdkMajor" to jdkMajor) }
+    filesMatching("**/version.properties") { expand("appVersion" to appVersion) }
 }
 
 // The worker is a program the application starts, and the robot world is a set of jars the worker and the importer read:
@@ -198,6 +205,8 @@ tasks.test {
             "-Dftcsim.dist=${distFolder.get().asFile}",
             "-Dftcsim.distZip=${distZipFile.get().asFile}",
             "-Dftcsim.distSources=${distSources.asFile}",
+            "-Dftcsim.installerScript=${layout.projectDirectory.file("installer/FTC-Sim.iss").asFile}",
+            "-Dftcsim.releaseWorkflow=${rootProject.layout.projectDirectory.file(".github/workflows/release.yml").asFile}",
         )
     })
 }

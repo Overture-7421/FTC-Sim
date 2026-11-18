@@ -30,6 +30,12 @@ class AppOptionsTest {
     }
 
     @Test
+    fun theApplicationLooksForANewerVersionAtStartUnlessTheLaunchSaysNot() {
+        assertEquals(true, AppOptions.parse(emptyArray()).checksForUpdates)
+        assertEquals(false, AppOptions.parse(arrayOf("--no-update-check")).checksForUpdates)
+    }
+
+    @Test
     fun aBadOptionIsRefusedRatherThanIgnored() {
         assertThrows(IllegalArgumentException::class.java) { AppOptions.parse(arrayOf("--exit-after=soon")) }
         assertThrows(IllegalArgumentException::class.java) { AppOptions.parse(arrayOf("--exit-after=0")) }

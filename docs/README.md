@@ -17,6 +17,7 @@ Start with the root `README.md` (what FTC-Sim is, how to use and build it), then
 | change how the window talks to the simulation | `architecture/link.md` |
 | understand the app, its folders and the importer | `architecture/app.md`, `architecture/prepared-program.md` |
 | change startup, the Java runtime or the zip | `architecture/distribution.md` |
+| make a release, change the installer, or see how the app updates itself | `architecture/updates.md` |
 | see which FTC SDK releases are supported | `sdk-versions.md` |
 | see what is missing and what to do next | `roadmap.md` |
 

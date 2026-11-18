@@ -16,7 +16,11 @@ around it and nothing else: driving, path following and mechanism logic stay the
 
 ## Using it
 
-**Start.** Unzip `FTC-Sim.zip` (Extract All) and double-click `FTC-Sim.cmd`. It opens the last project. Map two gamepads or
+**Start.** Download `FTC-Sim-<version>-Setup.exe` from the [latest release](https://github.com/Overture-7421/FTC-Sim/releases/latest)
+and run it (it installs for you alone, no administrator rights; Windows may warn once that the publisher is unknown: More
+info, Run anyway), then start FTC-Sim from the Start menu. The zip in the release also works: Extract All and double-click
+`FTC-Sim.cmd`. FTC-Sim offers a newer release in its window and installs it when you say so (`--no-update-check` turns the
+look off; `docs/architecture/updates.md`). It opens the last project. Map two gamepads or
 the keyboard on **Controls**, then press Init and Start on **Simulator**. Field, alliance and start pose are in the
 Simulator's Setup tab. Problems show in the Problems tab and in `%LOCALAPPDATA%\FTC-Sim\logs` (newest `app-*.log` and
 `worker-*.log`).
@@ -39,7 +43,8 @@ mounts, and the file is written. Commit it so teammates get the same robot. An u
 ```text
 .\gradlew.bat :app:run              the real application from source
 .\gradlew.bat :desktop-ui:runFake   the window alone on a fake host (interface work)
-.\gradlew.bat :app:dist             app\build\dist\FTC-Sim and FTC-Sim.zip
+.\gradlew.bat :app:dist                  app\build\dist\FTC-Sim and FTC-Sim.zip
+                                        (a release: -PappVersion=1.2.3; the installer is built by the release workflow, docs/architecture/updates.md)
 .\gradlew.bat check                 all tests, module rules, distribution
 ```
 

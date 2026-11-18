@@ -18,6 +18,8 @@ import androidx.compose.ui.Modifier
 import dev.ftcsim.ui.common.FakeHostBanner
 import dev.ftcsim.ui.common.FileChooser
 import dev.ftcsim.ui.common.LogOpener
+import dev.ftcsim.ui.common.UpdateBanner
+import dev.ftcsim.ui.common.rememberUpdateStatus
 import dev.ftcsim.ui.controls.ControlsScreen
 import dev.ftcsim.ui.nav.AppShell
 import dev.ftcsim.ui.nav.Destination
@@ -102,6 +104,12 @@ fun AppContent(
     }
     Column(modifier.fillMaxSize()) {
         if (services.isFake) FakeHostBanner()
+        val update by rememberUpdateStatus(services.updates)
+        UpdateBanner(
+            update,
+            onInstall = { scope.launch(Dispatchers.IO) { services.updates.install() } },
+            onDismiss = { services.updates.dismiss() },
+        )
         Box(Modifier.weight(1f).fillMaxSize()) {
             AppShell(navigator) { destination ->
                 val notice = ui.folderNotice?.takeIf { it.screen == destination }?.text

@@ -20,6 +20,7 @@ class AppFoldersTest {
 
         assertEquals(WorkerEnvironment.defaultNativeDirectory(), folders.natives(), "two natives caches would unpack the engine twice");
         assertEquals(folders.base().resolve("logs"), folders.logs());
+        assertEquals(folders.base().resolve("updates"), folders.updates(), "the installer of a newer version waits here");
         assertEquals("FTC-Sim", folders.base().getFileName().toString());
     }
 

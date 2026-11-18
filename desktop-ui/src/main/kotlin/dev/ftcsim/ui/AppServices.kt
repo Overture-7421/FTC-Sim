@@ -7,6 +7,7 @@ import dev.ftcsim.ui.glfw.GlfwThread
 import dev.ftcsim.ui.host.AppHost
 import dev.ftcsim.ui.host.ProgramPreparer
 import dev.ftcsim.ui.host.ProjectMappings
+import dev.ftcsim.ui.host.UpdateService
 import dev.ftcsim.ui.input.GamepadRouter
 import dev.ftcsim.ui.input.ViewportInput
 import dev.ftcsim.ui.practice.Connection
@@ -48,6 +49,9 @@ class AppServices(private val host: AppHost, val settings: SettingsStore) : Auto
 
     /** Whether the window runs on a stand-in host that runs no robot code, which it says everywhere. */
     val isFake: Boolean = host.isFake()
+
+    /** How the application keeps itself up to date: a newer version is offered, never installed unasked. */
+    val updates: UpdateService = host.updates()
 
     private val links: ExecutorService = Executors.newSingleThreadExecutor { task ->
         Thread(task, "link-opener").also { it.isDaemon = true }
