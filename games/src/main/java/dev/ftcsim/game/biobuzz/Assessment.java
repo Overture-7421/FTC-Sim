@@ -143,7 +143,7 @@ record Assessment(
             double d = side * local[0];
             if (d >= in(HiveModel.BACK) && d <= in(HiveModel.FRONT)
                     && Math.abs(local[1]) <= in(HiveModel.HALF_WIDTH)
-                    && local[2] >= in(HiveModel.FLOOR) && local[2] <= in(HiveModel.CEILING)) {
+                    && local[2] >= in(HiveModel.FLOOR) && local[2] <= in(HiveModel.roofInches(local[1] / 0.0254))) {
                 counted[i] = true;
                 inside++;
             }

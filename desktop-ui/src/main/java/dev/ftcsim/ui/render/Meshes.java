@@ -138,6 +138,48 @@ final class Meshes {
         return new Mesh(vertices, indices);
     }
 
+    /**
+     * Triangular prism: the triangle with base corners (y, z) = (-1, -1) and (1, -1) and apex (0, 1), extruded over x in
+     * [-1, 1]. The instance scale turns it into any isosceles gable; the normals of its two slanted faces are those of
+     * the unit proportions.
+     */
+    static Mesh wedge() {
+        float[][] triangle = {{-1, -1}, {1, -1}, {0, 1}};
+        float slant = (float) Math.sqrt(5.0);
+        float[] vertices = new float[(2 * 3 + 3 * 4) * VERTEX_FLOATS];
+        int[] indices = new int[(2 + 3 * 2) * 3];
+        int vertex = 0;
+        int index = 0;
+        for (float x : new float[] {1f, -1f}) {
+            int first = vertex;
+            for (float[] corner : triangle) {
+                putVertex(vertices, vertex++, x, corner[0], corner[1], x, 0f, 0f);
+            }
+            boolean flip = x < 0;
+            indices[index++] = first;
+            indices[index++] = flip ? first + 2 : first + 1;
+            indices[index++] = flip ? first + 1 : first + 2;
+        }
+        float[][] normals = {{0f, -1f}, {2f / slant, 1f / slant}, {-2f / slant, 1f / slant}};
+        for (int edge = 0; edge < 3; edge++) {
+            float[] a = triangle[edge];
+            float[] b = triangle[(edge + 1) % 3];
+            float[] n = {0f, normals[edge][0], normals[edge][1]};
+            int first = vertex;
+            putVertex(vertices, vertex++, -1f, a[0], a[1], 0f, n[1], n[2]);
+            putVertex(vertices, vertex++, 1f, a[0], a[1], 0f, n[1], n[2]);
+            putVertex(vertices, vertex++, 1f, b[0], b[1], 0f, n[1], n[2]);
+            putVertex(vertices, vertex++, -1f, b[0], b[1], 0f, n[1], n[2]);
+            indices[index++] = first;
+            indices[index++] = first + 2;
+            indices[index++] = first + 1;
+            indices[index++] = first;
+            indices[index++] = first + 3;
+            indices[index++] = first + 2;
+        }
+        return new Mesh(vertices, indices);
+    }
+
     private static void putVertex(float[] vertices, int vertex, float x, float y, float z, float nx, float ny, float nz) {
         int base = vertex * VERTEX_FLOATS;
         vertices[base] = x;

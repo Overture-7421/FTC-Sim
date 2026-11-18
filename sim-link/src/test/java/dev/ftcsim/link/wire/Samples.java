@@ -94,14 +94,15 @@ final class Samples {
     }
 
     static FieldDescription field() {
-        FieldPart wall = new FieldPart(new Shape.Box(0.0125, 1.8, 0.15), Pose3.at(0.1, 0.2, 0.3), 0x336699);
+        FieldPart wall = new FieldPart(new Shape.Box(0.0125, 1.8, 0.15), Pose3.at(0.1, 0.2, 0.3), 0x336699, 0.25f);
         FieldPart ball = new FieldPart(new Shape.Sphere(0.0635), Pose3.IDENTITY, 0x7B2CBF);
         FieldPart post = new FieldPart(new Shape.Cylinder(0.02, 0.4), Pose3.turned(0, 0, 0.4, 0, 1, 0, 0.1), 0xFFFFFF);
+        FieldPart gable = new FieldPart(new Shape.Wedge(0.0125, 0.25, 0.1), Pose3.at(0.4, 0, 0.2), 0xCFD8DC, 0.25f);
         return new FieldDescription(
                 "decode",
                 "DECODE ✓ 2025–26",
                 List.of(new Scenery("north wall", wall, Pose3.at(0, 1.8, 0.15)), new Scenery("goal", post, Pose3.turned(1, 1, 0, 0, 0, 1, 2.5))),
-                List.of(new BodyKind(100, "purple ball", List.of(ball)), new BodyKind(200, "ramp gate", List.of(wall, post))),
+                List.of(new BodyKind(100, "purple ball", List.of(ball)), new BodyKind(200, "ramp gate", List.of(wall, post, gable))),
                 List.of(new FieldTag(20, 0.1651, -1, Pose3.at(-1.5, 1.4, 0.75)), new FieldTag(24, 0.1651, 1000, Pose3.IDENTITY)),
                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
                 List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")));

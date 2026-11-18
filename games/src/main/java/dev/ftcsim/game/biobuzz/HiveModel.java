@@ -37,8 +37,17 @@ final class HiveModel {
     static final double BACK = 9.44;
     static final double FRONT = 21.46;
     static final double FLOOR = -1.46;
+    /** The height of the ridge: a CELL is a house, with upright sides up to {@link #EAVE} and a gabled roof above. */
     static final double CEILING = 12.50;
+    /** Where the sides end and the roof starts: 7.61 in above the CELL floor, from figure 9-11 of the manual. */
+    static final double EAVE = FLOOR + 7.61;
     static final double HALF_WIDTH = 10.0;
+
+    /** The height of the inside of the roof at {@code lateral} inches from the middle of the CELL. */
+    static double roofInches(double lateral) {
+        double a = Math.min(Math.abs(lateral), HALF_WIDTH);
+        return CEILING - a * (CEILING - EAVE) / HALF_WIDTH;
+    }
     /** The solids are thickened outwards, so that the inside of the CELL keeps its CAD size. */
     private static final double WALL = 0.40;
 
@@ -57,6 +66,8 @@ final class HiveModel {
     static final float SURFACE_RESTITUTION = 0.1f;
 
     private static final int SKIN_RGB = 0xCFD8DC;
+    private static final double SKIN = 0.03;
+    private static final float SKIN_ALPHA = 0.25f;
     private static final int STICKER_RGB = 0xFAFAFA;
 
     // The AprilTag cluster: SDK 12 member offsets in inches along the sticker, tag size and where the row sits.
@@ -91,45 +102,106 @@ final class HiveModel {
         return new double[] {dx * c - dz * s, y - p.y(), dx * s + dz * c};
     }
 
-    /** The audience CELL has sign +1 and the scoring CELL sign -1, which mirrors the arm about the pivot. */
-    private record Cuboid(double d0, double d1, double n0, double n1, double x0, double x1) {}
+    /** The slope of each half of the roof, from the eave up to the ridge. */
+    private static final double ROOF_RADIANS = Math.atan2(CEILING - EAVE, HALF_WIDTH);
+    private static final double ROOF_LENGTH = Math.hypot(HALF_WIDTH, CEILING - EAVE);
+    /** How wide each step of the gable's collision wall is. */
+    private static final double GABLE_STEP = 2.0;
 
-    private static List<Cuboid> collisionCuboids() {
+
+    private static List<ShapePart> collisionCuboids(int sign) {
         double w = HALF_WIDTH + WALL;
-        return List.of(
-                new Cuboid(BACK - WALL, FRONT, FLOOR - WALL, FLOOR, -w, w),
-                new Cuboid(BACK - WALL, BACK, FLOOR - WALL, CEILING + WALL, -w, w),
-                new Cuboid(BACK, FRONT, FLOOR, CEILING, -w, -HALF_WIDTH),
-                new Cuboid(BACK, FRONT, FLOOR, CEILING, HALF_WIDTH, w),
-                new Cuboid(BACK - WALL, FRONT, CEILING, CEILING + WALL, -w, w));
+        List<ShapePart> parts = new ArrayList<>();
+        parts.add(box(sign, BACK - WALL, FRONT, FLOOR - WALL, FLOOR, -w, w));
+        parts.add(box(sign, BACK - WALL, BACK, FLOOR - WALL, EAVE, -w, w));
+        parts.add(box(sign, BACK, FRONT, FLOOR, EAVE, -w, -HALF_WIDTH));
+        parts.add(box(sign, BACK, FRONT, FLOOR, EAVE, HALF_WIDTH, w));
+        // The gable of the back wall, in steps that stay just clear of the roof's outer face
+        for (int side : new int[] {-1, 1}) {
+            for (double a = 0; a < HALF_WIDTH; a += GABLE_STEP) {
+                double top = roofInches(a);
+                double y0 = Math.min(side * a, side * (a + GABLE_STEP));
+                double y1 = Math.max(side * a, side * (a + GABLE_STEP));
+                parts.add(box(sign, BACK - WALL, BACK, EAVE, top, y0, y1));
+            }
+        }
+        for (int side : new int[] {-1, 1}) {
+            parts.add(roofSlab(sign, side, BACK - WALL, FRONT, 0, WALL, WALL));
+        }
+        return parts;
     }
 
     /** The solids both CELLS collide with, in the HIVE frame. */
     static List<ShapePart> collisionParts() {
         List<ShapePart> parts = new ArrayList<>();
         for (int sign : new int[] {1, -1}) {
-            for (Cuboid c : collisionCuboids()) {
-                parts.add(new ShapePart.Box(
-                        new Vector3(sign * in(c.d0() + c.d1()) / 2, in(c.x0() + c.x1()) / 2, in(c.n0() + c.n1()) / 2),
-                        new Vector3(in(c.d1() - c.d0()) / 2, in(c.x1() - c.x0()) / 2, in(c.n1() - c.n0()) / 2)));
-            }
+            parts.addAll(collisionCuboids(sign));
         }
         return parts;
     }
 
-    /** How the HIVE looks, in the HIVE frame: clear skins left open so that the pieces inside stay visible. */
+    private static ShapePart box(int sign, double d0, double d1, double n0, double n1, double x0, double x1) {
+        return new ShapePart.Box(
+                new Vector3(sign * in(d0 + d1) / 2, in(x0 + x1) / 2, in(n0 + n1) / 2),
+                new Vector3(in(d1 - d0) / 2, in(x1 - x0) / 2, in(n1 - n0) / 2));
+    }
+
+    /**
+     * One half of the roof as a collision slab lying along its slope, from {@code inner} to {@code outer} inches outside
+     * the inner face and {@code extend} longer at both ends.
+     */
+    private static ShapePart roofSlab(int sign, int side, double d0, double d1, double inner, double outer, double extend) {
+        double[] c = roofCenter(side, inner, outer);
+        return new ShapePart.Box(
+                new Vector3(sign * in(d0 + d1) / 2, in(c[0]), in(c[1])),
+                new Vector3(in(d1 - d0) / 2, in(ROOF_LENGTH + 2 * extend) / 2, in(outer - inner) / 2),
+                Vector3.X, -side * ROOF_RADIANS);
+    }
+
+    /** The y and n, in inches, of the middle of a roof slab between two offsets from the inner face. */
+    private static double[] roofCenter(int side, double inner, double outer) {
+        double offset = (inner + outer) / 2;
+        return new double[] {
+                side * (HALF_WIDTH / 2 + offset * Math.sin(ROOF_RADIANS)),
+                (EAVE + CEILING) / 2 + offset * Math.cos(ROOF_RADIANS)};
+    }
+
+    private static FieldPart roofPart(
+            int sign, int side, double d0, double d1, double inner, double outer, double extend, int rgb, float alpha) {
+        double[] c = roofCenter(side, inner, outer);
+        return new FieldPart(
+                new Shape.Box(in(d1 - d0) / 2, in(ROOF_LENGTH + 2 * extend) / 2, in(outer - inner) / 2),
+                Pose3.turned(sign * in(d0 + d1) / 2, in(c[0]), in(c[1]), 1, 0, 0, -side * ROOF_RADIANS),
+                rgb, alpha);
+    }
+
+    /**
+     * How the HIVE looks, in the HIVE frame: a house-shaped CELL, whose floor, sides, gabled back and two roof slopes
+     * are clear skins with only the entry open.
+     */
     static List<FieldPart> visualParts(int ribRgb) {
         List<FieldPart> parts = new ArrayList<>();
         for (int sign : new int[] {1, -1}) {
-            parts.add(visual(sign, BACK - 0.06, BACK, FLOOR, CEILING, -HALF_WIDTH, HALF_WIDTH, SKIN_RGB));
-            parts.add(visual(sign, BACK, FRONT, FLOOR - 0.06, FLOOR, -HALF_WIDTH, HALF_WIDTH, SKIN_RGB));
-            parts.add(visual(sign, 11.52, 16.52, STICKER_N - 0.03, STICKER_N, -8.5, 8.5, STICKER_RGB));
+            parts.add(skin(sign, BACK - SKIN, BACK, FLOOR - SKIN, EAVE, -HALF_WIDTH - SKIN, HALF_WIDTH + SKIN));
+            // The gable above the eave is one triangular skin
+            parts.add(new FieldPart(
+                    new Shape.Wedge(in(SKIN) / 2, in(HALF_WIDTH), in(CEILING - EAVE) / 2),
+                    Pose3.at(sign * in(BACK - SKIN / 2), 0, in((EAVE + CEILING) / 2)), SKIN_RGB, SKIN_ALPHA));
+            parts.add(skin(sign, BACK, FRONT, FLOOR - SKIN, FLOOR, -HALF_WIDTH, HALF_WIDTH));
+            parts.add(skin(sign, BACK, FRONT, FLOOR, EAVE, -HALF_WIDTH - SKIN, -HALF_WIDTH));
+            parts.add(skin(sign, BACK, FRONT, FLOOR, EAVE, HALF_WIDTH, HALF_WIDTH + SKIN));
+            for (int side : new int[] {-1, 1}) {
+                parts.add(roofPart(sign, side, BACK, FRONT, 0, SKIN, SKIN, SKIN_RGB, SKIN_ALPHA));
+            }
+            parts.add(visual(sign, 11.52, 16.52, STICKER_N, FLOOR - SKIN, -8.5, 8.5, STICKER_RGB));
             for (double d : new double[] {BACK, FRONT - 2.0}) {
                 double d1 = d + 2.0;
-                parts.add(visual(sign, d, d1, FLOOR - 1.5, FLOOR, -HALF_WIDTH - 0.5, HALF_WIDTH + 0.5, ribRgb));
-                parts.add(visual(sign, d, d1, CEILING, CEILING + 0.6, -HALF_WIDTH - 0.5, HALF_WIDTH + 0.5, ribRgb));
-                parts.add(visual(sign, d, d1, FLOOR, CEILING, -HALF_WIDTH - 0.5, -HALF_WIDTH, ribRgb));
-                parts.add(visual(sign, d, d1, FLOOR, CEILING, HALF_WIDTH, HALF_WIDTH + 0.5, ribRgb));
+                parts.add(visual(sign, d, d1, FLOOR - 1.5, FLOOR - SKIN, -HALF_WIDTH - 0.5, HALF_WIDTH + 0.5, ribRgb));
+                parts.add(visual(sign, d, d1, FLOOR, EAVE, -HALF_WIDTH - 0.5, -HALF_WIDTH - SKIN, ribRgb));
+                parts.add(visual(sign, d, d1, FLOOR, EAVE, HALF_WIDTH + SKIN, HALF_WIDTH + 0.5, ribRgb));
+                for (int side : new int[] {-1, 1}) {
+                    parts.add(roofPart(sign, side, d, d1, SKIN, 0.6, 0.5, ribRgb, 1f));
+                }
             }
             parts.add(visual(sign, BACK - 4.7, FRONT, -2.71, -1.71, -0.5, 0.5, ribRgb));
         }
@@ -137,10 +209,19 @@ final class HiveModel {
     }
 
     private static FieldPart visual(int sign, double d0, double d1, double n0, double n1, double x0, double x1, int rgb) {
+        return visual(sign, d0, d1, n0, n1, x0, x1, rgb, 1f);
+    }
+
+    private static FieldPart skin(int sign, double d0, double d1, double n0, double n1, double x0, double x1) {
+        return visual(sign, d0, d1, n0, n1, x0, x1, SKIN_RGB, SKIN_ALPHA);
+    }
+
+    private static FieldPart visual(
+            int sign, double d0, double d1, double n0, double n1, double x0, double x1, int rgb, float alpha) {
         return new FieldPart(
                 new Shape.Box(in(d1 - d0) / 2, in(x1 - x0) / 2, in(n1 - n0) / 2),
                 Pose3.at(sign * in(d0 + d1) / 2, in(x0 + x1) / 2, in(n0 + n1) / 2),
-                rgb);
+                rgb, alpha);
     }
 
     /** The HIVE as a pivoting body, resting on the stop that leaves the given CELL facing up. */

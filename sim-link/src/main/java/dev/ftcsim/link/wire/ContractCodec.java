@@ -50,7 +50,7 @@ final class ContractCodec {
     private static final int GAMEPAD_FLAGS = 15;
     private static final int POSE_BYTES = 7 * 8;
     private static final int STRING_BYTES = 4;
-    private static final int PART_BYTES = 1 + 8 + POSE_BYTES + 4;
+    private static final int PART_BYTES = 1 + 8 + POSE_BYTES + 4 + 4;
 
     private ContractCodec() {}
 
@@ -361,9 +361,16 @@ final class ContractCodec {
                 w.doubleBits(cylinder.radius());
                 w.doubleBits(cylinder.halfHeight());
             }
+            case Shape.Wedge wedge -> {
+                w.unsignedByte(3);
+                w.doubleBits(wedge.halfX());
+                w.doubleBits(wedge.halfY());
+                w.doubleBits(wedge.halfZ());
+            }
         }
         writePose(w, part.local());
         w.integer(part.rgb());
+        w.floatBits(part.alpha());
     }
 
     private static FieldPart readPart(WireReader r) throws WireException {
@@ -373,10 +380,11 @@ final class ContractCodec {
                     case 0 -> new Shape.Box(r.doubleBits(), r.doubleBits(), r.doubleBits());
                     case 1 -> new Shape.Sphere(r.doubleBits());
                     case 2 -> new Shape.Cylinder(r.doubleBits(), r.doubleBits());
+                    case 3 -> new Shape.Wedge(r.doubleBits(), r.doubleBits(), r.doubleBits());
                     default -> throw new WireException("unknown shape code " + tag);
                 };
         Pose3 local = readPose(r);
-        return new FieldPart(shape, local, r.integer());
+        return new FieldPart(shape, local, r.integer(), r.floatBits());
     }
 
     private static void writePose(WireWriter w, Pose3 pose) {

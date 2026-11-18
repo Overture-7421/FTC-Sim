@@ -73,6 +73,8 @@
  *
  * Fields of records are written in declaration order. A kind that this version does not know, a payload that ends
  * early and a payload with bytes left over are all errors.
+ * A field part carries its shape, local pose, sRGB colour (32 bits) and opacity (float, 0 to 1); opacity affects
+ * presentation only, not the colour seen by sensors.
  *
  * <h2>Versions</h2>
  *
@@ -92,6 +94,8 @@
  *   <li>9: the turret parts end with the positional servos of the hood, the stopper and the colibri arms (a count, then a
  *       role, a name, a model and a mirrored flag each)
  *   <li>10: each mapped motor ends with its gear ratio (64 bits), and the mapping carries the drive ratio, after the drive motor
+ *   <li>11: every field part ends with its opacity (float), after its colour
+ *   <li>12: a field part's shape may also be a wedge (code 3: a triangular prism, three half extents)
  * </ul>
  */
 package dev.ftcsim.link.wire;

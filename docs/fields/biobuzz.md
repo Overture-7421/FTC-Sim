@@ -35,7 +35,7 @@ and the vision model works from that body's live pose.
 | FLOWER pipes, posts | four pipes of radius 0.525 in at (+-1.725, +-1.725) in, 4.25 to 21.25 in; two posts; V-shaped backstop bar above the top ring; wall bracket ring | CAD |
 | FLOWER scoring volume | between the middle and top ring, 3.86 to 20.25 in, 2.44 in round the axis, "at least partially within" | CM 10.5.2, CAD ref. 10-4 |
 | Frame | two A-frames 38.94 in deep, joined by a bar, a panel on each side; pivot axes 43.95 in above the tiles, 12.74 in either side of the centre line | CM 9.6.1, CAD |
-| HIVE | arm turning about an axis along Y, +-30 degrees; CELL interior 12.02 in deep (9.44 to 21.46 in from the pivot), 13.96 in high, 20 in wide | CM 9.6.2, CAD |
+| HIVE | arm turning about an axis along Y, +-30 degrees; house-shaped CELL interior 12.02 in deep (9.44 to 21.46 in from the pivot), 13.96 in high at the ridge, 7.61 in at the eave, 20 in wide | CM 9.6.2, figures 9-7 and 9-11, CAD |
 | Tags | 3.25 in; four per CELL at 2.75 and 6.5 in either side of the middle, on the outside of the CELL floor, 7.19 in behind the CELL front | SDK 12, CM figure 9-15 |
 | LOADING ZONES | red x -46.60 to -23.91 in, y from the wall to -59.10 in; blue the mirror image | CAD tape |
 | GARDENS | red x 68.10 to 70.10 in, y -70.10 to -47.41 in (against the +X wall); blue the mirror image | CAD tape |
@@ -55,6 +55,11 @@ The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of
   position; the CELL that goes down spills through its opening onto the floor and the other end rises with its tags. A TIP is
   counted once, when the arm enters the damper zone on the other side (the manual's "damper begins to contact the frame"); the
   ordered list is `BiobuzzRun.tips()`.
+  Each CELL is house-shaped, as in figure 9-7 of the manual: upright sides up to an eave 7.61 in above the floor (figure 9-11), then
+  two roof slopes rising to the 12.50 in ridge, with a gabled back wall (the old model was a rectangular box). The eave The skins are translucent (back and gable, floor, sides, both roof slopes); only the
+  entry is open. The gable skin is one triangular prism (`Shape.Wedge`); the roof is solid for collisions and the collision gable wall is stepped, as colliders are boxes; a piece inside the CELL counts only while
+  it is under the roof line. The coloured ribs outline the house outside the skins rather than sharing their exposed planes,
+  and the white tag backings sit behind the tag planes, avoiding Z-fighting. The tag poses and the load calibration are unchanged.
 - **Calibration.** The checklist wants 7 POLLEN not to tip and 8 to tip; 3 NECTAR with 2 POLLEN not to tip and 3 to tip. Both
   hold if a NECTAR weighs about 5/3 of a POLLEN (AndyMark weights: 1.65). The centre of mass height was swept until all eight
   loads of `HiveTest` came out as the checklist says, set down gently or tossed in at 1.5 m/s, for both HIVES. The window is
@@ -90,10 +95,12 @@ The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of
 
   A piece counts in one place only, in the order CELL, FLOWER, GARDEN. In PRACTICE everything is read live. The score is the
   robot's alliance's.
-- **Humans.** `load-nectar` and `load-opponent-nectar` drop one NECTAR into the LOADING ZONE: once per TIP of that colour of
-  HIVE (G426.A), freely with 60 s or less left (G426.B), always for a NECTAR that left the field; five NECTAR per colour.
-  `return-pollen` puts the POLLEN that has been outside longest back in at the wall where it left. NECTAR that leaves the field
-  goes back to its human; POLLEN waits for the staff. NECTAR enters the game only through these actions, never into a robot.
+- **Humans and returns.** BIOBUZZ offers no manual field-action buttons; the viewport keeps **Details**. POLLEN that leaves
+  the field automatically returns on the same step, just inside the wall or corner where it left, with no outward velocity.
+  NECTAR that leaves the field goes back to its human's reserve, not automatically into play. The field-level `load-nectar`
+  and `load-opponent-nectar` operations still model entry through the LOADING ZONE: once per TIP of that colour of HIVE
+  (G426.A), freely with 60 s or less left (G426.B), always for a NECTAR that left the field; five NECTAR per colour at setup.
+  These operations are not exposed by the window. NECTAR is never handed directly to a robot.
 - **Seed.** Moves FLOWER stacks by up to 0.06 in and GARDEN and LOADING ZONE balls by up to 0.08 in.
 - **Start poses.** Six, as G304 asks: on the robot's own half, touching its own wall, facing the field, outside the LOADING ZONE
   and clear of every FLOWER and piece: red x = 46, 0 and -58 in at 9.2 in from the wall; blue the half turn. LEAVE and PARK use
@@ -104,6 +111,7 @@ The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of
 Not from a source:
 - HIVE: mass 1.5 kg, inertia 0.27 kg m^2 about the pivot, centre of mass height 58.5 mm (calibrated), bearing friction
   0.004 N m, damper 2.0 N m s/rad over 6 degrees, CELL friction 0.35 and bounce 0.1.
+- HIVE visual skins: 0.03 in thick, 25% opaque. Physics still uses the outward-thickened walls described above.
 - Balls: friction 0.5, bounce 0.3, rolling resistance 0.06, spin damping 0.05/s.
 - Surfaces: floor friction 0.8, walls 0.4, FLOWER and frame 0.35, no bounce.
 

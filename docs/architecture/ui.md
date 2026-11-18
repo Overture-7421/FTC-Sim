@@ -126,6 +126,10 @@ The window never blocks on any of them.
 The render thread draws into an offscreen framebuffer, reads it back and Compose shows it as a bitmap, so menus, dialogs and snackbars overlap it ([viewport-measurements.md](viewport-measurements.md) says why not a native canvas). The renderer is described in the Javadoc of `ui.render` and `ui.viewport`.
 
 - The loop interpolates one snapshot interval behind the newest and draws only when something changed, so a world at rest costs no render time.
+- Field parts keep their RGB colour and opacity separately. Translucent panels are depth-tested and blended back to front
+  after opaque geometry and shadows, without writing depth or casting opaque shadows; pieces stay visible through them.
+- Besides boxes, cylinders and spheres, a field part may be a wedge (`Shape.Wedge`, a triangular prism with a unit mesh
+  scaled by its half extents), used for the BIOBUZZ CELL gable.
 - A pacer is used by one thread only: a changed frame cap puts a new pacer in place that the render thread takes before its next frame.
 - The viewport is shown only while the Simulator is composed. On leaving, `ViewportEngine.setShown(false)` stops drawing, releases held keys and tells the controllers' gate; on return `ShownFrame` already holds the last picture, so it is never blank.
 

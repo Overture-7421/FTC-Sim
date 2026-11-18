@@ -52,6 +52,7 @@ public final class SceneModel {
     public enum Mesh {
         BOX,
         CYLINDER,
+        WEDGE,
         SPHERE_COARSE,
         SPHERE_MEDIUM,
         SPHERE_FINE
@@ -60,6 +61,7 @@ public final class SceneModel {
     /**
      * One solid: where its centre is and how it is turned, its half extents along its own axes, and its colour.
      *
+     * @param alpha opacity, independent of the colour a sensor reads
      * @param floor whether it is the field's floor, which is drawn with the seams between its tiles
      */
     public record Part(
@@ -67,7 +69,7 @@ public final class SceneModel {
             float x, float y, float z,
             float qx, float qy, float qz, float qw,
             float halfX, float halfY, float halfZ,
-            float red, float green, float blue,
+            float red, float green, float blue, float alpha,
             boolean floor) {
 
         /** Writes the pose of this part when its parent sits at the pose found at {@code offset} of {@code parent}. */
@@ -288,7 +290,7 @@ public final class SceneModel {
         float launcherZ = top + 2f * ring + launcher;
         return new Part[] {
             new Part(Mesh.CYLINDER, 0f, 0f, ringZ, 0f, 0f, 0f, 1f, TURRET_RING_RADIUS, TURRET_RING_RADIUS, ring,
-                    red(TURRET_RING_RGB), green(TURRET_RING_RGB), blue(TURRET_RING_RGB), false),
+                    red(TURRET_RING_RGB), green(TURRET_RING_RGB), blue(TURRET_RING_RGB), 1f, false),
             box(0.02f, 0f, launcherZ, 0.12f, 0.075f, launcher, bodyRgb),
             box(0.14f, 0f, launcherZ, 0.01f, 0.06f, launcher * 0.6f, ROBOT_FRONT_RGB),
             box(0.0f, -0.09f, launcherZ + launcher + 0.02f, 0.03f, 0.02f, 0.02f, LIMELIGHT_RGB),
@@ -296,7 +298,7 @@ public final class SceneModel {
     }
 
     private static Part box(float x, float y, float z, float halfX, float halfY, float halfZ, int rgb) {
-        return new Part(Mesh.BOX, x, y, z, 0f, 0f, 0f, 1f, halfX, halfY, halfZ, red(rgb), green(rgb), blue(rgb), false);
+        return new Part(Mesh.BOX, x, y, z, 0f, 0f, 0f, 1f, halfX, halfY, halfZ, red(rgb), green(rgb), blue(rgb), 1f, false);
     }
 
     /** The layers of a tag lying on the XY plane of its own frame, facing along +Z. */
@@ -321,7 +323,7 @@ public final class SceneModel {
     private static Part asFloor(Part part) {
         return new Part(
                 part.mesh(), part.x(), part.y(), part.z(), part.qx(), part.qy(), part.qz(), part.qw(),
-                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), true);
+                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), part.alpha(), true);
     }
 
     private static Part partOf(FieldPart part) {
@@ -343,15 +345,23 @@ public final class SceneModel {
             case Shape.Box shape -> new Part(
                     Mesh.BOX, (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
             case Shape.Sphere shape -> new Part(
                     sphereMesh((float) shape.radius()), (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.radius(), (float) shape.radius(), (float) shape.radius(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.radius(), (float) shape.radius(), (float) shape.radius(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
+            case Shape.Wedge shape -> new Part(
+                    Mesh.WEDGE, (float) local.x(), (float) local.y(), (float) local.z(),
+                    qx / length, qy / length, qz / length, qw / length,
+                    (float) shape.halfX(), (float) shape.halfY(), (float) shape.halfZ(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
             case Shape.Cylinder shape -> new Part(
                     Mesh.CYLINDER, (float) local.x(), (float) local.y(), (float) local.z(),
                     qx / length, qy / length, qz / length, qw / length,
-                    (float) shape.radius(), (float) shape.radius(), (float) shape.halfHeight(), red(rgb), green(rgb), blue(rgb), false);
+                    (float) shape.radius(), (float) shape.radius(), (float) shape.halfHeight(),
+                    red(rgb), green(rgb), blue(rgb), part.alpha(), false);
         };
     }
 
@@ -379,7 +389,8 @@ public final class SceneModel {
     private static Part withPose(Part part, float[] pose) {
         return new Part(
                 part.mesh(), pose[0], pose[1], pose[2], pose[3], pose[4], pose[5], pose[6],
-                part.halfX(), part.halfY(), part.halfZ(), part.red(), part.green(), part.blue(), part.floor());
+                part.halfX(), part.halfY(), part.halfZ(),
+                part.red(), part.green(), part.blue(), part.alpha(), part.floor());
     }
 
     private static float red(int rgb) {

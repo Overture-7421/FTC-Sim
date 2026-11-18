@@ -9,9 +9,11 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.field.BodyKind;
 import dev.ftcsim.contracts.field.FieldDescription;
+import dev.ftcsim.contracts.field.FieldPart;
 import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.field.MatchPhase;
 import dev.ftcsim.contracts.field.Pose3;
+import dev.ftcsim.contracts.field.Shape;
 import dev.ftcsim.contracts.field.StartPose;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
@@ -19,8 +21,10 @@ import dev.ftcsim.contracts.world.Vec3;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.physics.MecanumChassis;
 import dev.ftcsim.physics.MecanumConfig;
+import dev.ftcsim.physics.ShapePart;
 import dev.ftcsim.physics.Vector3;
 import dev.ftcsim.physics.WheelPosition;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -43,8 +47,7 @@ class FieldTest {
     private static long piecesAnywhere(Arena arena) {
         long inReserve = arena.run.piecesInReserve(BiobuzzIds.KIND_POLLEN)
                 + arena.run.piecesInReserve(BiobuzzIds.KIND_NECTAR_RED)
-                + arena.run.piecesInReserve(BiobuzzIds.KIND_NECTAR_BLUE)
-                + arena.run.pollenOutsideField();
+                + arena.run.piecesInReserve(BiobuzzIds.KIND_NECTAR_BLUE);
         return piecesInWorld(arena) + inReserve;
     }
 
@@ -85,6 +88,146 @@ class FieldTest {
         Set<Integer> hosts = new HashSet<>();
         description.tags().stream().filter(t -> t.id() >= firstTag && t.id() <= lastTag).forEach(t -> hosts.add(t.hostEntityId()));
         return hosts;
+    }
+
+    @Test
+    void hiveCellsHaveTranslucentSkinsOnEveryClosedFace() {
+        List<FieldPart> skins = HiveModel.visualParts(FieldGeometry.RED_RGB).stream()
+                .filter(part -> part.alpha() > 0f && part.alpha() < 1f).toList();
+        double middleD = in((HiveModel.BACK + HiveModel.FRONT) / 2);
+        for (int sign : new int[] {1, -1}) {
+            List<double[]> faces = new ArrayList<>();
+            faces.add(new double[] {sign * middleD, 0, in(HiveModel.FLOOR)});
+            for (double lateral : new double[] {-1, 1}) {
+                faces.add(new double[] {sign * middleD, lateral * in(HiveModel.HALF_WIDTH), in(HiveModel.EAVE / 2)});
+            }
+            // Roof and gable: a skin just outside the inside of the house outline at several widths
+            for (double a = -9.5; a <= 9.5; a += 1.9) {
+                faces.add(new double[] {sign * middleD, in(a), in(HiveModel.roofInches(a) + 0.01)});
+                faces.add(new double[] {sign * in(HiveModel.BACK - 0.01), in(a), in(HiveModel.roofInches(a) - 0.7)});
+            }
+            for (double[] face : faces) {
+                assertTrue(skins.stream().anyMatch(part -> touches(part, face)),
+                        "every closed CELL face has a visible translucent skin: " + Arrays.toString(face));
+            }
+            assertFalse(skins.stream().anyMatch(part ->
+                    touches(part, new double[] {sign * in(HiveModel.FRONT), 0, in(HiveModel.EAVE / 2)})),
+                    "the entry stays open");
+        }
+    }
+
+    @Test
+    void hiveCellsAreHouseShapedNotBoxes() {
+        // Above the eave, the corners of the old rectangle are free of both skins and solid walls.
+        double lateral = in(HiveModel.HALF_WIDTH - 0.5);
+        double n = in((HiveModel.EAVE + HiveModel.CEILING) / 2 + 1.5);
+        double d = in((HiveModel.BACK + HiveModel.FRONT) / 2);
+        for (FieldPart part : HiveModel.visualParts(FieldGeometry.RED_RGB)) {
+            assertFalse(touches(part, new double[] {d, lateral, n}), "the roof corner is empty space");
+            assertFalse(touches(part, new double[] {d, -lateral, n}), "the roof corner is empty space");
+        }
+        for (ShapePart part : HiveModel.collisionParts()) {
+            assertFalse(solidContains(part, new double[] {d, lateral, n}), "the roof corner is empty space");
+            assertFalse(solidContains(part, new double[] {d, -lateral, n}), "the roof corner is empty space");
+        }
+        assertTrue(HiveModel.roofInches(HiveModel.HALF_WIDTH) < HiveModel.roofInches(0.0), "the ridge is in the middle");
+        assertEquals(HiveModel.CEILING, HiveModel.roofInches(0.0), 1e-12);
+    }
+
+    @Test
+    void aPieceDroppedOnTheRoofRollsOffAndNeverEntersTheCell() {
+        try (Arena arena = new Arena(1, Alliance.RED)) {
+            // Over the red HIVE's audience CELL, between the ridge and the eave.
+            double lateral = 5.0;
+            int id = arena.spawn(BiobuzzIds.KIND_POLLEN, HiveModel.toField(true, -HiveModel.STOP_RADIANS,
+                    in(15.0), in(lateral), in(HiveModel.roofInches(lateral) + 3.0)), dev.ftcsim.physics.Vector3.ZERO);
+            for (int i = 0; i < 600; i++) {
+                arena.steps(1);
+                double angle = Assessment.hiveAngle(arena.body(BiobuzzIds.HIVE_RED));
+                BodyState piece = arena.body(id);
+                double[] local = HiveModel.toHive(true, angle, piece.x(), piece.y(), piece.z());
+                boolean inside = local[0] > in(HiveModel.BACK) && local[0] < in(HiveModel.FRONT)
+                        && Math.abs(local[1]) < in(HiveModel.HALF_WIDTH) && local[2] < in(HiveModel.roofInches(local[1] / 0.0254) - 0.1)
+                        && local[2] > in(HiveModel.FLOOR);
+                assertFalse(inside, "the roof is solid: piece at " + Arrays.toString(local));
+            }
+        }
+    }
+
+    /** Whether a point of the HIVE frame is within a visual box, which may be turned about the HIVE's X axis. */
+    private static boolean touches(FieldPart part, double[] point) {
+        Pose3 pose = part.local();
+        if (part.shape() instanceof Shape.Wedge wedge) {
+            double t = (point[2] - pose.z() + wedge.halfZ()) / (2 * wedge.halfZ());
+            return Math.abs(point[0] - pose.x()) <= wedge.halfX() + 1e-8 && t >= -1e-8 && t <= 1 + 1e-8
+                    && Math.abs(point[1] - pose.y()) <= wedge.halfY() * (1 - t) + 1e-8;
+        }
+        Shape.Box box = (Shape.Box) part.shape();
+        double angle = 2 * Math.atan2(pose.qx(), pose.qw());
+        return insideTurned(point, new double[] {pose.x(), pose.y(), pose.z()},
+                new double[] {box.halfX(), box.halfY(), box.halfZ()}, angle);
+    }
+
+    private static boolean solidContains(ShapePart part, double[] point) {
+        ShapePart.Box box = (ShapePart.Box) part;
+        return insideTurned(point, new double[] {box.center().x(), box.center().y(), box.center().z()},
+                new double[] {box.halfExtents().x(), box.halfExtents().y(), box.halfExtents().z()}, box.angleRadians());
+    }
+
+    private static boolean insideTurned(double[] point, double[] center, double[] half, double angleAboutX) {
+        double dy = point[1] - center[1];
+        double dz = point[2] - center[2];
+        double c = Math.cos(angleAboutX);
+        double s = Math.sin(angleAboutX);
+        double y = dy * c + dz * s;
+        double z = -dy * s + dz * c;
+        return Math.abs(point[0] - center[0]) <= half[0] + 1e-8 && Math.abs(y) <= half[1] + 1e-8
+                && Math.abs(z) <= half[2] + 1e-8;
+    }
+
+    @Test
+    void hiveFloorSkinsDoNotShareExposedTopFacesWithTheColouredRibs() {
+        List<FieldPart> parts = HiveModel.visualParts(FieldGeometry.RED_RGB);
+        for (FieldPart skin : parts) {
+            if (!(skin.shape() instanceof Shape.Box skinBox)) {
+                continue;
+            }
+            if (skin.rgb() != 0xCFD8DC || skinBox.halfZ() > in(0.1) || skin.local().qx() != 0.0) {
+                continue;
+            }
+            for (FieldPart rib : parts) {
+                if (!(rib.shape() instanceof Shape.Box ribBox)) {
+                    continue;
+                }
+                if (rib.rgb() == FieldGeometry.RED_RGB && rib.local().qx() == 0.0) {
+                    boolean overlapX = Math.abs(skin.local().x() - rib.local().x())
+                            < skinBox.halfX() + ribBox.halfX() - 1e-8;
+                    boolean overlapY = Math.abs(skin.local().y() - rib.local().y())
+                            < skinBox.halfY() + ribBox.halfY() - 1e-8;
+                    boolean sameTop = Math.abs(skin.local().z() + skinBox.halfZ()
+                            - rib.local().z() - ribBox.halfZ()) < 1e-8;
+                    assertFalse(overlapX && overlapY && sameTop, "the skin and rib must not fight for the same pixels");
+                }
+            }
+        }
+    }
+
+    @Test
+    void hiveTagBackingsSitBehindTheTagsRatherThanIntersectingThem() {
+        List<FieldPart> backings = HiveModel.visualParts(FieldGeometry.RED_RGB).stream()
+                .filter(part -> part.rgb() == 0xFAFAFA).toList();
+        for (boolean audience : new boolean[] {false, true}) {
+            for (FieldTag tag : HiveModel.tags(BiobuzzIds.HIVE_RED, audience ? 34 : 30, audience)) {
+                FieldPart backing = backings.stream()
+                        .filter(part -> Math.signum(part.local().x()) == Math.signum(tag.local().x()))
+                        .findFirst().orElseThrow();
+                Shape.Box box = (Shape.Box) backing.shape();
+                assertTrue(backing.local().z() - box.halfZ() >= tag.local().z() - 1e-8,
+                        "the white backing must be behind the outward-facing tag, not through its black back face");
+                assertTrue(backing.local().z() + box.halfZ() > tag.local().z() + 1e-5,
+                        "the backing hides the tag's back face from inside the CELL");
+            }
+        }
     }
 
     @Test

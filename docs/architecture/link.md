@@ -26,7 +26,9 @@ Why a separate process: [decisions.md](decisions.md) section 6. Tests serve the 
 Hand-written, big-endian, no serialisation framework, deterministic (floats and doubles travel as IEEE bits, so a `WorldSnapshot` comes back bit for bit).
 
 - Every length is checked against a bound before anything is allocated. Unknown content, a message that ends early or has bytes left over is an error, never skipped.
-- **The current version is 10** (`Protocol.VERSION`). It changes whenever a message gains, loses or reorders a field. The format and the version list are in the package description of `dev.ftcsim.link.wire`.
+- **The current version is 12** (`Protocol.VERSION`). Field parts carry opacity after their RGB colour (it affects drawing,
+  not sensors) and a shape may be a wedge, a triangular prism for gables. The version changes whenever a message gains, loses or reorders a field. The format and the version list are
+  in the package description of `dev.ftcsim.link.wire`.
 - The worker never reads `ftcsim.json`: it builds the robot with `RobotDesign.forField(request.field()).spec(request.mapping())` from the mapping `Open` carries.
 - The worker tees `System.out`, `System.err` (`LineCapture`) and the SDK's log calls into a `WorkerLog` sink that sends them in order as `Log` events (a `Log` is never dropped for a newer one); the window shows them as its console. The worker does not log what it sends, so a failing connection cannot feed itself.
 

@@ -3,11 +3,14 @@ package dev.ftcsim.game.biobuzz;
 import static dev.ftcsim.game.biobuzz.Solids.in;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.field.MatchPhase;
 import dev.ftcsim.contracts.field.Score;
+import dev.ftcsim.contracts.snapshot.BodyState;
+import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.physics.Vector3;
@@ -289,7 +292,7 @@ class RulesTest {
     }
 
     @Test
-    void aPieceThatLeavesTheFieldIsReturnedByTheStaffOrItsHumanAndNothingIsLost() {
+    void escapedPollenReturnsAutomaticallyWhileEscapedNectarGoesBackToItsHuman() {
         try (Arena arena = new Arena(5, Alliance.RED)) {
             arena.run.enterPhase(MatchPhase.AUTONOMOUS, 0);
             long pollenBefore = piecesOfKind(arena, POLLEN);
@@ -297,17 +300,50 @@ class RulesTest {
             arena.spawn(NECTAR_RED, new Vector3(0.5, -1.5, 0.3), new Vector3(0, -5.0, 3.0));
             arena.steps(2 * STEPS_PER_SECOND);
 
-            assertEquals(pollenBefore, piecesOfKind(arena, POLLEN), "the POLLEN is gone from the world");
-            assertEquals(1, arena.run.pollenOutsideField());
+            assertEquals(pollenBefore + 1, piecesOfKind(arena, POLLEN), "the POLLEN returned without a human action");
             assertEquals(6, arena.run.piecesInReserve(NECTAR_RED), "the NECTAR went back to its humans, who now hold six");
 
             arena.run.perform(BiobuzzField.LOAD_NECTAR);
             assertEquals(4, piecesOfKind(arena, NECTAR_RED), "a NECTAR that left the field may be entered again whatever the tips");
-            arena.run.perform(BiobuzzField.RETURN_POLLEN);
-            assertEquals(pollenBefore + 1, piecesOfKind(arena, POLLEN));
-            assertEquals(0, arena.run.pollenOutsideField());
-            arena.run.perform(BiobuzzField.RETURN_POLLEN);
-            assertEquals(pollenBefore + 1, piecesOfKind(arena, POLLEN), "there is nothing more to return");
+        }
+    }
+
+    @Test
+    void escapedPollenReturnsAtTheSameWallOrCornerWithoutLosingOrDuplicatingPieces() {
+        double inside = FieldGeometry.HALF_M - 0.20;
+        double[][] exits = {
+                {2, 0.45, 0.5, inside, 0.45},
+                {-2, -0.45, 0.5, -inside, -0.45},
+                {0.45, 2, 0.5, 0.45, inside},
+                {-0.45, -2, 0.5, -0.45, -inside},
+                {2, -2, 0.5, inside, -inside},
+                {0.6, 0.5, -0.3, 0.6, 0.5}
+        };
+        for (MatchPhase phase : MatchPhase.values()) {
+            try (Arena arena = new Arena(5, Alliance.RED)) {
+                arena.run.enterPhase(phase, 0);
+                long before = piecesOfKind(arena, POLLEN);
+                int[] ids = new int[exits.length];
+                for (int i = 0; i < exits.length; i++) {
+                    double[] exit = exits[i];
+                    ids[i] = arena.spawn(POLLEN, new Vector3(exit[0], exit[1], exit[2]), Vector3.ZERO);
+                }
+                arena.steps(1);
+                for (int i = 0; i < exits.length; i++) {
+                    BodyState returned = arena.body(ids[i]);
+                    assertNotNull(returned, phase + ": POLLEN " + ids[i] + " returns automatically");
+                    assertEquals(POLLEN, returned.kind());
+                    assertEquals(exits[i][3], returned.x(), 1e-5, "returns on the same side in X");
+                    assertEquals(exits[i][4], returned.y(), 1e-5, "returns on the same side in Y");
+                    assertEquals(0.25, returned.z(), 1e-5, "drops safely inside the wall");
+                    BodyPose pose = arena.world.bodyPose(ids[i]);
+                    assertEquals(0, pose.vx(), 1e-5);
+                    assertEquals(0, pose.vy(), 1e-5);
+                    assertEquals(0, pose.vz(), 1e-5);
+                }
+                arena.steps(2 * STEPS_PER_SECOND);
+                assertEquals(before + exits.length, piecesOfKind(arena, POLLEN), "each escaped piece returns exactly once");
+            }
         }
     }
 }

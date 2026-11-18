@@ -98,8 +98,9 @@ class WorkerProcessTest {
             for (FieldChoice game : catalogue.fields().subList(1, 3)) {
                 assertFalse(game.displayName().isBlank(), game.id());
                 assertFalse(game.startPoses().isEmpty(), game.id() + " offers start poses");
-                assertFalse(game.humanActions().isEmpty(), game.id() + " offers human actions");
             }
+            assertFalse(catalogue.fields().get(1).humanActions().isEmpty(), "DECODE offers human actions");
+            assertTrue(catalogue.fields().get(2).humanActions().isEmpty(), "BIOBUZZ needs no human-action buttons");
             assertFalse(catalogue.motors().isEmpty(), "the motors a mapping may name");
 
             // A request that cannot be met is a failure the UI can read, and the worker goes on.

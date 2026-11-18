@@ -1,5 +1,6 @@
 package dev.ftcsim.ui.render;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -174,6 +175,59 @@ class FieldRendererTest {
             }
         }
         return count;
+    }
+
+    private int[] paneOverBall(float alpha, boolean moving) {
+        FieldPart pane = new FieldPart(new Shape.Box(0.5, 0.5, 0.005), Pose3.IDENTITY, 0xCFD8DC, alpha);
+        FieldDescription base = field(List.of(), true);
+        List<Scenery> scenery = new ArrayList<>(base.scenery());
+        List<BodyKind> kinds = new ArrayList<>(base.bodyKinds());
+        List<BodyState> bodies = new ArrayList<>(List.of(ball(1, 0, 0, 0.3)));
+        if (moving) {
+            kinds.add(new BodyKind(8, "pane", List.of(pane)));
+            bodies.add(new BodyState(2, 8, 0, 0, 0.8f, 0, 0, 0, 1));
+        } else {
+            scenery.add(new Scenery("pane", pane, Pose3.at(0, 0, 0.8)));
+        }
+        return top(new FieldDescription("t", "T", scenery, kinds, List.of(), List.of(), List.of()), bodies);
+    }
+
+    @Test
+    void fixedAndMovingTranslucentPanelsRemainVisibleWithoutHidingThePiecesBehindThem() {
+        for (boolean moving : new boolean[] {false, true}) {
+            int[] bare = paneOverBall(0f, moving);
+            int[] glass = paneOverBall(0.3f, moving);
+            int[] opaque = paneOverBall(1f, moving);
+            int checked = 0;
+            for (int i = 0; i < bare.length; i++) {
+                if (((bare[i] >> 16) & 0xFF) > 100 && (bare[i] & 0xFF) > 100
+                        && ((bare[i] >> 8) & 0xFF) < 70) {
+                    for (int shift : new int[] {0, 8, 16}) {
+                        int before = (bare[i] >> shift) & 0xFF;
+                        int solid = (opaque[i] >> shift) & 0xFF;
+                        int blended = (glass[i] >> shift) & 0xFF;
+                        assertEquals(before * 0.7 + solid * 0.3, blended, 3,
+                                "the panel tints the piece rather than hiding it");
+                    }
+                    checked++;
+                }
+            }
+            assertTrue(checked > 10, "the piece remains visible behind the " + (moving ? "moving" : "fixed") + " panel");
+        }
+    }
+
+    @Test
+    void overlappingTranslucentPanelsAreBlendedBackToFrontRegardlessOfDescriptionOrder() {
+        FieldPart red = new FieldPart(new Shape.Box(0.5, 0.5, 0.005), Pose3.IDENTITY, 0xFF2020, 0.4f);
+        FieldPart blue = new FieldPart(new Shape.Box(0.5, 0.5, 0.005), Pose3.IDENTITY, 0x2020FF, 0.4f);
+        Scenery near = new Scenery("near", red, Pose3.at(0, 0, 1.0));
+        Scenery far = new Scenery("far", blue, Pose3.at(0, 0, 0.5));
+        int[] first = top(new FieldDescription(
+                "t", "T", List.of(floor(), near, far), List.of(), List.of(), List.of(), List.of()), List.of());
+        int[] reversed = top(new FieldDescription(
+                "t", "T", List.of(floor(), far, near), List.of(), List.of(), List.of(), List.of()), List.of());
+
+        assertArrayEquals(first, reversed, "camera depth, not field description order, determines blending");
     }
 
     @Test

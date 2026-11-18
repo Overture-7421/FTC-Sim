@@ -81,6 +81,27 @@ class MeshesTest {
         }
     }
 
+    @Test
+    void wedgeIsATriangularPrismWhoseTrianglesFaceOutward() {
+        Meshes.Mesh wedge = Meshes.wedge();
+        assertWellFormed(wedge);
+        assertEquals(24, wedge.indices().length);
+        float[] data = wedge.vertices();
+        for (int v = 0; v < wedge.vertexCount(); v++) {
+            float[] p = position(data, v);
+            assertTrue(Math.abs(p[0]) == 1f && p[2] >= -1f && p[2] <= 1f && Math.abs(p[1]) <= 1f - (p[2] + 1f) / 2f + 1e-6f,
+                    "vertex " + v + " is off the prism");
+        }
+        int[] indices = wedge.indices();
+        for (int i = 0; i < indices.length; i += 3) {
+            float[] a = position(data, indices[i]);
+            float[] normal = cross(sub(position(data, indices[i + 1]), a), sub(position(data, indices[i + 2]), a));
+            float[] stored = normalOf(data, indices[i]);
+            float dot = normal[0] * stored[0] + normal[1] * stored[1] + normal[2] * stored[2];
+            assertTrue(dot > 0f, "triangle " + i / 3 + " winds against its normal");
+        }
+    }
+
     private static float[] position(float[] data, int vertex) {
         int base = vertex * Meshes.VERTEX_FLOATS;
         return new float[] {data[base], data[base + 1], data[base + 2]};

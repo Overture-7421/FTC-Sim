@@ -16,6 +16,9 @@ Last full run (2026-11-17): `gradlew check` without the Hornet properties ran ab
 | Pictures | `desktop-ui` (`PracticeSmokeTest`), `acceptance-tests` (`RealFieldViewportTest`, `ViewportShots`) | The screens and fields look right: PNGs under `build\screens` | OpenGL 3.3, else skipped |
 
 `gradlew check` runs every layer except Hornet and the SDK releases other than the default 11.1.0. Hornet tests are **skipped, not failed**, without their properties: read the skipped count before you claim anything about Hornet.
+Hornet acceptance and import tests and the full SDK fixture matrix are **opt-in only**, not a routine iteration or
+handover requirement. Run them only when explicitly requested; keep Hornet properties and `-PftcSdk` unset for normal
+validation on the default SDK.
 
 ## The acceptance suite
 
@@ -24,7 +27,8 @@ Last full run (2026-11-17): `gradlew check` without the Hornet properties ran ab
 - **One JVM per test class** (`forkEvery = 1`, 2 GB): the SDK keeps singletons and library threads outlive a session.
 - **Slicing.** A session test runs one scenario with different slicings of simulated time and asserts the same readings, or an outcome within a tolerance (a time, a pose). That is how a hole in virtual time shows. No world hashes: runs need not repeat bit for bit.
 - **Below the SDK**, the `sim-core` kernel tests, `ForeignThreadHubTest` and `UnscheduledBusTest` (a library thread talks to the hubs and moves no simulated time) cover the same ground; the `robot-runtime` rule tests scan the JDK so a new member that reads the clock or reaches the network cannot go unnoticed.
-- **Per SDK.** `-PftcSdk=<version>` changes only the SDK jars the robot world loads. A feature the SDK sees (a device, a hook) must pass on every release of the matrix before it is done.
+- **Per SDK (optional).** `-PftcSdk=<version>` changes only the SDK jars the robot world loads. Use it for explicitly
+  requested compatibility checks; the full matrix is not required for routine changes.
 - **Two processes** (`@Tag("two-process")`): `WorkerProcessTest`, `RealHostSessionTest`, `RealHostProjectTest`, `RealHostHornetTest` and `app`'s `RealHostWorkerTest` start the real worker through the real launcher and assert no process is left behind; `DistributionEndToEndTest` starts the distribution through `FTC-Sim.cmd`. `-Pftcsim.runtime=<runtime folder>` runs the test JVMs, and so the workers, on a Java runtime such as `app\build\dist\FTC-Sim\runtime`; use it with `--tests "*RealHost*Hornet*"`, because other tests need a JDK's compiler or tools.
 - `ProjectMappingsAcceptanceTest` checks the stored mapping against the fixed robot and real sessions, with no checkout. `HornetMapping` is the Hornet mapping the session-opening tests share.
 - `BiobuzzStubSessionTest` runs the whole BIOBUZZ robot (drive, Pinpoint, Limelight on the turret, servo turret, OctoQuad encoders) with the stub program ([biobuzz-stub](robots/biobuzz-stub.md)); it is also the end-to-end check of the servo, OctoQuad and camera-on-turret code. A turret test must compare while the turret is still: telemetry lags by its interval. `RobotModelRenderTest` (`desktop-ui`, OpenGL 3.3) draws the CAD robot from several views into `build\screens`, checks that the turret, colibri arms, hood and wheels change the picture and times a frame.
