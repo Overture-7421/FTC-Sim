@@ -143,7 +143,7 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
         telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f", turretDegrees));
         telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.2f stopper=%s flywheels=%.0f intake=%s indexer=%s",
                 command.hoodPosition, command.stopperOpen ? "open" : "shut", flywheelTicks, intaking ? "on" : "off",
-                indexerPower > BiobuzzHardware.STAGING_POWER ? "feeding" : indexerPower > 0.0 ? "staging" : "off"));
+                command.indexerPower > 0.0 ? "feeding" : indexerPower > 0.0 ? "staging" : "off"));
         if (seen) {
             StringBuilder ids = new StringBuilder();
             for (FiducialResult tag : result.getFiducialResults()) {

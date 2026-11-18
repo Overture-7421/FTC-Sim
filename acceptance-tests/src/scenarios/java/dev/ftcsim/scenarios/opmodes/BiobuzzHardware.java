@@ -38,9 +38,14 @@ public final class BiobuzzHardware {
     public static final double INTAKE_POWER = 1.0;
     public static final double STAGING_POWER = 0.6;
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
-    /** Servo positions: the stopper shut and open (past the 60 degrees at which it lets a ball by, no further, so it is quick), the colibri arms down and up. */
-    public static final double STOPPER_SHUT = 0.0;
-    public static final double STOPPER_OPEN = 0.3;
+    /**
+     * Servo positions: the stopper shut and open, the colibri arms down and up. The stopper's servo (270 degrees a second) is the
+     * slowest thing between the button and the shot, so it travels as little as it can: it lets a ball by from 60 degrees of servo, so
+     * shut is 45 degrees (0.15) and open is 75 (0.25), which is 0.11 s of travel; these are the simulated stopper's, and a real
+     * stopper's two positions are wherever it holds and releases the balls.
+     */
+    public static final double STOPPER_SHUT = 0.15;
+    public static final double STOPPER_OPEN = 0.25;
     public static final double COLIBRI_DOWN = 0.0;
     public static final double COLIBRI_UP = 0.4;
 

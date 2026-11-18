@@ -65,18 +65,25 @@ public final class BiobuzzHoldShooter {
     static final double STILL_TURN_DEGREES_PER_SECOND = 15.0;
     /** The hood's servo (five turns, about 250 degrees a second) takes this long for a whole range, and a little more to settle. */
     static final double HOOD_SECONDS_PER_POSITION = 1800.0 / 250.0;
-    static final double HOOD_SETTLE_MARGIN_SECONDS = 0.3;
+    static final double HOOD_SETTLE_MARGIN_SECONDS = 0.15;
     /** A hood that is only a little off stays where it is: the estimate wanders a little, and every move costs the servo its time. */
     static final double HOOD_DEADBAND = 0.02;
     /** The stopper's servo takes this long to open. */
-    public static final double STOPPER_OPEN_SECONDS = 0.35;
+    public static final double STOPPER_OPEN_SECONDS = 0.15;
     /** Ready has to hold this long before the stopper opens. */
     static final double READY_HOLD_SECONDS = 0.05;
-    /** The indexer's power to feed a shot. */
+    /**
+     * The indexer's power to feed a shot. It starts at {@link #FEED_POWER} for {@link #FEED_KICK_SECONDS}, which takes the first ball up
+     * to the flywheels at once, and then goes on at {@link #FEED_SUSTAINED_POWER}: at full power the four balls leave 20 ms apart, so close
+     * that they fly in a line, touch in the air and in the CELL, and the last falls short, and the flywheels have no time to recover
+     * between them; slowly, they leave about a tenth of a second apart.
+     */
     public static final double FEED_POWER = 1.0;
+    static final double FEED_KICK_SECONDS = 0.06;
+    public static final double FEED_SUSTAINED_POWER = 0.1;
     /** The shot is worked out again when the robot has moved this far, or this often. */
-    static final double RESOLVE_DISTANCE_M = 0.02;
-    static final double RESOLVE_SECONDS = 0.5;
+    static final double RESOLVE_DISTANCE_M = 0.01;
+    static final double RESOLVE_SECONDS = 0.2;
 
     private final BiobuzzHive.Alliance alliance;
     private State state = State.IDLE;
@@ -217,7 +224,7 @@ public final class BiobuzzHoldShooter {
         }
         boolean open = now - stopperOpenedAt >= STOPPER_OPEN_SECONDS;
         if (open && ready) {
-            command.indexerPower = FEED_POWER;
+            command.indexerPower = fedSeconds < FEED_KICK_SECONDS ? FEED_POWER : FEED_SUSTAINED_POWER;
             fedSeconds += dt;
         }
         status = String.format(Locale.ROOT, "feeding %.1f s%s: %s", fedSeconds, ready ? "" : " (paused until ready)", detail);

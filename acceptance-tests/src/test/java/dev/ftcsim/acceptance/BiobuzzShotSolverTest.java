@@ -124,6 +124,18 @@ class BiobuzzShotSolverTest {
     }
 
     @Test
+    void theHoodGoesToTheNearestAngleThatWorksNotToTheMiddleOfThemSoItTravelsAsLittleAsItCan() {
+        Solution near = red(1.0, -0.8);
+        Solution middle = BiobuzzShotSolver.solve(facingRedHive(1.7, -1.0), Alliance.RED, Tilt.AUDIENCE_UP, Double.NaN);
+        Solution nearest = BiobuzzShotSolver.solve(facingRedHive(1.7, -1.0), Alliance.RED, Tilt.AUDIENCE_UP, near.hoodPosition);
+        assertTrue(middle.feasible && nearest.feasible);
+        assertTrue(Math.abs(nearest.elevationDegrees - near.elevationDegrees) < Math.abs(middle.elevationDegrees - near.elevationDegrees) - 1.0,
+                "from " + near.elevationDegrees + " degrees it goes to " + nearest.elevationDegrees + ", not the middle " + middle.elevationDegrees);
+        // And it is still an angle that works with a degree to spare, so the shot goes in.
+        assertTrue(missDistance(facingRedHive(1.7, -1.0), nearest) < 0.03, "a miss of " + missDistance(facingRedHive(1.7, -1.0), nearest));
+    }
+
+    @Test
     void theTurretsBearingIsTheDirectionOfTheMouthFromItsAxisWhateverTheRobotsHeading() {
         for (double heading : new double[] {0.0, 1.0, 2.5, -2.0}) {
             Pose pose = new Pose(1.4, -1.0, heading);

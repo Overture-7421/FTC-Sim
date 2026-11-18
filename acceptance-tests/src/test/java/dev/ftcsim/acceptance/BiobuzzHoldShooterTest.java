@@ -102,7 +102,11 @@ class BiobuzzHoldShooterTest {
         }
         assertTrue(fed > 0.0, shooter.status());
         assertTrue(command.stopperOpen);
-        assertEquals(BiobuzzHoldShooter.FEED_POWER, command.indexerPower, 0.0);
+        assertEquals(BiobuzzHoldShooter.FEED_POWER, command.indexerPower, 0.0, "a kick first, to take the first ball up to the flywheels");
+        for (int i = 0; i < 10; i++) {
+            command = step(true);
+        }
+        assertEquals(BiobuzzHoldShooter.FEED_SUSTAINED_POWER, command.indexerPower, 0.0, "then slowly, so that the balls leave apart");
         assertEquals(State.FEEDING, shooter.state());
     }
 
@@ -137,7 +141,7 @@ class BiobuzzHoldShooterTest {
         for (int i = 0; i < 60; i++) {
             command = step(true);
         }
-        assertEquals(BiobuzzHoldShooter.FEED_POWER, command.indexerPower, 0.0, shooter.status());
+        assertEquals(BiobuzzHoldShooter.FEED_SUSTAINED_POWER, command.indexerPower, 0.0, shooter.status());
         double fed = shooter.fedSeconds();
         assertTrue(fed > 0.4);
 
@@ -152,7 +156,7 @@ class BiobuzzHoldShooterTest {
         speed = 0.5;
         assertEquals(0.0, step(true).indexerPower, 0.0, "nor does it feed while the robot is being driven");
         speed = 0.0;
-        assertEquals(BiobuzzHoldShooter.FEED_POWER, step(true).indexerPower, 0.0);
+        assertEquals(BiobuzzHoldShooter.FEED_SUSTAINED_POWER, step(true).indexerPower, 0.0);
     }
 
     @Test

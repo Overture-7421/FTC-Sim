@@ -147,6 +147,44 @@ class BiobuzzAllianceSessionTest {
     }
 
     @Test
+    void theFourBallsLeaveApartAndEveryOneGoesIntoTheCellBecauseTheFeedIsSlowAfterTheFirst() throws IOException {
+        try (TestSessions.Handle handle = open(Alliance.RED, 1.4, -1.0, 0.0)) {
+            SimulationSession session = handle.session;
+            initAndStart(session, Alliance.RED);
+            session.runFor(SECOND * 8);
+            session.setGamepad(1, pad(false, true));
+            double[] aim = dev.ftcsim.scenarios.opmodes.BiobuzzHive.upCell(
+                    dev.ftcsim.scenarios.opmodes.BiobuzzHive.Alliance.RED, dev.ftcsim.scenarios.opmodes.BiobuzzHive.Tilt.AUDIENCE_UP).aimPoint();
+            java.util.Map<Integer, BodyState> before = new java.util.HashMap<>();
+            java.util.Map<Integer, double[]> flights = new java.util.LinkedHashMap<>();
+            for (int i = 0; i < 240 * 4; i++) {
+                session.runFor(SECOND / 240);
+                for (BodyState body : session.snapshot().bodies()) {
+                    BodyState last = before.put(body.entityId(), body);
+                    if (last == null || body.kind() != BiobuzzIds.KIND_POLLEN) {
+                        continue;
+                    }
+                    double step = Math.hypot(Math.hypot(body.x() - last.x(), body.y() - last.y()), body.z() - last.z());
+                    if (step > 0.018 && step < 0.05 && body.z() > 0.3 && !flights.containsKey(body.entityId())) {
+                        flights.put(body.entityId(), new double[] {i / 240.0, 1e9});
+                    }
+                    double[] flight = flights.get(body.entityId());
+                    if (flight != null) {
+                        flight[1] = Math.min(flight[1], Math.sqrt(Math.pow(body.x() - aim[0], 2) + Math.pow(body.y() - aim[1], 2) + Math.pow(body.z() - aim[2], 2)));
+                    }
+                }
+            }
+            assertEquals(4, flights.size(), "all four left");
+            double previous = -1.0;
+            for (double[] flight : flights.values()) {
+                assertTrue(previous < 0.0 || flight[0] - previous > 0.03, "the balls leave apart, not in a line: " + flight[0] + " after " + previous);
+                assertTrue(flight[1] < 0.1, "every ball, the last too, goes through the CELL's mouth: " + flight[1] + " m from its middle");
+                previous = flight[0];
+            }
+        }
+    }
+
+    @Test
     void theBallLeavesFromBetweenTheWheelsAndTheHoodWhereTheHoodSetsItNotFromTheLimelight() throws IOException {
         for (double[] place : new double[][] {{1.0, -0.8}, {1.7, -1.0}}) {
             try (TestSessions.Handle handle = open(Alliance.RED, place[0], place[1], 0.0)) {

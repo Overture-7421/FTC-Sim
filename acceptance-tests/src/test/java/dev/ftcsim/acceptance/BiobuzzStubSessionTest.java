@@ -227,7 +227,7 @@ class BiobuzzStubSessionTest {
             }
 
             assertEquals(1.0, joint(session, RobotJoint.HOOD), 0.2, "the hood stands at the bottom of its range, 1 degree");
-            assertEquals(0.0, joint(session, RobotJoint.STOPPER), 0.5, "the stopper is shut");
+            assertEquals(45.0, joint(session, RobotJoint.STOPPER), 0.5, "the stopper is shut (below the 60 degrees at which it lets a ball by)");
             assertEquals(0.0, joint(session, RobotJoint.COLIBRI_LEFT), 0.5);
             double wheel = joint(session, RobotJoint.WHEEL_FRONT_LEFT);
 
@@ -256,7 +256,7 @@ class BiobuzzStubSessionTest {
             session.setGamepad(1, pad(0f, 0f, false, false, true, true));
             session.runFor(SECOND);
             note(session, atRest, moved);
-            assertEquals(90.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.3, a third of 300 degrees: past the 60 at which it lets a ball by");
+            assertEquals(75.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.25, a quarter of 300 degrees: past the 60 at which it lets a ball by");
             assertEquals(0.4 * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
             assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
 

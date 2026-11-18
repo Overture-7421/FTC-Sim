@@ -115,8 +115,6 @@ public final class BiobuzzShotSolver {
     static final double HEADING_ERROR_DEGREES = 1.5;
     static final double SPEED_ERROR = 0.03;
     static final double ELEVATION_ERROR_DEGREES = 0.7;
-    /** A new launch angle replaces the old one only if the old one has left the working range or is this far from the best. */
-    static final double KEEP_ELEVATION_DEGREES = 5.0;
     /** The ball is a POLLEN: 1.40 in in radius. */
     private static final double BALL_RADIUS_M = 1.40 * BiobuzzHive.INCH;
     private static final double GRAVITY = 9.81;
@@ -183,13 +181,28 @@ public final class BiobuzzShotSolver {
         }
         double elevation = bestStart + 0.5 * (bestLength - 1);
         if (!Double.isNaN(previousHood)) {
+            // The hood's servo is the slowest thing in the robot (about 0.12 s a degree of hood), so the hood goes to the nearest angle
+            // that works with a degree to spare on either side, not to the middle of the working angles: it moves as little as it has to,
+            // and stays where it is for as long as where it is still works.
             double previous = ELEVATION_BASE_DEGREES + previousHood * HOOD_DEGREES_PER_POSITION;
+            boolean[] robust = new boolean[high + 1];
+            for (int e = low; e <= high; e++) {
+                robust[e] = works[e] && (e == low || works[e - 1]) && (e == high || works[e + 1]);
+            }
             int below = (int) Math.floor(previous);
             int above = (int) Math.ceil(previous);
-            boolean stillWorks = below >= low && above <= high && works[below] && works[above]
-                    && Math.abs(previous - elevation) <= KEEP_ELEVATION_DEGREES;
-            if (stillWorks) {
+            if (below >= low && above <= high && robust[below] && robust[above]) {
                 elevation = previous;
+            } else {
+                double nearest = Double.NaN;
+                for (int e = low; e <= high; e++) {
+                    if (robust[e] && (Double.isNaN(nearest) || Math.abs(e - previous) < Math.abs(nearest - previous))) {
+                        nearest = e;
+                    }
+                }
+                if (!Double.isNaN(nearest)) {
+                    elevation = nearest;
+                }
             }
         }
         double theta = Math.toRadians(elevation);
