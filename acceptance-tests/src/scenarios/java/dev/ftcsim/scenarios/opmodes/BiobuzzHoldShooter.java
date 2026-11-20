@@ -66,8 +66,8 @@ public final class BiobuzzHoldShooter {
     /** The hood's servo (five turns, about 250 degrees a second) takes this long for a whole range, and a little more to settle. */
     static final double HOOD_SECONDS_PER_POSITION = 1800.0 / 250.0;
     static final double HOOD_SETTLE_MARGIN_SECONDS = 0.15;
-    /** A hood that is only a little off stays where it is: the estimate wanders a little, and every move costs the servo its time. */
-    static final double HOOD_DEADBAND = 0.02;
+    /** A hood that is only a little off stays where it is (in degrees of hood: a position is 355 of them): every move costs the servo its time. */
+    static final double HOOD_DEADBAND = 0.5 / BiobuzzShotSolver.HOOD_DEGREES_PER_POSITION;
     /** The stopper's servo takes this long to open. */
     public static final double STOPPER_OPEN_SECONDS = 0.15;
     /** Ready has to hold this long before the stopper opens. */
