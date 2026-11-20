@@ -41,8 +41,8 @@ public final class BiobuzzHoldShooter {
     static final double FLYWHEEL_KP = 0.01;
     /** Where the flywheels idle when there is nothing at all to work a speed out from (an estimate that cannot reach the CELL). */
     static final double IDLE_TICKS_PER_SECOND = 1500.0;
-    static final double AIM_GAIN = 0.03;
-    /** The turret's servo (an Axon Mini+ behind 2.75:1) turns about 184 degrees a second at full power: nothing here holds it back. */
+    static final double AIM_GAIN = 0.015;
+    /** The turret's servo (an Axon Mini+ behind 1.375:1) turns about 370 degrees a second at full power: nothing here holds it back. */
     static final double AIM_LIMIT = 1.0;
     /**
      * While the pose is not confirmed the turret sweeps this far either side of where the HIVE should be, once in this many seconds:

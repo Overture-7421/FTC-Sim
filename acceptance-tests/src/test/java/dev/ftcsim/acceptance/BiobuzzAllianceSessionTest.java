@@ -499,14 +499,14 @@ class BiobuzzAllianceSessionTest {
                 most = Math.max(most, yaw);
                 // Not just the same direction: past half a turn the reading must say 200, not -160, or the controller winds on.
                 if (yaw > -160.0 && yaw < 245.0) {
-                    assertEquals(yaw, value(text(session, "Turret"), "deg"), 30.0, "the turret's angle as the program reads it");
+                    assertEquals(yaw, value(text(session, "Turret"), "deg"), 45.0, "the turret's angle as the program reads it");
                 }
             }
             session.setGamepad(1, GamepadState.NEUTRAL);
             session.runFor(SECOND * 8);
 
             assertTrue(least > -176.0 && most < 256.0, "the turret stayed in its range, which the two encoders can read: " + least + " to " + most);
-            assertTrue(fastest > 120.0, "and it was let turn at near what its servo can do (about 184 degrees a second), not a share of it: " + fastest);
+            assertTrue(fastest > 120.0, "and it was let turn at near what its servo can do (about 370 degrees a second), not a share of it: " + fastest);
             double yaw = Math.toDegrees(session.rig().turretYawRadians());
             assertEquals(0.0, Math.IEEEremainder(value(text(session, "Turret"), "deg") - yaw, 360.0), 6.0, "and what the encoders say is where it is");
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);

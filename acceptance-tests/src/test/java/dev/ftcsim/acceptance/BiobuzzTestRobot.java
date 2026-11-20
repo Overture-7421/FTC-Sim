@@ -17,7 +17,7 @@ final class BiobuzzTestRobot {
 
     /**
      * Four wheels mounted as a team mounts a mecanum robot (its left side reversed in code), a continuous-rotation servo that turns
-     * the turret 2.75 turns to its one, the two absolute encoders on the OctoQuad's ports 0 and 1, the Limelight on the turret and the
+     * the turret 1.375 turns to its one, the two absolute encoders on the OctoQuad's ports 0 and 1, the Limelight on the turret and the
      * hood, stopper and colibri servos.
      */
     static RobotSpec spec() {
@@ -40,7 +40,7 @@ final class BiobuzzTestRobot {
                         servo(RobotMapping.ServoRole.HOOD, "hood"), servo(RobotMapping.ServoRole.STOPPER, "stopper"),
                         servo(RobotMapping.ServoRole.COLIBRI_LEFT, "colibriLeft"), servo(RobotMapping.ServoRole.COLIBRI_RIGHT, "colibriRight")));
         return RobotDesign.biobuzz().spec(new RobotMapping(
-                wheels.name(), wheels.motors(), wheels.massKg(), wheels.wheelDiameterMm(), wheels.driveMotor(), 2.75,
+                wheels.name(), wheels.motors(), wheels.massKg(), wheels.wheelDiameterMm(), wheels.driveMotor(), 1.375,
                 wheels.hubLogo(), wheels.hubUsb(), wheels.camera(), turret, wheels.driveRatio()));
     }
 
