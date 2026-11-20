@@ -17,7 +17,7 @@ public final class ServoCatalog {
     public static final String AXON_MINI_PLUS = "axon-mini-plus";
     public static final String AXON_MAX = "axon-max";
     public static final String GOBILDA_TORQUE = "gobilda-2000-torque";
-    /** The same servo with five turns of travel (1800 degrees), as the hood needs: 730 degrees of servo for its 24 degrees. */
+    /** The same servo with five turns of travel (1800 degrees), as the BIOBUZZ hood has. */
     public static final String GOBILDA_TORQUE_5_TURN = "gobilda-2000-torque-5turn";
 
     /** The usual servo of a mechanism, which moves to a position: the goBILDA Torque servo. */

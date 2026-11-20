@@ -208,7 +208,7 @@ class BiobuzzAllianceSessionTest {
                 BodyPose chassis = session.world().bodyPose(EntityIds.CHASSIS);
                 double heading = chassis.yaw() + session.rig().turretYawRadians();
                 double hood = value(text(session, "Mechanisms"), "hood");
-                double theta = Math.toRadians(45.0 + hood * 1800.0 / (730.0 / 24.0));
+                double theta = Math.toRadians(45.0 + hood * 1800.0 / (365.0 / 72.0));
                 // From the turret's axis, along the turret: the ball rides round the wheels' rim to where the hood's end lets it go, which is
                 // back over the axle for a steep launch (x 0.162 - 0.0737 sin, z 0.2146 + 0.0737 cos); not out in front of the wheels.
                 double dx = ball.x() - (chassis.x() + 0.089 * Math.cos(chassis.yaw()));
@@ -438,7 +438,7 @@ class BiobuzzAllianceSessionTest {
 
             // The hood's servo takes seconds to get anywhere.
             session.runFor(SECOND * 6);
-            assertTrue(value(text(session, "Mechanisms"), "hood") > 0.2,
+            assertTrue(value(text(session, "Mechanisms"), "hood") > 0.03,
                     "the hood is already where the shot wants it, with no button held: " + summary(session));
             assertTrue(text(session, "Shooter").startsWith("IDLE"), summary(session));
             assertTrue(value(text(session, "Mechanisms"), "flywheels") > 800 && text(session, "Mechanisms").contains("stopper=shut"),

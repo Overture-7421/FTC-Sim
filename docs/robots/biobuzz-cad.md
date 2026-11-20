@@ -28,7 +28,7 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 |---|---|---|
 | Four wheels | the chassis's wheel angles | direct; positive rolls the robot forward |
 | Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, `turret.axis` of the mapping (the CAD's is x 0.089, y 0) |
-| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 30.42 (730:24 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a 5-turn one (1800 degrees), 1338 degrees of it (position 0.74) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
+| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 5.0694 (365:72 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a 5-turn one (1800 degrees), 223 degrees of it (position 0.124) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2 |

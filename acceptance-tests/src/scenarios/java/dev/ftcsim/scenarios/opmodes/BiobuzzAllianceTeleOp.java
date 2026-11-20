@@ -141,7 +141,7 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
         telemetry.addData("Aim", shooter.aim());
         telemetry.addData("Shooter", shooter.state() + ": " + shooter.status());
         telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f", turretDegrees));
-        telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.2f stopper=%s flywheels=%.0f intake=%s indexer=%s",
+        telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.3f stopper=%s flywheels=%.0f intake=%s indexer=%s",
                 command.hoodPosition, command.stopperOpen ? "open" : "shut", flywheelTicks, intaking ? "on" : "off",
                 command.indexerPower > 0.0 ? "feeding" : indexerPower > 0.0 ? "staging" : "off"));
         if (seen) {
