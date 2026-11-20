@@ -243,10 +243,10 @@ class RobotDesignTest {
         assertEquals(ServoCatalog.GOBILDA_TORQUE, spec.servos().get("arm").model(), "the others have the usual 300 degrees");
         LaunchSpec.Hood hood = spec.launches().get(0).hood();
         assertEquals(Math.toRadians(45.0), hood.elevationRadians(0.0), 1e-9, "the servo at 0: 45 degrees");
-        assertEquals(Math.toRadians(45.0 + 730.0 / (730.0 / 24.0)), hood.elevationRadians(Math.toRadians(730.0)), 1e-9,
-                "730 degrees of servo are 24 degrees of hood: 69 degrees");
-        assertEquals(Math.toRadians(89.0), hood.elevationRadians(Math.toRadians(44.0 * 730.0 / 24.0)), 1e-9, "the stop is 44 degrees of hood: 89");
-        assertEquals(hood.elevationRadians(Math.toRadians(44.0 * 730.0 / 24.0)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
+        assertEquals(Math.toRadians(45.0 + 100.0 / RobotDesign.HOOD_RATIO), hood.elevationRadians(Math.toRadians(100.0)), 1e-9,
+                "100 degrees of servo are 19.7 degrees of hood: 64.7 degrees");
+        assertEquals(Math.toRadians(89.0), hood.elevationRadians(Math.toRadians(44.0 * RobotDesign.HOOD_RATIO)), 1e-9, "the stop is 44 degrees of hood: 89");
+        assertEquals(hood.elevationRadians(Math.toRadians(44.0 * RobotDesign.HOOD_RATIO)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
         assertEquals(Math.toRadians(44.0), spec.joints().servos().get(0).limit(), 1e-12, "and the drawn hood stops there too");
     }
 

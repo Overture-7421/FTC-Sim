@@ -75,7 +75,7 @@ public final class BiobuzzShotSolver {
             if (!feasible) {
                 return String.format(Locale.ROOT, "no shot: %s (bearing %.1f, distance %.2f m)", reason.text(), bearingDegrees, distanceMeters);
             }
-            return String.format(Locale.ROOT, "bearing %.1f distance %.2f m elevation %.0f hood %.2f flywheels %.0f margin +-%.0f deg",
+            return String.format(Locale.ROOT, "bearing %.1f distance %.2f m elevation %.0f hood %.3f flywheels %.0f margin +-%.0f deg",
                     bearingDegrees, distanceMeters, elevationDegrees, hoodPosition, flywheelTicksPerSecond, marginDegrees / 2.0);
         }
     }
@@ -101,13 +101,13 @@ public final class BiobuzzShotSolver {
     static final double MAX_SHARE_OF_TOP_SPEED = 0.95;
     /**
      * The launch angle is {@code BASE} degrees with the hood servo at 0 and rises with the servo: the servo has five turns (1800
-     * degrees) behind 730:24 gears, so a whole turn of it is 59.2 degrees of hood, and the hood's stop holds it at 44 degrees, which is
-     * position 0.74. The code keeps its commands under that.
+     * degrees) behind 365:72 gears (5.0694444), so a whole turn of it is 71 degrees of hood, and the hood's stop holds it at 44 degrees,
+     * which is position 0.12. The code keeps its commands under that.
      */
     static final double ELEVATION_BASE_DEGREES = 45.0;
     /** The lob the idle flywheel speed is worked out for: the middle of the steep lobs that work. */
     static final double NOMINAL_ELEVATION_DEGREES = 65.0;
-    static final double HOOD_DEGREES_PER_POSITION = 1800.0 / (730.0 / 24.0);
+    static final double HOOD_DEGREES_PER_POSITION = 1800.0 / (365.0 / 72.0);
     static final double HOOD_RANGE_DEGREES = 44.0;
     public static final double HOOD_MAX_POSITION = HOOD_RANGE_DEGREES / HOOD_DEGREES_PER_POSITION;
 
@@ -181,7 +181,7 @@ public final class BiobuzzShotSolver {
         }
         double elevation = bestStart + 0.5 * (bestLength - 1);
         if (!Double.isNaN(previousHood)) {
-            // The hood's servo is the slowest thing in the robot (about 0.12 s a degree of hood), so the hood goes to the nearest angle
+            // The hood's servo is the slowest thing in the robot (about 0.02 s a degree of hood), so the hood goes to the nearest angle
             // that works with a degree to spare on either side, not to the middle of the working angles: it moves as little as it has to,
             // and stays where it is for as long as where it is still works.
             double previous = ELEVATION_BASE_DEGREES + previousHood * HOOD_DEGREES_PER_POSITION;

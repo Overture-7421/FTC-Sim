@@ -143,8 +143,8 @@ public final class RobotDesign {
     /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
     public static final double COLIBRI_RATIO = 40.0 / 30.0;
 
-    /** Servo turns to one turn of the hood (the CAD's 730:24 gears). */
-    public static final double HOOD_RATIO = 730.0 / 24.0;
+    /** Servo turns to one turn of the hood (the team's table: 5.0694444, 365:72). */
+    public static final double HOOD_RATIO = 365.0 / 72.0;
 
     /** Servo turns to one turn of the stopper. */
     public static final double STOPPER_RATIO = 1.0;
@@ -158,7 +158,7 @@ public final class RobotDesign {
     /**
      * How far the hood turns from its rest to its stop: 44 degrees, which sends a piece up at 45 to 89 degrees. The CAD allows only
      * 1 to 25 degrees; the range is widened so that a CELL can be reached from near and from far, which a HIVE's open end needs
-     * steep lobs for (65 to 85 degrees from close to the HIVE, 55 degrees from far). The servo (5 turns) reaches it at position 0.74.
+     * steep lobs for (65 to 85 degrees from close to the HIVE, 55 degrees from far). The servo (5 turns) reaches it at position 0.124.
      */
     public static final double HOOD_RANGE_RADIANS = Math.toRadians(44.0);
 

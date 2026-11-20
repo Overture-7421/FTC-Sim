@@ -309,15 +309,15 @@ class MechanismsSessionTest {
     void theStopperHoldsThePieceUntilItsServoOpensAndTheHoodSetsHowSteeplyItLeaves() throws IOException {
         double[] closed = hoodShot(-1f, false);
         double[] low = hoodShot(-1f, true);
-        double[] mid = hoodShot(-0.6f, true);
+        double[] mid = hoodShot(-0.95f, true);
         double[] high = hoodShot(1f, true);
 
         assertEquals(0.0, closed[0], "the belt cannot push the piece out past a closed stopper");
         assertEquals(1.0, low[0], "and it leaves once the stopper is open");
         assertEquals(1.0, high[0]);
         assertEquals(45.0, low[1], 3.0, "the hood at its lowest, 1 degree, sends it up at 45 degrees (a little less by the time it is looked at)");
-        // The hood's servo has five turns: position 0.2 is 360 degrees of servo, 11.8 degrees of hood over the 30.4 to 1 gears.
-        assertEquals(45.0 + 360.0 / (730.0 / 24.0), mid[1], 3.0, "position 0.2 raises the hood 11.8 degrees");
+        // The hood's servo has five turns: position 0.025 is 45 degrees of servo, 8.9 degrees of hood over the 5.07 to 1 gears.
+        assertEquals(45.0 + 45.0 / RobotDesign.HOOD_RATIO, mid[1], 3.0, "position 0.025 raises the hood 8.9 degrees");
         // A piece leaving at 89 degrees has hardly any sideways speed, so by the time it is looked at (up to 10 ms later) gravity has taken
         // it a long way down in angle: it reads over 70, which the old 24 degree stop (69 at launch) cannot. RobotDesignTest has the exact 89.
         assertTrue(high[1] > 70.0 && high[1] > mid[1] + 10.0, "the servo's travel is more than the hood's: its stop holds it, 44 degrees up: " + high[1]);

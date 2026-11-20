@@ -71,8 +71,8 @@ class BiobuzzShotSolverTest {
         assertTrue(near.elevationDegrees > middle.elevationDegrees && middle.elevationDegrees > far.elevationDegrees,
                 near.elevationDegrees + " " + middle.elevationDegrees + " " + far.elevationDegrees);
         assertTrue(near.elevationDegrees > 70.0, "a lob that comes down into a CELL that is open at the end of its arm: " + near.elevationDegrees);
-        assertEquals(45.0 + near.hoodPosition * 1800.0 / (730.0 / 24.0), near.elevationDegrees, 1e-9, "the hood servo's five turns behind the 730:24 gears");
-        assertEquals(44.0 / (1800.0 / (730.0 / 24.0)), BiobuzzShotSolver.HOOD_MAX_POSITION, 1e-12, "the hood's stop is position 0.74 of the servo");
+        assertEquals(45.0 + near.hoodPosition * 1800.0 / (365.0 / 72.0), near.elevationDegrees, 1e-9, "the hood servo's five turns behind the 365:72 gears");
+        assertEquals(44.0 / (1800.0 / (365.0 / 72.0)), BiobuzzShotSolver.HOOD_MAX_POSITION, 1e-12, "the hood's stop is position 0.12 of the servo");
     }
 
     @Test
@@ -120,7 +120,7 @@ class BiobuzzShotSolverTest {
         assertEquals(first.hoodPosition, moved.hoodPosition, 0.0, "the same position, though the best has moved a little");
         Solution far = BiobuzzShotSolver.solve(facingRedHive(1.7, -1.0), Alliance.RED, Tilt.AUDIENCE_UP, red(1.0, -0.8).hoodPosition);
         assertTrue(far.feasible);
-        assertTrue(far.hoodPosition < red(1.0, -0.8).hoodPosition - 0.1, "but one that no longer works is replaced");
+        assertTrue(far.hoodPosition < red(1.0, -0.8).hoodPosition - 0.015, "but one that no longer works is replaced");
     }
 
     @Test

@@ -62,7 +62,7 @@ From the team's table of its mechanisms (the part is the simulator's model of it
 | Shooter (2) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio `"43/30"`; a ball leaves at 0.49 of the rim speed of a 3 in wheel on BIOBUZZ's robot (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
 | Chassis (4) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; the wheels are 112 mm (BIOBUZZ's robot takes that when `wheelDiameterMm` is left at 96). Nothing here is a default: the mapping gives it |
 | Colibri arms (2) | goBILDA Torque servo | 40/30 servo to shaft | `gobilda-2000-torque`, `COLIBRI_RATIO` |
-| Hood | goBILDA Torque servo | 730/24 = 30.4167 servo to hood | `gobilda-2000-torque`, `HOOD_RATIO` |
+| Hood | goBILDA Torque servo | 365/72 = 5.0694 servo to hood | `gobilda-2000-torque`, `HOOD_RATIO` |
 | Turret | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V) |
 | Stopper | goBILDA Torque servo | 1:1 | `gobilda-2000-torque`; it holds the balls at the foot of the column while shut (below) |
 
@@ -93,11 +93,11 @@ The BIOBUZZ robot turns its turret with a continuous-rotation servo (Axon Mini+)
 
 ### Positional servos: the hood, the stopper and the colibri arms
 
-The BIOBUZZ robot has four more servos, goBILDA Torque servos that go to a position (`servo.setPosition`). Each is mapped by its name under `turret` (`hood`, `stopper`, `colibriLeft`, `colibriRight`, each `{ "name", "model", "mirrored" }`, model empty for `gobilda-2000-torque`, or `gobilda-2000-torque-5turn` for the hood: its 730 degrees of servo for 24 degrees of hood need the 5-turn version) and takes a Control Hub servo port after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (4.4 rad/s, so a whole 5-turn range takes 7 s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
+The BIOBUZZ robot has four more servos, goBILDA Torque servos that go to a position (`servo.setPosition`). Each is mapped by its name under `turret` (`hood`, `stopper`, `colibriLeft`, `colibriRight`, each `{ "name", "model", "mirrored" }`, model empty for `gobilda-2000-torque`, or `gobilda-2000-torque-5turn` for the hood: the BIOBUZZ hood's servo has five turns) and takes a Control Hub servo port after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (4.4 rad/s, so a whole 5-turn range takes 7 s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
 
 | Part | What it does in the simulation |
 |---|---|
-| Hood | Sets the launch elevation: 45 degrees at the servo's 0 plus the hood's angle, which is the servo's angle over 30.42 (the 730:24 gears), up to the hood's stop at **44 degrees**: 45 degrees at position 0, 89 from position 0.74 of the 5-turn servo on (`HOOD_RANGE_RADIANS`). The CAD allows only 1 to 25 degrees; the stop is widened so that a HIVE's CELL, which is open only at the end of its arm, can be reached with a steep lob from near and from far ([biobuzz-stub](biobuzz-stub.md)). Without a hood servo the launcher is at its fixed 55 degrees |
+| Hood | Sets the launch elevation: 45 degrees at the servo's 0 plus the hood's angle, which is the servo's angle over 5.0694 (365:72 gears, the team's table), up to the hood's stop at **44 degrees**: 45 degrees at position 0, 89 from position 0.124 of the 5-turn servo on (`HOOD_RANGE_RADIANS`). The CAD allows only 1 to 25 degrees; the stop is widened so that a HIVE's CELL, which is open only at the end of its arm, can be reached with a steep lob from near and from far ([biobuzz-stub](biobuzz-stub.md)). Without a hood servo the launcher is at its fixed 55 degrees |
 | Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 60 degrees (position 0.2), whatever the belt and flywheels do. Without a stopper servo nothing holds it |
 | Colibri arms | Moved in the picture only. They change nothing in the simulation |
 
