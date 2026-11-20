@@ -63,12 +63,12 @@ From the team's table of its mechanisms (the part is the simulator's model of it
 | Chassis (4) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; the wheels are 112 mm (BIOBUZZ's robot takes that when `wheelDiameterMm` is left at 96). Nothing here is a default: the mapping gives it |
 | Colibri arms (2) | goBILDA Torque servo | 40/30 servo to shaft | `gobilda-2000-torque`, `COLIBRI_RATIO` |
 | Hood | goBILDA Torque servo | 365/72 = 5.0694 servo to hood | `gobilda-2000-torque`, `HOOD_RATIO` |
-| Turret | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V) |
+| Turret | Axon Mini servo | 1.375 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V) |
 | Stopper | goBILDA Torque servo | 1:1 | `gobilda-2000-torque`; it holds the balls at the foot of the column while shut (below) |
 
 ### A turret turned by a continuous-rotation servo
 
-The BIOBUZZ robot turns its turret with a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 2.75 turns of servo to one of the turret: `"turretRatio": 2.75`. The servo is a `CRServo` in the code, found by the name `turret.servo.name`. Do not map a motor as `TURRET` as well: that is a problem.
+The BIOBUZZ robot turns its turret with a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 1.375 turns of servo to one of the turret: `"turretRatio": 1.375`. The servo is a `CRServo` in the code, found by the name `turret.servo.name`. Do not map a motor as `TURRET` as well: that is a problem.
 
 | Part | Model |
 |---|---|

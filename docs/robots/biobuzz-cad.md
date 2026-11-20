@@ -42,7 +42,7 @@ The signs of the rollers are the direction that moves pieces the way the robot t
 
 - **Odometry pods.** The forward-measuring pod's wheel rolls along the CAD's Y at x -0.0704, y 0.1997, so it sits 70.4 mm to the right of the centre of the wheels; the strafe pod's wheel rolls along X at x -0.1136, y -0.0204, 58.9 mm ahead of it. The Pinpoint takes `setOffsets(-2.772, 2.319, INCH)`, which the stub uses. The Pinpoint model is ideal and ignores offsets, so they only matter on the real robot.
 - **Turret axis.** (0, -0.0505) in the CAD, which is x 0.089 ahead of the wheels' centre.
-- **Gear ratios.** The 2.75:1 turret, the encoders' 5.5 and 44/7, and the ratios in the table above, all as the CAD and the team's table say.
+- **Gear ratios.** The 1.375:1 turret, the encoders' 5.5 and 44/7, and the ratios in the table above, all as the CAD and the team's table say.
 - **Hood limits.** 1 to 25 degrees, from the revolute mate; the simulator allows 1 to 45 degrees (see the table above), an estimate that is not the CAD's.
 
 ## The path of the pieces
