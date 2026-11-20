@@ -506,7 +506,7 @@ class BiobuzzAllianceSessionTest {
             session.runFor(SECOND * 8);
 
             assertTrue(least > -176.0 && most < 256.0, "the turret stayed in its range, which the two encoders can read: " + least + " to " + most);
-            assertTrue(fastest > 120.0, "and it was let turn at near what its servo can do (about 370 degrees a second), not a share of it: " + fastest);
+            assertTrue(fastest > 120.0, "and it was let turn at near what its servo can do (about 510 degrees a second), not a share of it: " + fastest);
             double yaw = Math.toDegrees(session.rig().turretYawRadians());
             assertEquals(0.0, Math.IEEEremainder(value(text(session, "Turret"), "deg") - yaw, 360.0), 6.0, "and what the encoders say is where it is");
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);

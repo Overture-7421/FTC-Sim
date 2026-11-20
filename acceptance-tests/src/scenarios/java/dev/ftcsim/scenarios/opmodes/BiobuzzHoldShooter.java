@@ -41,8 +41,8 @@ public final class BiobuzzHoldShooter {
     static final double FLYWHEEL_KP = 0.01;
     /** Where the flywheels idle when there is nothing at all to work a speed out from (an estimate that cannot reach the CELL). */
     static final double IDLE_TICKS_PER_SECOND = 1500.0;
-    static final double AIM_GAIN = 0.015;
-    /** The turret's servo (an Axon Mini+ behind 1.375:1) turns about 370 degrees a second at full power: nothing here holds it back. */
+    static final double AIM_GAIN = 0.011;
+    /** The turret's servo (an Axon Mini+ behind 0.99:1) turns about 510 degrees a second at full power: nothing here holds it back. */
     static final double AIM_LIMIT = 1.0;
     /**
      * While the pose is not confirmed the turret sweeps this far either side of where the HIVE should be, once in this many seconds:
@@ -66,8 +66,8 @@ public final class BiobuzzHoldShooter {
     /** The hood's servo (five turns, about 250 degrees a second) takes this long for a whole range, and a little more to settle. */
     static final double HOOD_SECONDS_PER_POSITION = 1800.0 / 250.0;
     static final double HOOD_SETTLE_MARGIN_SECONDS = 0.15;
-    /** A hood that is only a little off stays where it is: the estimate wanders a little, and every move costs the servo its time. */
-    static final double HOOD_DEADBAND = 0.02;
+    /** A hood that is only a little off stays where it is (in degrees of hood: a position is 355 of them): every move costs the servo its time. */
+    static final double HOOD_DEADBAND = 0.5 / BiobuzzShotSolver.HOOD_DEGREES_PER_POSITION;
     /** The stopper's servo takes this long to open. */
     public static final double STOPPER_OPEN_SECONDS = 0.15;
     /** Ready has to hold this long before the stopper opens. */
