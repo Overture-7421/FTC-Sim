@@ -87,7 +87,7 @@ public final class BiobuzzPoseEstimator {
     /** The camera's height above the floor (the robot's body is 0.1824 m up at its centre, the Limelight 0.256 m above that). */
     public static final double CAMERA_HEIGHT_M = 0.4384;
     /** The turret's axis; the camera turns about it with the turret. */
-    public static final double TURRET_AXIS_X = 0.089;
+    public static final double TURRET_AXIS_X = 0.045;
     public static final double TURRET_AXIS_Y = 0.0;
 
     /** The blend of a fix, as Hornet's {@code Camera} has it: tags nearer than this are "close". */

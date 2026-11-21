@@ -209,7 +209,7 @@ class MechanismsSessionTest {
     private static RobotSpec servoTurretRobot(boolean mirrored) {
         List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
         RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
-                new RobotMapping.ServoMapping("turretServo", ServoCatalog.AXON_MINI_PLUS, mirrored), List.of(), 0, 0, false, List.of());
+                new RobotMapping.ServoMapping("turretServo", ServoCatalog.AXON_MINI_PLUS, mirrored), List.of(), 0.089, 0, false, List.of());
         return RobotDesign.biobuzz().spec(rig("servo turret rig", motors, SERVO_TURRET_RATIO, parts));
     }
 

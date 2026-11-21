@@ -16,8 +16,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 /**
- * BIOBUZZ's two colour sensors on the stub program: {@code upSensor} sees the ball that waits against the stopper and
- * {@code intakeSensor} the fourth ball of the queue, so the first reads a ball whenever one has reached the stopper and
+ * BIOBUZZ's two colour sensors on the stub program: {@code upperSensor} sees the ball that waits against the stopper and
+ * {@code lowerSensor} the fourth ball of the queue, so the first reads a ball whenever one has reached the stopper and
  * the second only when the fourth place of the queue is taken. A ball is read at under 5 cm (Hornet's own test); nothing in range reads the
  * sensor's 6 inch (15.24 cm) maximum.
  */
@@ -83,8 +83,8 @@ class BiobuzzColourSensorsSessionTest {
             run(session);
 
             assertEquals("4 of 4 pieces", held(session));
-            assertTrue(up(session) < NEAR_CM, "upSensor: " + text(session, "Sensors"));
-            assertTrue(intake(session) < NEAR_CM, "intakeSensor: " + text(session, "Sensors"));
+            assertTrue(up(session) < NEAR_CM, "upperSensor: " + text(session, "Sensors"));
+            assertTrue(intake(session) < NEAR_CM, "lowerSensor: " + text(session, "Sensors"));
         }
     }
 
@@ -96,8 +96,8 @@ class BiobuzzColourSensorsSessionTest {
 
             shootDownTo(session, "0 of 4 pieces");
 
-            assertTrue(up(session) >= FAR_CM, "upSensor: " + text(session, "Sensors"));
-            assertTrue(intake(session) >= FAR_CM, "intakeSensor: " + text(session, "Sensors"));
+            assertTrue(up(session) >= FAR_CM, "upperSensor: " + text(session, "Sensors"));
+            assertTrue(intake(session) >= FAR_CM, "lowerSensor: " + text(session, "Sensors"));
         }
     }
 
@@ -110,8 +110,8 @@ class BiobuzzColourSensorsSessionTest {
             // The stopper lets the three balls ahead of it go together; the fourth, which only the intake roller moves, stays where it queued.
             shootDownTo(session, "1 of 4 pieces");
 
-            assertTrue(up(session) >= FAR_CM, "upSensor: " + text(session, "Sensors"));
-            assertTrue(intake(session) < NEAR_CM, "intakeSensor: " + text(session, "Sensors"));
+            assertTrue(up(session) >= FAR_CM, "upperSensor: " + text(session, "Sensors"));
+            assertTrue(intake(session) < NEAR_CM, "lowerSensor: " + text(session, "Sensors"));
 
             // The intake's staging run carries it up against the shut stopper.
             session.setGamepad(1, pad(true, false, false, false));
@@ -120,8 +120,8 @@ class BiobuzzColourSensorsSessionTest {
             session.runFor(SECOND);
 
             assertEquals("1 of 4 pieces", held(session));
-            assertTrue(up(session) < NEAR_CM, "upSensor: " + text(session, "Sensors"));
-            assertTrue(intake(session) >= FAR_CM, "intakeSensor: " + text(session, "Sensors"));
+            assertTrue(up(session) < NEAR_CM, "upperSensor: " + text(session, "Sensors"));
+            assertTrue(intake(session) >= FAR_CM, "lowerSensor: " + text(session, "Sensors"));
         }
     }
     @Test
@@ -130,7 +130,7 @@ class BiobuzzColourSensorsSessionTest {
             IllegalArgumentException refused =
                     assertThrows(IllegalArgumentException.class, () -> handle.session.rig().wiring().colorSensor("colorSensor"));
 
-            assertTrue(refused.getMessage().contains("upSensor") && refused.getMessage().contains("intakeSensor"), refused.getMessage());
+            assertTrue(refused.getMessage().contains("upperSensor") && refused.getMessage().contains("lowerSensor"), refused.getMessage());
         }
     }
 }

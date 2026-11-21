@@ -155,17 +155,17 @@ class BiobuzzAllianceSessionTest {
             session.setGamepad(1, pad(false, true));
             double[] aim = dev.ftcsim.scenarios.opmodes.BiobuzzHive.upCell(
                     dev.ftcsim.scenarios.opmodes.BiobuzzHive.Alliance.RED, dev.ftcsim.scenarios.opmodes.BiobuzzHive.Tilt.AUDIENCE_UP).aimPoint();
-            java.util.Map<Integer, BodyState> before = new java.util.HashMap<>();
+            var preloads = session.snapshot().bodies().stream()
+                    .filter(body -> body.kind() == BiobuzzIds.KIND_POLLEN && !session.world().hasPiece(body.entityId()))
+                    .map(BodyState::entityId).toList();
             java.util.Map<Integer, double[]> flights = new java.util.LinkedHashMap<>();
             for (int i = 0; i < 240 * 4; i++) {
                 session.runFor(SECOND / 240);
                 for (BodyState body : session.snapshot().bodies()) {
-                    BodyState last = before.put(body.entityId(), body);
-                    if (last == null || body.kind() != BiobuzzIds.KIND_POLLEN) {
+                    if (!preloads.contains(body.entityId()) || !session.world().hasPiece(body.entityId())) {
                         continue;
                     }
-                    double step = Math.hypot(Math.hypot(body.x() - last.x(), body.y() - last.y()), body.z() - last.z());
-                    if (step > 0.018 && step < 0.05 && body.z() > 0.3 && !flights.containsKey(body.entityId())) {
+                    if (!flights.containsKey(body.entityId())) {
                         flights.put(body.entityId(), new double[] {i / 240.0, 1e9});
                     }
                     double[] flight = flights.get(body.entityId());
@@ -211,18 +211,18 @@ class BiobuzzAllianceSessionTest {
                 double theta = Math.toRadians(45.0 + hood * 300.0 / (365.0 / 72.0));
                 // From the turret's axis, along the turret: the ball rides round the wheels' rim to where the hood's end lets it go, which is
                 // back over the axle for a steep launch (x 0.162 - 0.0737 sin, z 0.2146 + 0.0737 cos); not out in front of the wheels.
-                double dx = ball.x() - (chassis.x() + 0.089 * Math.cos(chassis.yaw()));
-                double dy = ball.y() - (chassis.y() + 0.089 * Math.sin(chassis.yaw()));
+                double dx = ball.x() - (chassis.x() + 0.045 * Math.cos(chassis.yaw()));
+                double dy = ball.y() - (chassis.y() + 0.045 * Math.sin(chassis.yaw()));
                 double ahead = dx * Math.cos(heading) + dy * Math.sin(heading);
                 double across = -dx * Math.sin(heading) + dy * Math.cos(heading);
-                double expectedAhead = 0.162 - 0.0737 * Math.sin(theta) - 0.089;
+                double expectedAhead = 0.162 - 0.0737 * Math.sin(theta) - 0.045;
                 double expectedHeight = 0.2146 + 0.0737 * Math.cos(theta);
                 // The ball has had up to a physics step (4 ms, about 2.5 cm of flight) since it was let go.
                 assertEquals(expectedAhead, ahead, 0.04, "ahead of the axis at " + Math.toDegrees(theta) + " degrees");
                 assertEquals(expectedHeight, ball.z() - chassis.z(), 0.04, "above the chassis' centre");
                 assertEquals(0.0, across, 0.03, "on the turret's line");
                 // The Limelight's box is on its 45 degree panel at (0.217, 0.0035, 0.256) of the robot: the ball is not there.
-                double limelightAhead = 0.217 - 0.089;
+                double limelightAhead = 0.217 - 0.045;
                 double fromLimelight = Math.hypot(ahead - limelightAhead, ball.z() - chassis.z() - 0.256);
                 assertTrue(fromLimelight > 0.08, "the ball starts " + fromLimelight + " m from the Limelight");
             }
@@ -444,8 +444,8 @@ class BiobuzzAllianceSessionTest {
             assertTrue(value(text(session, "Mechanisms"), "flywheels") > 800 && text(session, "Mechanisms").contains("stopper=shut"),
                     "the flywheels already run, with no button held: " + summary(session));
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
-            double axisX = truth.x() + 0.089 * Math.cos(truth.yaw());
-            double axisY = truth.y() + 0.089 * Math.sin(truth.yaw());
+            double axisX = truth.x() + 0.045 * Math.cos(truth.yaw());
+            double axisY = truth.y() + 0.045 * Math.sin(truth.yaw());
             double expected = Math.toDegrees(Math.atan2(-0.3236 - axisY, 0.4 - axisX) - truth.yaw());
             assertEquals(0.0, Math.IEEEremainder(Math.toDegrees(session.rig().turretYawRadians()) - expected, 360.0), 6.0,
                     "the turret faces the HIVE's CELL: " + summary(session));

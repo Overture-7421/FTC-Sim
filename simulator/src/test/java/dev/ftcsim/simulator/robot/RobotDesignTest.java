@@ -138,8 +138,8 @@ class RobotDesignTest {
 
         assertEquals(
                 List.of(
-                        new RobotSpec.ColorSensor("upSensor", 173, 2, 0.089, 0.065, 0.060, -90.0),
-                        new RobotSpec.ColorSensor("intakeSensor", 2, 0, 0.187, 0.065, -0.112, -90.0)),
+                        new RobotSpec.ColorSensor("upperSensor", 173, 2, 0.089, 0.065, 0.060, -90.0),
+                        new RobotSpec.ColorSensor("lowerSensor", 2, 0, 0.187, 0.065, -0.112, -90.0)),
                 biobuzz.colorSensors());
         assertTrue(RobotDesign.decode().spec(RobotMapping.empty("Test")).colorSensors().isEmpty());
         RobotException refused = assertThrows(
@@ -241,15 +241,15 @@ class RobotDesignTest {
         assertEquals(0.048, decode.chassis().wheelRadiusM(), 1e-9);
         assertEquals(0.0381 / (43.0 / 30.0), biobuzz.launches().get(0).wheels().get(0).radiusM(), 1e-9,
                 "a 3 in wheel behind a 43:30 belt, per radian of the motor");
-        assertEquals(new StorageSpec.Gate(4, "stopper", Math.toRadians(60.0)), biobuzz.storages().get(0).gate(),
+        assertEquals(new StorageSpec.Gate(4, "brake", Math.toRadians(60.0)), biobuzz.storages().get(0).gate(),
                 "the stopper holds the pieces at the foot of the column");
         assertNull(decode.storages().get(0).gate());
-        assertEquals(0.02 / 2.0, biobuzz.storages().get(0).drives().get(1).radiusM(), 1e-12, "the indexer's rollers turn at half the motor's speed (2:1)");
-        assertEquals(0.025 / 2.0, biobuzz.storages().get(0).drives().get(0).radiusM(), 1e-12, "and the intake's at half too");
+        assertEquals(0.02 / 2.5, biobuzz.storages().get(0).drives().get(1).radiusM(), 1e-12, "the indexer's rollers turn at the motor speed divided by 2.5");
+        assertEquals(0.025 / 2.5, biobuzz.storages().get(0).drives().get(0).radiusM(), 1e-12, "and the intake's at the same reduction");
         assertEquals(43.0 / 30.0, biobuzz.joints().flywheelRatio(), 1e-12, "and the picture turns the flywheel by it");
-        assertEquals(2.0, biobuzz.joints().conveyorRatio(), 1e-12);
-        assertEquals(2.0, biobuzz.joints().intakeRatio(), 1e-12);
-        assertEquals(List.of(Condition.atLeast("up", 20.0 * 2.0)), biobuzz.launches().get(0).active(), "the belt feeds when the indexer, not the motor, turns fast enough");
+        assertEquals(2.5, biobuzz.joints().conveyorRatio(), 1e-12);
+        assertEquals(2.5, biobuzz.joints().intakeRatio(), 1e-12);
+        assertEquals(List.of(Condition.atLeast("indexer", 20.0 * 2.5)), biobuzz.launches().get(0).active(), "the belt feeds when the indexer, not the motor, turns fast enough");
     }
 
     @Test

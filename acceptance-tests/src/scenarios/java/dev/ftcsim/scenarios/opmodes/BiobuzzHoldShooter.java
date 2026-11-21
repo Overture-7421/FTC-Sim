@@ -79,7 +79,7 @@ public final class BiobuzzHoldShooter {
      * between them; slowly, they leave about a tenth of a second apart.
      */
     public static final double FEED_POWER = 1.0;
-    static final double FEED_KICK_SECONDS = 0.06;
+    static final double FEED_KICK_SECONDS = 0.035;
     public static final double FEED_SUSTAINED_POWER = 0.1;
     /** The shot is worked out again when the robot has moved this far, or this often. */
     static final double RESOLVE_DISTANCE_M = 0.01;

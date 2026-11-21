@@ -163,7 +163,7 @@ class SessionFactoryTest {
         assertEquals(List.of("arm"), SessionFactory.robotInfo(arm).motors());
         assertEquals(0, SessionFactory.robotInfo(arm).lengthM(), "a robot that does not drive has no body to draw");
         assertEquals(
-                List.of("turretServo", "hood", "stopper", "colibriLeft", "colibriRight"),
+                List.of("turret", "hood", "brake", "colibriLeft", "colibriRight"),
                 SessionFactory.robotInfo(RobotDesign.biobuzz().spec()).servos());
     }
 }

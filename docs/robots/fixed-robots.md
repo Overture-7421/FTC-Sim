@@ -67,22 +67,22 @@ From the team's table of its mechanisms and its CAD (the part is the simulator's
 
 | Mechanism | Motor or servo | Ratio | In the simulator |
 |---|---|---|---|
-| Chassis (4: `frontLeft`, `backLeft` mirrored, `frontRight`, `backRight`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm |
-| Intake (`intake`) and indexer (`up`) | goBILDA Yellow Jacket, 6000 rpm | 2:1 | `goBILDA-bare-6000`, ratio 2 |
+| Chassis (4: `lf`, `lr` mirrored, `rf`, `rr`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm |
+| Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5 |
 | Shooter (`shooterLeft`, `shooterRight`) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio 43/30; a ball leaves at 0.49 of the rim speed of a 3 in wheel (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
-| Turret (`turretServo`) | Axon Mini servo | 1.0185 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 1.0185 |
+| Turret (`turret`) | Axon Mini servo | 1.0185 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 1.0185 |
 | Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 5 turns | 40/30 servo to shaft | `gobilda-2000-torque-5turn`, `COLIBRI_RATIO` |
 | Hood (`hood`) | goBILDA Super Speed servo, 300 degrees | 365/72 = 5.0694 servo to hood | `gobilda-2000-superspeed`, `HOOD_RATIO` |
-| Stopper (`stopper`) | goBILDA Torque servo, 5 turns | 1:1 | `gobilda-2000-torque-5turn`; it holds the balls at the foot of the column while shut (below) |
-| Turret encoders | REV Through Bore Encoders on the OctoQuad | 5.5 (port 0), 44/7 = 6.2857 (port 1) turns per turret turn | `rev-tbe-v2` |
-| Turret axis | | | x 0.089 m, y 0 (the CAD's) |
+| Stopper (`brake`) | goBILDA Torque servo, 5 turns | 1:1 | `gobilda-2000-torque-5turn`; it holds the balls at the foot of the column while shut (below) |
+| Turret encoders | REV Through Bore Encoders on the OctoQuad | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1` |
+| Turret axis | | | x 0.045 m, y 0 (team code) |
 
-**Colour sensors** (REV Color Sensor V3, two, found by name): `upSensor` before the stopper, `intakeSensor` near the intake. The sensor sees one ball position along the path ([biobuzz-cad](biobuzz-cad.md): the stopper is the gate at path point 4, and the queue is 0.0711 m apart, a POLLEN's diameter). Both are on the robot's left wall at y = +0.065 m looking right (azimuth -90 degrees), so a ball in front is 2.9 cm from the sensor's face (Hornet's is about 2.7 cm, where its code reads under 5 cm as "a ball").
+**Colour sensors** (REV Color Sensor V3, two, found by name): `upperSensor` before the stopper, `lowerSensor` near the intake. The sensor sees one ball position along the path ([biobuzz-cad](biobuzz-cad.md): the stopper is the gate at path point 4, and the queue is 0.0711 m apart, a POLLEN's diameter). Both are on the robot's left wall at y = +0.065 m looking right (azimuth -90 degrees), so a ball in front is 2.9 cm from the sensor's face (Hornet's is about 2.7 cm, where its code reads under 5 cm as "a ball").
 
 | Name | Hub and bus | Mount (robot frame, m) | Reads a ball when |
 |---|---|---|---|
-| `upSensor` | Control Hub, I2C bus 2 | (0.089, 0.065, 0.060) | a ball waits at the stopper (piece 1 of the queue) |
-| `intakeSensor` | Expansion Hub, I2C bus 0 | (0.187, 0.065, -0.112) | four balls are queued, so the robot is full (piece 4) |
+| `upperSensor` | Control Hub, I2C bus 2 | (0.089, 0.065, 0.060) | a ball waits at the stopper (piece 1 of the queue) |
+| `lowerSensor` | Expansion Hub, I2C bus 0 | (0.187, 0.065, -0.112) | four balls are queued, so the robot is full (piece 4) |
 
 At the start the four preloads wait at the stopper, so both read a ball; after four shots both read nothing. **These mounts are estimates**: the CAD has no sensors. Replace them with measured numbers when the real ones are mounted, in `RobotProfiles.biobuzz()` ([the colour sensor page](../devices/color-sensor.md)). The Control Hub's four I2C buses are taken (IMU 0, Pinpoint 1, first colour sensor 2, OctoQuad 3), which is why the second sensor is on the Expansion Hub.
 
@@ -101,7 +101,7 @@ At the start the four preloads wait at the stopper, so both read a ball; after f
 
 ### A turret turned by a continuous-rotation servo
 
-BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 1.0185 turns of servo to one of the turret. The servo is a `CRServo` in the code, found by the name `turretServo`. A turret has a motor or a servo, not both.
+BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 1.0185 turns of servo to one of the turret. The servo is a `CRServo` in the code, found by the name `turret`. A turret has a motor or a servo, not both.
 
 | Part | Model |
 |---|---|
@@ -112,7 +112,7 @@ BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Co
 
 ### Encoders and the OctoQuad
 
-BIOBUZZ's turret carries two REV Through Bore Encoders, on OctoQuad ports 0 (the 32-tooth gear's, 5.5 turns per turret turn) and 1 (the 28-tooth gear's, 44/7 = 6.285714). An encoder has a model (`rev-tbe-v2`, absolute pulse 3.884 to 998.06 microseconds, or `rev-tbe-v1`, 1 to 1024), turns of the encoder per turn of the turret, a zero offset (where it reads zero with the turret forward, in degrees of the encoder) and a mirrored flag (the real encoder's direction is not known from its datasheet, so check it on the robot). Any encoder puts an OctoQuad on the robot; code finds it by the class `OctoQuad`, under any name. Details and limits: [octoquad](../devices/octoquad.md).
+BIOBUZZ's turret carries two V1 REV Through Bore Encoders, on OctoQuad ports 5 (the 32-tooth gear's, 5.5 turns per turret turn) and 4 (the 28-tooth gear's, 44/7 = 6.285714). An encoder has a model (`rev-tbe-v2`, absolute pulse 3.884 to 998.06 microseconds, or `rev-tbe-v1`, 1 to 1024), turns of the encoder per turn of the turret, a zero offset (where it reads zero with the turret forward, in degrees of the encoder) and a mirrored flag (the real encoder's direction is not known from its datasheet, so check it on the robot). Any encoder puts an OctoQuad on the robot; code finds it by the class `OctoQuad`, under any name. Details and limits: [octoquad](../devices/octoquad.md).
 
 **Ambiguity.** An absolute encoder repeats every turn of itself, so two encoders whose ratios are not whole numbers tell the turret's angle only within one turn of the turret (the vernier the team's code computes). Past one full turn of the turret the encoders show what the real ones would, which is not the first turn's reading again. The turret has no mechanical limit in the simulator; a real one has cables.
 
