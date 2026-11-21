@@ -27,7 +27,7 @@ final class Staging {
     final List<Integer> blueNectarWithHuman = new ArrayList<>();
 
     private static final double PITCH = 2.82;
-    private static final double AGAINST_WALL = 70.52 - 1.4 - 0.02;
+    private static final double AGAINST_WALL = FieldGeometry.HALF_IN - 1.4 - 0.02;
     /** Height of a POLLEN centre when it rests on the tiles, with a hair of clearance. */
     private static final double RESTING = 1.42;
 

@@ -124,7 +124,7 @@ BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the ho
 |---|---|
 | Hood | Sets the launch elevation: 45 degrees at the servo's 0 plus the hood's angle, which is the servo's angle over 5.0694 (365:72 gears, the team's table), up to the hood's stop at **44 degrees**: 45 degrees at position 0, 89 from position 0.7435 of the Super Speed servo on (`HOOD_RANGE_RADIANS`). The CAD allows only 1 to 25 degrees; the stop is widened so that a HIVE's CELL, which is open only at the end of its arm, can be reached with a steep lob from near and from far ([biobuzz-stub](biobuzz-stub.md)). A robot with no hood servo launches at its fixed 55 degrees |
 | Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 60 degrees (position 0.0333 of its 1800 degrees), whatever the belt and flywheels do. A robot with no stopper servo has nothing holding it |
-| Colibri arms | Moved in the picture only. They change nothing in the simulation |
+| Colibri arms | A 3D-printed plate joins the two Lexan arms across their noses. Both arms and the contact surface use the same angle. When the servos disagree, the model averages their geared shaft angles as an equal-strength approximation. Raising the plate nudges the bottom POLLEN over the lip and lets the stack fall toward the intake. Intake checks for static obstructions at the centre and underside of the ball |
 
 All four are estimates where the CAD has no number ([biobuzz-cad](biobuzz-cad.md)). Verified by `PositionServoPlantTest`, `MechanismsSessionTest` (the `Hood Stopper` fixture: closed stopper holds, open releases, the hood changes the elevation by 9.9 degrees) and `BiobuzzStubSessionTest`.
 

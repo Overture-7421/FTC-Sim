@@ -8,7 +8,7 @@ How the window's picture of the BIOBUZZ robot is made from the team's Onshape CA
 |---|---|---|
 | Export | The configured Main assembly as glTF from Onshape (MasterSketch=false, coarse tessellation, 1,187 mesh instances). It is not in the repository | the team's Onshape |
 | Convert | `tools\cad\convert_biobuzz.py <robot.gltf> <biobuzz.model> [triangle budget]` leaves out fasteners and parts under a size limit, and **rebuilds the robot from simple shapes**: a cylinder, ring or box for each round or blocky part (gears, sprockets, wheels, motors, standoffs), a flat sheet with the outline and the larger holes of the CAD for each plate (extruded, so the purple lattice plates stay lattice), a lightly reduced mesh for belts and chains, and a heavily reduced one for anything else. The four drive wheels are not the CAD's: they are drawn from scratch as 112 mm by 35 mm mecanum wheels (two side discs, an axle and ten angled rollers). Lexan parts (the colibri plates and the number holders) get a translucent material. The Limelight 3A camera and mount use reduced meshes from the shooter assembly, including the camera?s separate face materials. The Stealth flywheels have 32-sided rims aligned to their axle. The converter removes internal bearings and makes the small shafts hexagonal. It splits the robot into rigid groups and writes each as 16-bit quantised positions with a colour and an opacity per chunk | `tools\cad` |
-| Ship | `biobuzz.model` (gzip, 171 KB, 29,728 triangles; the budget is 30 thousand) is a resource of `desktop-ui` | `dev\ftcsim\ui\model\biobuzz.model` |
+| Ship | `biobuzz.model` (gzip, 171 KB, 29,740 triangles; the budget is 30 thousand) is a resource of `desktop-ui` | `dev\ftcsim\ui\model\biobuzz.model` |
 | Read | `RobotModel` reads it into groups; `ModelPoser` finds where each group is from the snapshot | `dev.ftcsim.ui.model` |
 | Draw | `ModelRenderer` uploads every chunk to the GPU once and draws a group with one call per chunk (no per-frame upload), flat shaded from screen derivatives, with the same light and shadow as the rest of the scene. Opaque chunks first, with face culling off (plates are single sheets); translucent chunks after, blended, without depth writes and casting no shadow | `dev.ftcsim.ui.render` |
 
@@ -32,9 +32,11 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2.5 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2.5 |
-| Colibri arms | the left and right colibri servos | arm = servo angle / 1.333 (40:30), 225 degrees for the whole 300 degrees of servo; the CAD's pose is position 0 |
+| Colibri arms and printed plate | the left and right colibri servos | arm = servo angle / 1.333 (40:30), the CAD pose is 60 degrees above the simulated down position. A command of 0.0667 lifts the plate about 90 degrees |
 | Stopper (the goBILDA floodgate switch) | the stopper servo | 1:1 |
 | Encoder gears (32T and 28T) | the turret's yaw | 5.5 and 44/7 turns per turret turn, against the turret |
+
+The 3D-printed plate that joins the arms is missing from the Onshape assembly. The converter adds it between the CAD arm noses. Its simulated width is 424 mm, with an estimated 30 mm depth and 8 mm thickness. The matching kinematic box contacts loose pieces across the full width of the plate.
 
 The signs of the rollers are the direction that moves pieces the way the robot takes them in; the CAD cannot say which way a real motor turns, so the picture follows the motor's mapped direction.
 

@@ -28,19 +28,23 @@ and the vision model works from that body's live pose.
 
 | Item | Value | Where from |
 | --- | --- | --- |
-| Inside of the perimeter | +-70.52 in (141.04 in); walls 1.13 in thick, 11.83 in high | CAD; the manual says "approximately 144 in" |
+| Inside of the perimeter | 144 by 144 in between inner wall faces at +-72 in. Wall boxes are 1.13 in thick and 11.83 in high | Nominal playing area with simplified wall envelopes |
 | Floor | one flat slab, top at Z = 0; tile seams and under-tile strips not modelled | CAD |
-| FLOWER axes (in) | (-23.39, 68.04), (-68.04, -23.39), (68.04, 23.39), (23.39, -68.04), each in front of the nearest wall | CAD |
+| FLOWER axes (in) | (-23.39, 69.52), (-69.52, -23.39), (69.52, 23.39), (23.39, -69.52), each in front of the nearest wall | CAD, shifted with the perimeter |
 | FLOWER rings | lower ring lip 0.35 in high round a pocket of 2.79 in; middle ring seat 3.86 to 4.12 in, collar to 5.25 in; top ring 20.25 to 21.40 in, inner radius 2.0 in | CAD, CM 9.7 |
 | FLOWER pipes, posts | four pipes of radius 0.525 in at (+-1.725, +-1.725) in, 4.25 to 21.25 in; two posts; V-shaped backstop bar above the top ring; wall bracket ring | CAD |
 | FLOWER scoring volume | between the middle and top ring, 3.86 to 20.25 in, 2.44 in round the axis, "at least partially within" | CM 10.5.2, CAD ref. 10-4 |
 | Frame | two A-frames 38.94 in deep, joined by a bar, a panel on each side; pivot axes 43.95 in above the tiles, 12.74 in either side of the centre line | CM 9.6.1, CAD |
 | HIVE | arm turning about an axis along Y, +-30 degrees; house-shaped CELL interior 12.02 in deep (9.44 to 21.46 in from the pivot), 13.96 in high at the ridge, 7.61 in at the eave, 20 in wide | CM 9.6.2, figures 9-7 and 9-11, CAD |
 | Tags | 3.25 in; four per CELL at 2.75 and 6.5 in either side of the middle, on the outside of the CELL floor, 7.19 in behind the CELL front | SDK 12, CM figure 9-15 |
-| LOADING ZONES | red x -46.60 to -23.91 in, y from the wall to -59.10 in; blue the mirror image | CAD tape |
-| GARDENS | red x 68.10 to 70.10 in, y -70.10 to -47.41 in (against the +X wall); blue the mirror image | CAD tape |
+| LOADING ZONES | red x -46.60 to -23.91 in, y from the wall to -60.58 in; blue the mirror image | CAD tape, shifted with the perimeter |
+| GARDENS | red x 69.58 to 71.58 in, y -71.58 to -48.89 in (against the +X wall); blue the mirror image | CAD tape, shifted with the perimeter |
 | POLLEN | ball of radius 1.40 in (2.80 in), 0.02495 kg | CAD, am-5851 |
 | NECTAR | ball of radius 1.81 in (3.62 in), 0.04128 kg | CAD, am-5852 |
+
+The [FIRST field STEP assembly](https://ftc-resources.firstinspires.org/ftc/field/field-cad-step) (release 26-27.2) has a slightly smaller interior than the nominal field. Measuring the transformed solids in inches, the opposing inner rail faces are 141.17 in apart and the glass faces are 141.35 in apart. The simulator uses the requested 144 in clear span. The FLOWERS, tape and wall-side staging move with their walls. The centre frame and HIVES keep their field coordinates.
+
+In CAD the FLOWER axes lie 23.39 in along the wall and 68.04 in from field centre. The four starting POLLEN centres are 1.40, 4.29, 7.18 and 10.07 in above the tiles. The loading tape is 11 in deep and the garden strip is 2 by 22.69 in. The frame foot spans 38.94 in, and the HIVE bearing axes are at z = 43.95 in and y = -12.742 and +12.758 in (simulated symmetrically). With the HIVE rotated back to level, the CELL extends from 9.44 to 21.46 in along its arm and the 17 by 5 in tag backing spans 11.52 to 16.52 in. Individual printed tag identities and positions use the SDK and manual. Start presets and masses are simulation inputs.
 
 The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of 3.55 in, as the manual says). The model uses
 3.86 in so that a 3.62 in NECTAR cannot squeeze through within the engine's 1 mm contact tolerance.

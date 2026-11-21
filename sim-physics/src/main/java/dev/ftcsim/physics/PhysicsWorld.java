@@ -45,6 +45,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.TreeMap;
+import java.util.function.DoubleConsumer;
 
 /**
  * Fixed-step rigid-body world on top of Jolt, and the only class that touches jolt-jni. The world is
@@ -62,7 +63,10 @@ public final class PhysicsWorld implements AutoCloseable {
 
     private static final int LAYER_STATIC = 0;
     private static final int LAYER_MOVING = 1;
-    private static final int LAYER_COUNT = 2;
+    private static final int LAYER_PIECE = 2;
+    private static final int LAYER_ATTACHMENT = 3;
+    private static final int LAYER_COUNT = 4;
+    private static final int BROAD_PHASE_COUNT = 2;
     private static final int MAX_BODIES = 4096;
     private static final int MAX_BODY_PAIRS = 65_536;
     private static final int MAX_CONTACT_CONSTRAINTS = 16_384;
@@ -88,7 +92,7 @@ public final class PhysicsWorld implements AutoCloseable {
 
     private record ChassisBody(int bodyId, MecanumChassis model) {}
 
-    private final BroadPhaseLayerInterfaceTable broadPhaseLayers = new BroadPhaseLayerInterfaceTable(LAYER_COUNT, LAYER_COUNT);
+    private final BroadPhaseLayerInterfaceTable broadPhaseLayers = new BroadPhaseLayerInterfaceTable(LAYER_COUNT, BROAD_PHASE_COUNT);
     private final ObjectLayerPairFilterTable layerPairs = new ObjectLayerPairFilterTable(LAYER_COUNT);
     private final ObjectVsBroadPhaseLayerFilterTable objectVsBroadPhase;
     private final PhysicsSystem system = new PhysicsSystem();
@@ -106,6 +110,7 @@ public final class PhysicsWorld implements AutoCloseable {
     private final BroadPhaseLayerFilter anyBroadPhase = new BroadPhaseLayerFilter();
     private final ObjectLayerFilter anyLayer = new ObjectLayerFilter();
     private final IgnoreMultipleBodiesFilter rayIgnored = new IgnoreMultipleBodiesFilter();
+    private final Map<Integer, List<Integer>> attachments = new HashMap<>();
     private final Map<PieceSpec, SphereShape> pieceShapes = new HashMap<>();
     private final TreeMap<Integer, Entity> entities = new TreeMap<>();
     private final TreeMap<Integer, ChassisBody> chassis = new TreeMap<>();
@@ -122,9 +127,15 @@ public final class PhysicsWorld implements AutoCloseable {
         this.dllSha256 = dllSha256;
         broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_STATIC, LAYER_STATIC);
         broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_MOVING, LAYER_MOVING);
+        broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_PIECE, LAYER_MOVING);
+        broadPhaseLayers.mapObjectToBroadPhaseLayer(LAYER_ATTACHMENT, LAYER_MOVING);
+        layerPairs.enableCollision(LAYER_PIECE, LAYER_ATTACHMENT);
+        layerPairs.enableCollision(LAYER_PIECE, LAYER_STATIC);
+        layerPairs.enableCollision(LAYER_PIECE, LAYER_MOVING);
+        layerPairs.enableCollision(LAYER_PIECE, LAYER_PIECE);
         layerPairs.enableCollision(LAYER_MOVING, LAYER_STATIC);
         layerPairs.enableCollision(LAYER_MOVING, LAYER_MOVING);
-        objectVsBroadPhase = new ObjectVsBroadPhaseLayerFilterTable(broadPhaseLayers, LAYER_COUNT, layerPairs, LAYER_COUNT);
+        objectVsBroadPhase = new ObjectVsBroadPhaseLayerFilterTable(broadPhaseLayers, BROAD_PHASE_COUNT, layerPairs, LAYER_COUNT);
         system.init(MAX_BODIES, 0, MAX_BODY_PAIRS, MAX_CONTACT_CONSTRAINTS, broadPhaseLayers, objectVsBroadPhase, layerPairs);
         system.setGravity(0f, 0f, -GRAVITY);
         applyPhysicsSettings();
@@ -253,6 +264,9 @@ public final class PhysicsWorld implements AutoCloseable {
         if (ignored != null) {
             rayIgnored.ignoreBody(ignored.bodyId());
         }
+        for (int id : attachments.getOrDefault(ignoredEntityId, List.of())) {
+            rayIgnored.ignoreBody(id);
+        }
         try (RRayCast ray = new RRayCast(rvec3(origin), vec3(direction.times(maxMeters)));
                 RayCastResult hit = new RayCastResult()) {
             if (!groundQuery.castRay(ray, hit, anyBroadPhase, anyLayer, rayIgnored)) {
@@ -336,7 +350,7 @@ public final class PhysicsWorld implements AutoCloseable {
         requireFreeEntity(entityId);
         SphereShape shape = pieceShapes.computeIfAbsent(spec, s -> new SphereShape(s.radiusM()));
         try (BodyCreationSettings settings = new BodyCreationSettings(
-                        shape, rvec3(position), Quat.sIdentity(), EMotionType.Dynamic, LAYER_MOVING);
+                        shape, rvec3(position), Quat.sIdentity(), EMotionType.Dynamic, LAYER_PIECE);
                 MassProperties mass = new MassProperties()) {
             mass.setMass(spec.massKg());
             settings.setOverrideMassProperties(EOverrideMassProperties.CalculateInertia)
@@ -353,6 +367,34 @@ public final class PhysicsWorld implements AutoCloseable {
             register(entityId, kind, Role.PIECE, bodyId);
             rolling.add(entityId, bodyId, spec);
         }
+    }
+
+    /** A piece-contacting plate hinged about its owner's lateral axis. Positive joint travel raises the nose. */
+    public DoubleConsumer addHingedPlate(int owner, Vector3 halfExtents, Vector3 pivot, Vector3 offset, double angle) {
+        PlatePose initial = platePose(owner, pivot, offset, angle);
+        try (BoxShape shape = new BoxShape(vec3(halfExtents), 0.001f);
+                BodyCreationSettings settings = new BodyCreationSettings(
+                        shape, rvec3(initial.center()), quat(initial.rotation()), EMotionType.Kinematic, LAYER_ATTACHMENT)) {
+            int id = bodies.createAndAddBody(settings, EActivation.Activate);
+            if (id == Jolt.cInvalidBodyId) {
+                throw new IllegalStateException("the world is full");
+            }
+            attachments.computeIfAbsent(owner, key -> new ArrayList<>()).add(id);
+            return target -> {
+                PlatePose pose = platePose(owner, pivot, offset, target);
+                bodies.moveKinematic(id, rvec3(pose.center()), quat(pose.rotation()), STEP_SECONDS);
+            };
+        }
+    }
+
+    private record PlatePose(Vector3 center, Quaternion rotation) {}
+
+    private PlatePose platePose(int owner, Vector3 pivot, Vector3 offset, double angle) {
+        BodyPose chassis = bodyPose(owner);
+        Quaternion base = new Quaternion(chassis.qx(), chassis.qy(), chassis.qz(), chassis.qw());
+        Quaternion hinge = Quaternion.axisAngle(Vector3.Y, -angle);
+        Vector3 center = new Vector3(chassis.x(), chassis.y(), chassis.z()).plus(base.rotate(pivot.plus(hinge.rotate(offset))));
+        return new PlatePose(center, base.times(hinge));
     }
 
     /** Takes a piece out of the world, as when an intake swallows it. */
@@ -493,6 +535,14 @@ public final class PhysicsWorld implements AutoCloseable {
                 }
                 bodies.addForce(body.bodyId(), vec3(force), rvec3(contact.point()));
             }
+        }
+    }
+
+    /** Whether a segment crosses fixed field geometry, for example the lip between a loose ball and an intake. */
+    public boolean crossesField(Vector3 from, Vector3 to) {
+        try (RRayCast ray = new RRayCast(rvec3(from), vec3(to.minus(from)));
+                RayCastResult hit = new RayCastResult()) {
+            return groundQuery.castRay(ray, hit, groundBroadPhase, groundLayer, anyBody);
         }
     }
 

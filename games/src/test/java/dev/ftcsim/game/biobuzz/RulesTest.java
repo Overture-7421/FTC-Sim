@@ -113,14 +113,14 @@ class RulesTest {
             assertEquals(4, line(arena, "POLLEN and NECTAR in GARDEN").count(), "the four staged POLLEN");
 
             // A NECTAR of the other colour, and a POLLEN whose edge just reaches the tape, both count.
-            arena.spawn(NECTAR_BLUE, new Vector3(in(68.4), in(-56.0), in(2.5)), Vector3.ZERO);
-            arena.spawn(POLLEN, new Vector3(in(66.9), in(-49.0), in(2.0)), Vector3.ZERO);
+            arena.spawn(NECTAR_BLUE, new Vector3(in(69.88), in(-56.0), in(2.5)), Vector3.ZERO);
+            arena.spawn(POLLEN, new Vector3(in(68.38), in(-49.0), in(2.0)), Vector3.ZERO);
             arena.steps(480);
             assertEquals(6, line(arena, "POLLEN and NECTAR in GARDEN").count());
             assertEquals(6, line(arena, "POLLEN and NECTAR in GARDEN").points());
 
             // One that stops 1 cm short of the 2 in wide tape does not.
-            arena.spawn(POLLEN, new Vector3(in(66.3), in(-60.0), in(2.0)), Vector3.ZERO);
+            arena.spawn(POLLEN, new Vector3(in(67.78), in(-60.0), in(2.0)), Vector3.ZERO);
             arena.steps(480);
             assertEquals(6, line(arena, "POLLEN and NECTAR in GARDEN").count());
         }
@@ -242,7 +242,7 @@ class RulesTest {
             assertTrue(arena.run.isFinal(), "everything has come to rest");
 
             Score frozen = arena.run.score();
-            arena.spawn(POLLEN, new Vector3(in(69.0), in(-60.0), in(2.0)), Vector3.ZERO);
+            arena.spawn(POLLEN, new Vector3(in(70.48), in(-60.0), in(2.0)), Vector3.ZERO);
             arena.steps(240);
             assertEquals(frozen, arena.run.score(), "pieces that arrive after the final assessment are not counted");
         }

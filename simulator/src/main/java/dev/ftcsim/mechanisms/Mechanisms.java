@@ -384,6 +384,13 @@ public final class Mechanisms {
             }
             Vec3 local = chassis.directionToBody(new Vec3(body.x(), body.y(), body.z()).minus(chassis.position()));
             if (capture.volume().contains(local)) {
+                // The bottom of a ball has to clear any retaining lip on its way to the roller.
+                Vec3 entrance = chassis.pointToField(storage.positionAt(0.0));
+                double bottom = body.z() - spec.radiusM() + 0.002;
+                if (world.crossesField(new Vector3(entrance.x(), entrance.y(), bottom), new Vector3(body.x(), body.y(), bottom))
+                        || world.crossesField(new Vector3(entrance.x(), entrance.y(), body.z()), new Vector3(body.x(), body.y(), body.z()))) {
+                    continue;
+                }
                 world.removePiece(body.entityId());
                 takenThisStep.add(body.entityId());
                 storage.pieces.add(new Piece(body.entityId(), body.kind(), spec.radiusM()));

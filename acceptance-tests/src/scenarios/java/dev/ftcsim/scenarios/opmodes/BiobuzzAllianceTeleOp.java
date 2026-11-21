@@ -45,7 +45,7 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
      */
     private static final double SPEED_LIMIT = 0.2;
     /** The centre start on each alliance's wall: 9.2 in from it, facing the field (the manual's G304); the robot may be anywhere along it. */
-    private static final double WALL_START_Y = (70.52 - 9.2) * 0.0254;
+    private static final double WALL_START_Y = (72.0 - 9.2) * 0.0254;
 
     private final BiobuzzHive.Alliance alliance;
     private final BiobuzzPoseEstimator estimator;

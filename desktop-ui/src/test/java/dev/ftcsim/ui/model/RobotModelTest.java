@@ -32,6 +32,20 @@ class RobotModelTest {
     }
 
     @Test
+    void thePrintedPlateSpansBothArmsAndTurnsAboutTheirHinge() {
+        RobotModel.Group plate = MODEL.groups().get(indexOf("colibri.plate"));
+        RobotModel.Group left = MODEL.groups().get(indexOf("colibri.left"));
+        RobotModel.Group right = MODEL.groups().get(indexOf("colibri.right"));
+        RobotModel.Chunk mesh = plate.chunks().getFirst();
+        assertEquals(left.joint(), plate.joint());
+        assertEquals(left.rest(), plate.rest());
+        assertEquals(left.pivot()[0], plate.pivot()[0]);
+        assertEquals(left.pivot()[2], plate.pivot()[2]);
+        assertEquals(left.pivot()[1], mesh.max()[1] + plate.pivot()[1], 0.003);
+        assertEquals(right.pivot()[1], mesh.min()[1] + plate.pivot()[1], 0.003);
+    }
+
+    @Test
     void theBiobuzzModelIsInTheBuildWithEveryJointAGroupTurnsAboutAndParentsBeforeChildren() {
         assertNotNull(MODEL, "the build carries the model");
         assertTrue(MODEL.triangles() > 10_000, "the robot is there in full: " + MODEL.triangles());

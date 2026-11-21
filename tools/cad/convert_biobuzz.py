@@ -155,6 +155,13 @@ def box(centre, axes, half):
     return pts, np.array(tris, dtype=np.int32)
 
 
+def colibri_plate():
+    """Printed plate in simulated coordinates relative to its pivot, at the CAD's 60-degree pose."""
+    c, s = math.cos(math.radians(60)), math.sin(math.radians(60))
+    axes = np.array([(c, 0, s), (0, 1, 0), (-s, 0, c)])
+    return box(np.array([0.3311, 0, -0.0700]) @ axes, axes, np.array([0.015, 0.212, 0.004]))
+
+
 def mecanum_wheel(cx, cy, flip):
     """A mecanum wheel of the CAD's size (112 mm across, 35 mm wide), axle along the CAD's X; list of (points, tris, rgb)."""
     centre = np.array([cx, cy, 0.0])
@@ -560,6 +567,11 @@ def main():
         for (p, t, rgb) in mecanum_wheel(ax, ay, 1.0 if gname in ('wheel.fl', 'wheel.rr') else -1.0):
             add(gname, p, t, rgb)
 
+    # The team prints the cross-plate separately. Local X spans its depth with the linkage down.
+    groups['colibri.plate'] = ('base', 'colibri.left', (0, 0.016, 0.023), X, -1)
+    pts, tris = colibri_plate()
+    per_group['colibri.plate'].append((pts + np.array([0.0225, 0, -0.1034]), tris, (0.24, 0.17, 0.34), 1.0))
+
     def total(parts):
         return sum(len(t) for _, t, _, _ in parts)
     print('triangles', {k: total(v) for k, v in per_group.items()})
@@ -572,7 +584,7 @@ def main():
     for gname, (par, joint, pivot, axis, sign) in groups.items():
         pivot_sim = point_to_sim(pivot)
         entry = {'name': gname, 'parent': par or '', 'joint': joint, 'sign': sign,
-                 'rest': -hood_angle if gname == 'hood' else 0.0,
+                 'rest': -hood_angle if gname == 'hood' else math.radians(60) if gname.startswith('colibri.') else 0.0,
                  'pivot': [round(v, 6) for v in pivot_sim], 'axis': [round(v, 6) for v in dir_to_sim(axis)], 'chunks': []}
         parts = per_group.get(gname, [])
         for alpha in sorted({a for _, _, _, a in parts}, reverse=True):

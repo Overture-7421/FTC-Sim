@@ -11,6 +11,7 @@ import dev.ftcsim.contracts.field.Pose3;
 import dev.ftcsim.contracts.hardware.CameraWire;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.HubWire;
+import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.hardware.device.bosch.Bno055Model;
 import dev.ftcsim.hardware.device.gobilda.GoBildaPinpointModel;
 import dev.ftcsim.hardware.device.rev.RevColorSensorV3Model;
@@ -24,6 +25,7 @@ import dev.ftcsim.simulator.robot.RobotMapping.CameraMount;
 import dev.ftcsim.simulator.robot.RobotMapping.ColorSensorMapping;
 import dev.ftcsim.simulator.robot.RobotMapping.MotorMapping;
 import dev.ftcsim.simulator.robot.RobotMapping.Slot;
+import dev.ftcsim.simulator.robot.RobotProfiles;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.robot.ServoCatalog;
 import java.nio.ByteBuffer;
@@ -153,6 +155,20 @@ class RobotRigTest {
         double stopped = rig.turretYawRadians();
         tickFor(rig, 0.5);
         assertEquals(stopped, rig.turretYawRadians(), 1e-6, "with its output off the servo holds still");
+    }
+
+    @Test
+    void theJoinedColibriArmsShareOneAngleWhenTheirServoCommandsDiffer() {
+        RobotRig rig = rigOf(RobotDesign.biobuzz().spec(RobotProfiles.biobuzz().withMotors(List.of())));
+        int left = rig.wiring().servo("colibriLeft").port();
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, left, 0x20, 0x4E);
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, left, 0xD0, 0x02); // 720 us, 90 degrees at the linkage
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, left, 1);
+        tickFor(rig, 1.0);
+        for (RobotJoint joint : List.of(RobotJoint.COLIBRI_LEFT, RobotJoint.COLIBRI_RIGHT)) {
+            double angle = rig.jointBodies().stream().filter(b -> b.kind() == joint.kind()).findFirst().orElseThrow().x();
+            assertEquals(45, Math.toDegrees(angle), 0.5);
+        }
     }
 
     private void tickFor(RobotRig rig, double seconds) {
