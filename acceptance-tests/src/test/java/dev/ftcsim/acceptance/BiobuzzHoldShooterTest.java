@@ -87,7 +87,7 @@ class BiobuzzHoldShooterTest {
 
         // The turret is on the bearing and the flywheels at speed, but the hood's servo has only just been sent: not ready.
         flywheelTicks = shooter.solution().flywheelTicksPerSecond;
-        for (int i = 0; i < 20; i++) {
+        for (int i = 0; i < 10; i++) {
             command = step(true);
         }
         assertEquals(State.SPINNING_UP, shooter.state(), "the hood is still moving: " + shooter.status());

@@ -53,12 +53,22 @@ import dev.ftcsim.ui.project.ProjectActivity
  * armed, and Stop, which gives the match up or ends it.
  *
  * @param startPosition where the robot starts, as the application's own control; nothing by default
+ * @param onOpenDashboard called with the address of the robot program's dashboard when the button that opens it is
+ *     pressed; the button is shown only while the program has a dashboard, and not at all when this is null
  * @param focusViewport called after Init, Start or Stop, so that the keyboard goes to the robot again
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestart, focusViewport: () -> Unit, startPosition: @Composable () -> Unit = {}) {
+fun PracticeTopBar(
+    session: PracticeSession,
+    ui: PracticeUi,
+    restart: CodeRestart,
+    focusViewport: () -> Unit,
+    startPosition: @Composable () -> Unit = {},
+    onOpenDashboard: ((String) -> Unit)? = null,
+) {
     val state by session.session.collectAsState()
+    val dashboardUrl by session.dashboardUrl.collectAsState()
     val run by session.run.collectAsState()
     val match by session.match.collectAsState()
     val plan by session.matchPlan.collectAsState()
@@ -85,6 +95,16 @@ fun PracticeTopBar(session: PracticeSession, ui: PracticeUi, restart: CodeRestar
         },
         actions = {
             startPosition()
+            if (dashboardUrl.isNotEmpty() && onOpenDashboard != null) {
+                Tip("Open $dashboardUrl, the dashboard of the robot program, in your browser") {
+                    OutlinedButton(
+                        onClick = { onOpenDashboard(dashboardUrl) },
+                        modifier = Modifier.semantics { contentDescription = "Open the dashboard of the robot program in the browser" },
+                    ) {
+                        Text("Open dashboard")
+                    }
+                }
+            }
             Tip(if (controls.reset) "Stop the code and put everything back at the start" else "No session") {
                 FilledTonalButton(
                     onClick = { session.reset(); focusViewport() },

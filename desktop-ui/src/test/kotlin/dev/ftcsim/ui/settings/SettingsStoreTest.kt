@@ -52,7 +52,7 @@ class SettingsStoreTest {
             projects = listOf(
                 project(1, SetupInput("decode", Alliance.BLUE, true, "", "BLUE goal side", "1.25", "-0.5", "90", true)),
                 project(2, SetupInput("none", Alliance.RED, true, "", null, "0", "0", "0", false)),
-                project(3).copy(robotSkipped = true),
+                project(3).copy(opMode = "Teleop A"),
             ),
         )
 
@@ -209,29 +209,16 @@ class SettingsStoreTest {
     }
 
     @Test
-    fun theOpModeThatFindsAProjectsHardwareIsRememberedWithTheProjectAndSurvivesBeingSavedAndReadBack() {
-        val settings = UserSettings().withProject(RecentProject("C:\\a", "a")).withProject(RecentProject("C:\\b", "b"))
-            .withScanOpMode(Path.of("c:\\A"), "Teleop A")
-        val store = store()
-        store.update { settings }
-
-        assertEquals(listOf(null, "Teleop A"), settings.projects.map { it.scanOpMode })
-        assertEquals("Teleop A", store().state.value.project(Path.of("C:\\a"))?.scanOpMode)
-        assertNull(store().state.value.project(Path.of("C:\\b"))?.scanOpMode)
-        assertEquals(settings, settings.withScanOpMode(Path.of("C:\\unknown"), "x"), "a project that was never opened gets nothing")
-    }
-
-    @Test
     fun theLatestChosenOpModeIsRememberedWithTheProjectSurvivesBeingSavedAndReadBackAndSurvivesOpeningAgain() {
         val settings = UserSettings().withProject(RecentProject("C:\\a", "a")).withProject(RecentProject("C:\\b", "b"))
-            .withOpMode(Path.of("c:\\A"), "Auto B").withScanOpMode(Path.of("c:\\A"), "Teleop A")
+            .withOpMode(Path.of("c:\\A"), "Auto B")
         val store = store()
         store.update { settings }
 
         assertEquals("Auto B", store().state.value.project(Path.of("C:\\a"))?.opMode)
         assertNull(store().state.value.project(Path.of("C:\\b"))?.opMode)
         assertEquals(settings, settings.withOpMode(Path.of("C:\\unknown"), "x"), "a project that was never opened gets nothing")
-        val reopened = settings.withProject(RecentProject("C:\\a", "a", null, "Teleop A", false, "Auto B"))
+        val reopened = settings.withProject(RecentProject("C:\\a", "a", null, "Auto B"))
         assertEquals("Auto B", reopened.project(Path.of("C:\\a"))?.opMode)
     }
 

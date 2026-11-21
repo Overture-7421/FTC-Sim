@@ -1,7 +1,6 @@
 package dev.ftcsim.simulator.robot;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.RobotJoint;
 import dev.ftcsim.mechanisms.CaptureSpec;
 import dev.ftcsim.mechanisms.LaunchSpec;
@@ -31,7 +30,7 @@ import java.util.Map;
  * @param captures    the intakes
  * @param launches    the launchers
  * @param imu         how the Control Hub's IMU is mounted
- * @param colorSensor where the colour sensor is
+ * @param colorSensors the colour sensors, each found by its name; none if the robot has none
  * @param limelight   the Limelight's mount and pipeline
  * @param joints      what the window's picture of the robot follows
  */
@@ -46,7 +45,7 @@ public record RobotSpec(
         List<CaptureSpec> captures,
         List<LaunchSpec> launches,
         ImuMount imu,
-        ColorSensor colorSensor,
+        List<ColorSensor> colorSensors,
         Limelight limelight,
         Joints joints) {
 
@@ -57,6 +56,7 @@ public record RobotSpec(
         storages = List.copyOf(storages);
         captures = List.copyOf(captures);
         launches = List.copyOf(launches);
+        colorSensors = List.copyOf(colorSensors);
         joints = joints == null ? Joints.NONE : joints;
     }
 
@@ -176,8 +176,11 @@ public record RobotSpec(
         }
     }
 
-    /** Where the colour sensor is in the robot frame, and the way it looks: 0 degrees forward, 90 left. */
-    public record ColorSensor(double x, double y, double z, double azimuthDegrees) {
+    /**
+     * A colour sensor: the name robot code finds it by, the hub and I2C bus it is plugged into, and where it is in the robot
+     * frame and the way it looks (0 degrees forward, 90 left).
+     */
+    public record ColorSensor(String name, int hubAddress, int bus, double x, double y, double z, double azimuthDegrees) {
 
         /** The settings of the colour sensor's model. */
         public Map<String, Object> settings() {

@@ -42,9 +42,8 @@ class RealHostSessionTest {
         LinkRecorder ui = new LinkRecorder(link, PATIENCE);
         try {
             ui.waitFor(() -> !ui.catalogues.isEmpty(), "the catalogue");
-            assertFalse(ui.catalogues.get(0).motors().isEmpty(), "the motors a mapping may name");
 
-            link.open(new SessionRequest(HornetMapping.mapping(), WorkerFixtures.programFolder(temp).toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(WorkerFixtures.programFolder(temp).toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
             ui.waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             assertTrue(
                     ui.opened.get(0).opModes().stream().anyMatch(opMode -> opMode.name().equals("Mecanum Drive")),

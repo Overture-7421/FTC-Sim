@@ -119,6 +119,11 @@ final class KernelHooks implements RobotHooks {
     }
 
     @Override
+    public boolean listenOnLoopback(int port) {
+        return config.loopbackPorts().contains(port);
+    }
+
+    @Override
     public void loadLibrary(String name) {
         diagnostics.nativeLibraryDeclined(name);
     }

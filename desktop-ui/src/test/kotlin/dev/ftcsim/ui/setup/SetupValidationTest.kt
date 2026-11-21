@@ -1,7 +1,6 @@
 package dev.ftcsim.ui.setup
 
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.ui.practice.Fixtures
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertNotNull
@@ -43,11 +42,9 @@ class SetupValidationTest {
         assertTrue(SetupValidation.problems(custom.copy(startX = "0,5", startY = "-2", headingDegrees = "90"), rules).none, "a comma is a decimal point")
     }
 
-    private val robot = RobotMapping.empty("Robot")
-
     @Test
     fun theRequestTakesThePoseOfTheFieldOrTheNumbersAndConvertsTheHeading() {
-        val named = SetupValidation.request(valid, rules, { 9L }, "C:\\prog", robot)!!
+        val named = SetupValidation.request(valid, rules, { 9L }, "C:\\prog")!!
         assertEquals(listOf(1.2, -1.4, Math.PI / 2), listOf(named.startX(), named.startY(), named.startHeading()))
         assertEquals(9L, named.seed())
         assertEquals(1.0, named.speed())
@@ -55,13 +52,13 @@ class SetupValidationTest {
 
         val custom = SetupValidation.request(
             valid.copy(startPose = null, startX = "0.5", startY = "-0.25", headingDegrees = "180", randomSeed = false, seedText = "5"),
-            rules, { 9L }, "p", robot,
+            rules, { 9L }, "p",
         )!!
         assertEquals(listOf(0.5, -0.25, Math.PI), listOf(custom.startX(), custom.startY(), custom.startHeading()))
         assertEquals(5L, custom.seed())
 
-        assertNull(SetupValidation.request(valid.copy(startPose = "Nowhere"), rules, { 9L }, "p", robot))
-        assertNull(SetupValidation.request(valid.copy(startPose = null, startX = "x"), rules, { 9L }, "p", robot))
+        assertNull(SetupValidation.request(valid.copy(startPose = "Nowhere"), rules, { 9L }, "p"))
+        assertNull(SetupValidation.request(valid.copy(startPose = null, startX = "x"), rules, { 9L }, "p"))
     }
 
     @Test

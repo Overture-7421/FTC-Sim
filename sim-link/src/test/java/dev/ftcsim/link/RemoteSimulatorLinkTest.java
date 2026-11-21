@@ -422,7 +422,6 @@ class RemoteSimulatorLinkTest {
             assertThrows(IllegalArgumentException.class, () -> fixture.link.setSpeed(Double.NaN));
             assertThrows(NullPointerException.class, () -> fixture.link.init(null));
             assertThrows(NullPointerException.class, () -> fixture.link.open(null));
-            assertThrows(NullPointerException.class, () -> fixture.link.open(Messages.requestWithoutMapping()));
             assertThrows(NullPointerException.class, () -> fixture.link.armMatch(null, "Counting"));
             assertThrows(NullPointerException.class, () -> fixture.link.armMatch("", null));
         }

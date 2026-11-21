@@ -1,5 +1,6 @@
 package dev.ftcsim.core.kernel;
 
+import java.util.Set;
 import java.util.function.Predicate;
 
 /**
@@ -19,6 +20,8 @@ import java.util.function.Predicate;
  *                           point before the kernel asks it to end, and twice that before it gives up on it; a robot
  *                           thread that never reaches one, because it loops inside the JDK, would otherwise hang the
  *                           simulator
+  * @param loopbackPorts      the TCP ports on which robot code that listens gets a real listener on the loopback address,
+  *                           reachable by this machine's browser, instead of a simulated one
  */
 public record KernelConfig(
         Predicate<Thread> robotThread,
@@ -26,7 +29,8 @@ public record KernelConfig(
         long yieldCostNanos,
         long backEdgeCostNanos,
         long epochMillis,
-        long robotLivenessMillis) {
+        long robotLivenessMillis,
+        Set<Integer> loopbackPorts) {
 
     /** 2026-01-01T00:00:00Z, an arbitrary start of the simulated calendar. */
     public static final long DEFAULT_EPOCH_MILLIS = 1_767_225_600_000L;
@@ -40,12 +44,13 @@ public record KernelConfig(
         if (robotLivenessMillis <= 0) {
             throw new IllegalArgumentException("the robot thread must be given some real time to reach a synchronisation point");
         }
+        loopbackPorts = Set.copyOf(loopbackPorts);
     }
 
-    /** A configuration with the default liveness limit. */
+    /** A configuration with the default liveness limit and no real listeners. */
     public KernelConfig(
             Predicate<Thread> robotThread, long pollCostNanos, long yieldCostNanos, long backEdgeCostNanos, long epochMillis) {
-        this(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, DEFAULT_ROBOT_LIVENESS_MILLIS);
+        this(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, DEFAULT_ROBOT_LIVENESS_MILLIS, Set.of());
     }
 
     public static KernelConfig defaults(Predicate<Thread> robotThread) {
@@ -53,14 +58,18 @@ public record KernelConfig(
     }
 
     public KernelConfig withBackEdgeCostNanos(long nanos) {
-        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, nanos, epochMillis, robotLivenessMillis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, nanos, epochMillis, robotLivenessMillis, loopbackPorts);
     }
 
     public KernelConfig withEpochMillis(long millis) {
-        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, millis, robotLivenessMillis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, millis, robotLivenessMillis, loopbackPorts);
     }
 
     public KernelConfig withRobotLivenessMillis(long millis) {
-        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, millis);
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, millis, loopbackPorts);
+    }
+
+    public KernelConfig withLoopbackPorts(Set<Integer> ports) {
+        return new KernelConfig(robotThread, pollCostNanos, yieldCostNanos, backEdgeCostNanos, epochMillis, robotLivenessMillis, ports);
     }
 }

@@ -1,4 +1,4 @@
-# How the fixed DECODE robot was fitted to Hornet
+# How the built-in Hornet robot was fitted
 
 This page lists the fitted drivetrain and shooter numbers of the fixed DECODE robot (`RobotDesign`, [fixed-robots.md](fixed-robots.md)), how each was obtained and how sure they are; read it before changing one.
 
@@ -17,7 +17,7 @@ Measured by Pedro's own tuners on the simulated robot (`HornetBringupTest#pedros
 
 ## Chassis numbers
 
-Only what the design sets; everything else is `MecanumConfig.generic18Inch()` (model: `MecanumWheel`). Mass and wheel diameter come from the mapping (Hornet's: 11.3 kg, 96 mm). The two losses, `MecanumConfig.wheelFrictionNm` and `rollerRollingResistance`, are zero unless the design sets them, so other robots are unchanged.
+Only what the design sets; everything else is `MecanumConfig.generic18Inch()` (model: `MecanumWheel`). Mass and wheel diameter come from Hornet's profile in `RobotProfiles` (11.3 kg, 96 mm). The two losses, `MecanumConfig.wheelFrictionNm` and `rollerRollingResistance`, are zero unless the design sets them, so other robots are unchanged.
 
 | Number | Value | How obtained |
 |---|--:|---|

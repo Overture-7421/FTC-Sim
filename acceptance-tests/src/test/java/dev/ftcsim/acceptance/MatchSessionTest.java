@@ -12,8 +12,9 @@ import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
@@ -36,7 +37,7 @@ class MatchSessionTest {
 
     @BeforeAll
     static void loadProfile() throws IOException {
-        hornet = HornetMapping.spec();
+        hornet = RobotDesign.decode().spec();
     }
 
     private static MatchStatus status(MatchState state, long elapsed, long duration) {

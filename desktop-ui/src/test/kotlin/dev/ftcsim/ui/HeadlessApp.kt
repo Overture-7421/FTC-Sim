@@ -8,6 +8,7 @@ import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.unit.Density
 import dev.ftcsim.ui.common.FakeFileChooser
 import dev.ftcsim.ui.common.FakeLogOpener
+import dev.ftcsim.ui.common.FakeUrlOpener
 import dev.ftcsim.ui.common.FtcSimTheme
 import dev.ftcsim.ui.host.AppHost
 import dev.ftcsim.ui.host.testHost
@@ -44,8 +45,9 @@ class HeadlessApp(
     val ui = AppUi(services)
     val files = FakeFileChooser()
     val logs = FakeLogOpener()
+    val urls = FakeUrlOpener()
     private val scene = ImageComposeScene(width, height, Density(density)) {
-        FtcSimTheme(darkTheme = true) { AppContent(services, ui, files, logs, null) }
+        FtcSimTheme(darkTheme = true) { AppContent(services, ui, files, logs, urls, null) }
     }
     private var clockNanos = 0L
 

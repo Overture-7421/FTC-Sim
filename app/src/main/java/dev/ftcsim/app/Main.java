@@ -43,6 +43,8 @@ public final class Main {
             host.close();
         }
         // The installer of a newer version, if the person chose one, runs only now that nothing of this installation is in use.
+        // The window has closed and the host has been closed; the installer of a newer version, if the person chose one, runs only now.
+        System.out.println("FTC-Sim window closed");
         if (updater != null) {
             updater.startPendingInstaller();
         }

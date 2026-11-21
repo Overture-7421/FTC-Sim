@@ -16,8 +16,9 @@ import dev.ftcsim.game.biobuzz.BiobuzzIds;
 import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.physics.Vector3;
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import dev.ftcsim.ui.render.FieldRenderer;
 import dev.ftcsim.ui.render.OrbitCamera;
 import java.io.IOException;
@@ -61,7 +62,7 @@ class RealFieldViewportTest {
     }
 
     private static Run open(Field field, Alliance alliance, String startPrefix) throws IOException {
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         StartPose start = field.description().startPoses().stream()
                 .filter(pose -> pose.name().startsWith(startPrefix))
                 .findFirst()

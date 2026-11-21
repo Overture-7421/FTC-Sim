@@ -4,16 +4,16 @@ import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.field.StartPose;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.OpModeDescriptor;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.importer.pack.PreparedProgram;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotMapping;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotDesign;
-import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -43,7 +43,7 @@ class HornetBringupTest {
     void everyOpModeIsInitialisedStartedAndStoppedOnTheDecodeField() throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         DecodeField field = new DecodeField();
 
         List<OpModeDescriptor> opModes;
@@ -79,14 +79,16 @@ class HornetBringupTest {
     }
 
     /**
-     * A project with no robot file runs a robot with nothing placed on it, and the Devices page learns the hardware from an
+     * A robot with no motor placed: the Devices page learns the hardware from an
      * OpMode's Init on it: Hornet asks for eight motors, the wheels among them, so every one is reported and the robot has
-     * room for them or the OpMode dies in its constructor.
+     * room for them or the OpMode dies in its constructor. Its colour sensor, which robot code reaches by name, is the one
+     * thing the robot must declare.
      */
     @Test
     void anOpModeOfHornetInitialisesOnARobotWithNothingPlacedAndReportsEveryMotorItAsksFor() throws Exception {
         RobotProgram program = HornetFixture.program(HornetFixture.prepared());
-        RobotSpec undescribed = RobotDesign.decode().spec(RobotMapping.empty("Undescribed"));
+        RobotSpec undescribed = RobotDesign.decode().spec(RobotMapping.empty("Undescribed")
+                .withColorSensors(List.of(new RobotMapping.ColorSensorMapping("upSensor", 0.0, 0.0, 0.0, 0.0))));
 
         try (TestSessions.Handle handle = TestSessions.open(undescribed, program, null, null, 0, 0, 0)) {
             handle.session.init("Teleop - Blue");
@@ -114,7 +116,7 @@ class HornetBringupTest {
     void theClassesOfTheSdkThatCannotBeLoadedAreOneLineInTheLogAndNotEightThousand() throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
 
         try (TestSessions.Handle handle = TestSessions.open(profile, program, null, null, 0, 0, 0)) {
             List<String> classManager;
@@ -178,7 +180,7 @@ class HornetBringupTest {
     void theSameTunerMeasuresTheSameVelocityWhateverTheSlicingOfSimulatedTime() throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
 
         String coarse = telemetryAfterStart(profile, program, SECOND / 10);
         String fine = telemetryAfterStart(profile, program, 3_300_000L);
@@ -200,7 +202,7 @@ class HornetBringupTest {
     void pedrosOwnTunersMeasureTheSimulatedDrivetrain() throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         String[] tuners = {
             "Forward Velocity Tuner", "Lateral Velocity Tuner", "Forward Zero Power Acceleration Tuner",
             "Lateral Zero Power Acceleration Tuner"

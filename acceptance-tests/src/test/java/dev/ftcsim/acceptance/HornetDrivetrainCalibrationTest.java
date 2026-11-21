@@ -8,8 +8,9 @@ import dev.ftcsim.physics.MecanumChassis;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.Vector3;
 import dev.ftcsim.physics.WheelPosition;
-import dev.ftcsim.simulator.RobotRig;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.RobotRig;
 import java.io.IOException;
 import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeAll;
@@ -94,7 +95,7 @@ class HornetDrivetrainCalibrationTest {
 
     @BeforeAll
     static void loadHornet() throws IOException {
-        hornet = HornetMapping.spec();
+        hornet = RobotDesign.decode().spec();
     }
 
     /** What the velocity tuners report: the speed at full power once the robot has travelled 48 inches from rest. */

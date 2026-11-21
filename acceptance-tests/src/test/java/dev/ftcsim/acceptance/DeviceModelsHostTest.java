@@ -192,7 +192,7 @@ class DeviceModelsHostTest {
                     boolean inRange = wall != null && seconds < 11 && wall.metres() <= maxMeters;
                     return inRange ? new SurfaceHit(wall.metres(), SurfaceHit.SCENERY, -1, wall.rgb()) : null;
                 })
-                .colorSensor(sensorSettings());
+                .colorSensor("upSensor", 2, sensorSettings());
         return run(robot, "Color Range Sensor", 0, 11_500 * MS, slice, new ArrayList<>());
     }
 

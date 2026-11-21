@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -27,7 +28,7 @@ class SessionCloseThreadsTest {
 
     @Test
     void closingASessionEndsTheThreadsALibraryStartedAndReportsTheOneThatWillNotEnd() throws IOException, InterruptedException {
-        RobotSpec hornet = HornetMapping.spec();
+        RobotSpec hornet = RobotDesign.decode().spec();
         SimulationSession session;
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             session = handle.session;

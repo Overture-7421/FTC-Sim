@@ -80,8 +80,7 @@ class RealHostWorkerTest {
 
                 assertTrue(catalogue.get() != null, "the worker told what can be asked for; it failed with " + failure.get());
                 assertEquals(List.of("none", "decode", "biobuzz"), catalogue.get().fields().stream().map(FieldChoice::id).toList());
-                assertFalse(catalogue.get().motors().isEmpty());
-                String command = ProcessHandle.of(pid).orElseThrow().info().command().orElse("");
+                        String command = ProcessHandle.of(pid).orElseThrow().info().command().orElse("");
                 assertEquals(
                         RealHost.thisJava().toAbsolutePath().normalize().toString().toLowerCase(),
                         command.toLowerCase(),

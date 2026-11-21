@@ -10,7 +10,6 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import dev.ftcsim.contracts.session.Readout;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.link.wire.Command;
@@ -32,12 +31,12 @@ class WorkerServerTest {
 
     private static final String ROBOT = "robot.json";
 
-    private static SessionRequest request(String robotName) {
-        return new SessionRequest(RobotMapping.empty(robotName), "program", "none", Alliance.RED, 1L, 0, 0, 0, 1.0);
+    private static SessionRequest request(String program) {
+        return new SessionRequest(program, "none", Alliance.RED, 1L, 0, 0, 0, 1.0);
     }
 
-    private static Command.Open open(String robotName) {
-        return new Command.Open(request(robotName));
+    private static Command.Open open(String program) {
+        return new Command.Open(request(program));
     }
 
     private static String openCall(double speed) {
@@ -219,11 +218,11 @@ class WorkerServerTest {
     @Test
     void aSessionThatCannotBeOpenedIsAFailureTheUiCanReadAndTheWorkerGoesOnServing() throws Exception {
         try (ServerFixture fixture = new ServerFixture()) {
-            fixture.sessions.failToOpen = new IOException("the robot mapping is wrong: Map all four wheels or none");
+            fixture.sessions.failToOpen = new IOException("the robot program does not exist");
             fixture.send(open("bad"));
 
             assertEquals(
-                    "Could not open the session: the robot mapping is wrong: Map all four wheels or none",
+                    "Could not open the session: the robot program does not exist",
                     fixture.next(Event.Failed.class).message());
 
             fixture.sessions.failToOpen = null;

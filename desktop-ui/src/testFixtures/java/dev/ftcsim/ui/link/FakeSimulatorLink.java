@@ -5,7 +5,6 @@ import dev.ftcsim.contracts.field.FieldDescription;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.contracts.session.SimulatorLink;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
@@ -79,8 +78,7 @@ public final class FakeSimulatorLink implements SimulatorLink {
     /** The request that opens the fake session: the fake field standing in for DECODE, the red alliance, its first start pose. */
     public static SessionRequest defaultRequest() {
         return new SessionRequest(
-                RobotMapping.empty("Fake robot"), "", "decode", Alliance.RED, 0L, FakeField.START_X, FakeField.START_Y,
-                FakeField.START_HEADING, 1.0);
+                "", "decode", Alliance.RED, 0L, FakeField.START_X, FakeField.START_Y, FakeField.START_HEADING, 1.0);
     }
 
     /**

@@ -11,9 +11,6 @@ import dev.ftcsim.contracts.robot.OpModeKind;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.FieldChoice;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
@@ -26,16 +23,16 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
+import java.util.function.BooleanSupplier;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.concurrent.TimeUnit;
-import java.util.function.BooleanSupplier;
 import java.util.stream.IntStream;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The simulator in a worker process of its own and the UI's side of the port in this one: the real
@@ -101,16 +98,14 @@ class WorkerProcessTest {
             }
             assertFalse(catalogue.fields().get(1).humanActions().isEmpty(), "DECODE offers human actions");
             assertTrue(catalogue.fields().get(2).humanActions().isEmpty(), "BIOBUZZ needs no human-action buttons");
-            assertFalse(catalogue.motors().isEmpty(), "the motors a mapping may name");
 
             // A request that cannot be met is a failure the UI can read, and the worker goes on.
-            RobotMapping oneWheel = RobotMapping.empty("One wheel").withMotors(List.of(new MotorMapping("fl", Slot.FRONT_LEFT, "", false)));
-            link.open(new SessionRequest(oneWheel, programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
-            waitFor(() -> !ui.failures.isEmpty(), "the failure of a mapping with a problem");
-            assertTrue(ui.failures.get(0).contains("Map all four wheels or none"), ui.failures.toString());
+            link.open(new SessionRequest(programFolder().resolve("gone").toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            waitFor(() -> !ui.failures.isEmpty(), "the failure of a program that does not exist");
+            assertTrue(ui.failures.get(0).contains("gone does not exist"), ui.failures.toString());
             assertTrue(alive(pid), "a request that fails does not end the worker");
 
-            link.open(new SessionRequest(HornetMapping.mapping(), programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
             waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             SessionInfo info = ui.opened.get(0);
             assertNull(info.field(), "a bare floor has no field to draw");
@@ -177,7 +172,7 @@ class WorkerProcessTest {
         long pid = link.workerPid().orElseThrow();
         listen(link);
         try {
-            link.open(new SessionRequest(HornetMapping.mapping(), programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
             waitFor(() -> !ui.opened.isEmpty() && ui.status != null, "the session to open");
 
             link.init("Counting");
@@ -238,7 +233,7 @@ class WorkerProcessTest {
         long pid = link.workerPid().orElseThrow();
         listen(link);
         try {
-            link.open(new SessionRequest(HornetMapping.mapping(), programFolder().toString(), "none", Alliance.BLUE, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(programFolder().toString(), "none", Alliance.BLUE, 1L, 0, 0, 0, 1.0));
             waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             link.init("Gamepad Echo");
             waitFor(() -> ui.status != null && ui.status.phase() == RobotPhase.INIT, "Init");
@@ -268,7 +263,7 @@ class WorkerProcessTest {
         long pid = link.workerPid().orElseThrow();
         listen(link);
         try {
-            link.open(new SessionRequest(HornetMapping.mapping(), programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
             waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             link.init("Crasher");
             waitFor(() -> ui.status != null && ui.status.phase() == RobotPhase.INIT, "Init");
@@ -302,7 +297,7 @@ class WorkerProcessTest {
 
             waitFor(() -> !ui.failures.isEmpty(), "the link to notice that the worker is gone");
             assertTrue(ui.failures.get(0).contains("exited with code"), ui.failures.get(0));
-            link.open(new SessionRequest(HornetMapping.mapping(), programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
+            link.open(new SessionRequest(programFolder().toString(), "none", Alliance.RED, 1L, 0, 0, 0, 1.0));
             link.setGamepad(1, GamepadState.NEUTRAL);
             link.close();
             TimeUnit.MILLISECONDS.sleep(300);

@@ -10,8 +10,8 @@ around it and nothing else: driving, path following and mechanism logic stay the
 - **Virtual time.** Pausing, slowing or speeding a run does not change what the program sees. Runs are not bit-for-bit
   repeatable.
 - **Material 3 window, drawn up to 144 Hz.** Rendering never changes the simulation.
-- **Not done, on purpose:** foul and ranking rules, replay, a second or opposing robot, air drag, a browser dashboard for
-  Panels, macOS and Linux. Physics is accurate enough to test code and practise, not to design a robot. Webcams,
+- **Panels dashboard.** A program that carries Panels serves its dashboard on ports 8001 and 8002 of this PC, on the loopback address only; **Open dashboard** in the Simulator's top bar opens it in the browser.
+- **Not done, on purpose:** foul and ranking rules, replay, a second or opposing robot, air drag, macOS and Linux. Physics is accurate enough to test code and practise, not to design a robot. Webcams,
   `VisionPortal` and sensors beyond the fixed ones are not supported yet (`docs/roadmap.md`).
 
 ## Using it
@@ -32,11 +32,10 @@ run asks for the game once.
 
 **Change the code.** Edit as usual, then press **Restart code** in the Simulator's top bar. Nothing watches your files.
 
-**Map the robot.** Each game's robot is fixed: four mecanum wheels, intake, conveyor and shooter, plus a turret for
-BIOBUZZ. Your program only names its hardware, so map each motor onto a part in `ftcsim.json` at the project root. Without
-one, the **Robot** screen opens: pick an OpMode, drag each motor onto a part, set model, mirroring, mass, wheel diameter and
-mounts, and the file is written. Commit it so teammates get the same robot. An unmapped motor still works and is reported
-(`docs/robots/fixed-robots.md`).
+**The robot.** Hornet's and BIOBUZZ's robots are built into the simulator (BIOBUZZ's on its field, Hornet's on every
+other): four mecanum wheels, intake, conveyor and shooter, plus a turret, hood, stopper and colibri arms for BIOBUZZ.
+Your program finds them by the hardware names of those robots; nothing is mapped and no file is added to your project. A
+name the robot lacks is reported, not fatal (`docs/robots/fixed-robots.md`).
 
 ## Building it
 

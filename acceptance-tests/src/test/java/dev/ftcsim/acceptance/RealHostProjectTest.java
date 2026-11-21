@@ -11,37 +11,34 @@ import dev.ftcsim.app.RealHost;
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.field.StartPose;
 import dev.ftcsim.contracts.session.FieldChoice;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.link.RemoteSimulatorLink;
 import dev.ftcsim.ui.host.ProgramPreparer;
-import dev.ftcsim.ui.host.ProjectMappings;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.nio.file.Files;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Path;
 import java.nio.file.SimpleFileVisitor;
 import java.nio.file.StandardOpenOption;
-import java.nio.file.attribute.BasicFileAttributes;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.concurrent.TimeUnit;
 import java.util.List;
 import java.util.OptionalInt;
-import java.util.Set;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.Set;
 import java.util.stream.Stream;
+import org.junit.jupiter.api.io.TempDir;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
-import org.junit.jupiter.api.io.TempDir;
 
 /**
- * What a team does with the application, on Hornet unmodified except that the test works on a copy of the checkout
- * without its {@code ftcsim.json}: the application writes its mapping, a change to a source file gives a new program on the
- * next build and a change to the robot file alone gives none, only the newest programs are kept, and the programs
+ * What a team does with the application, on a copy of the Hornet checkout: a change to a source file gives a new program on the
+ * next build, only the newest programs are kept, and the programs
  * open on a fresh worker each time, which is what Restart code does (opening them again in one worker is measured, because
  * that is why: it keeps part of every old world). Needs {@code -Pftcsim.hornet=<checkout>}
  * (and, where discovery would not find them, {@code -Pftcsim.jdk} and {@code -Pftcsim.androidSdk}); runs nothing otherwise.
@@ -61,31 +58,19 @@ class RealHostProjectTest {
     Path temp;
 
     @Test
-    void aTeamsProjectGetsItsRobotFileAndEveryRestartPicksUpWhatChangedOnAFreshWorker() throws Exception {
+    void everyRestartPicksUpWhatChangedOnAFreshWorker() throws Exception {
         String checkout = System.getProperty("ftcsim.hornet");
         if (checkout == null) {
             System.out.println("REAL-HOST-PROJECT> " + HOW_TO_RUN);
         }
         assumeTrue(checkout != null, HOW_TO_RUN);
-        Path project = copyWithoutRobotFile(Path.of(checkout), temp.resolve("Hornet"));
+        Path project = copy(Path.of(checkout), temp.resolve("Hornet"));
         RealHost host = WorkerFixtures.realHost(temp, WorkerFixtures.machine());
         try {
             ProgramPreparer preparer = host.preparer();
-            ProjectMappings mappings = host.mappings();
-            assertTrue(mappings.find(project).isEmpty(), "the copy has no robot file");
-
             PrepareEvents first = prepare(preparer, project);
             Path programOne = first.prepared.folder();
             assertNotEquals("Already prepared, source unchanged", first.lastStep());
-
-            ProjectMappings.Saved saved = mappings.save(project, HornetMapping.mapping());
-            assertEquals(project.resolve("ftcsim.json"), saved.file(), "the robot file is written at the root of the project");
-            assertFalse(saved.keptByApp());
-            assertEquals(project.resolve("ftcsim.json"), mappings.find(project).orElseThrow().file());
-            assertEquals(HornetMapping.mapping(), mappings.find(project).orElseThrow().mapping());
-            PrepareEvents again = prepare(preparer, project);
-            assertEquals("Already prepared, source unchanged", again.lastStep(), "the robot file is not the team's source: no rebuild");
-            assertEquals(programOne, again.prepared.folder());
 
             touchASource(project, "first");
             PrepareEvents second = prepare(preparer, project);
@@ -104,9 +89,8 @@ class RealHostProjectTest {
                 assertEquals(2, kept.filter(Files::isDirectory).filter(path -> !path.getFileName().toString().startsWith(".")).count());
             }
 
-            RobotMapping stored = mappings.find(project).orElseThrow().mapping();
-            measureRepeatedOpensInOneWorker(host, stored, List.of(programTwo, programThree));
-            restartOnAFreshWorker(host, stored, programTwo, programThree);
+            measureRepeatedOpensInOneWorker(host, List.of(programTwo, programThree));
+            restartOnAFreshWorker(host, programTwo, programThree);
         } finally {
             host.close();
         }
@@ -116,14 +100,14 @@ class RealHostProjectTest {
      * Opens the programs over and over on one link and prints what the worker holds after each. It asserts nothing about
      * the numbers: it is the measurement that is why the window restarts on a fresh worker (docs/architecture/app.md).
      */
-    private void measureRepeatedOpensInOneWorker(RealHost host, RobotMapping mapping, List<Path> programs) throws Exception {
+    private void measureRepeatedOpensInOneWorker(RealHost host, List<Path> programs) throws Exception {
         RemoteSimulatorLink link = (RemoteSimulatorLink) host.openLink();
         long pid = link.workerPid().orElseThrow();
         LinkRecorder ui = new LinkRecorder(link, Duration.ofMinutes(5));
         try {
             List<Long> heap = new ArrayList<>();
             for (int open = 1; open <= RESTARTS; open++) {
-                openSession(link, ui, open, mapping, programs.get(open % programs.size()));
+                openSession(link, ui, open, programs.get(open % programs.size()));
                 long used = heapUsedAfterCollection(pid);
                 heap.add(used);
                 System.out.println("REAL-HOST-PROJECT> one worker, after open " + open + ": heap in use " + used / 1024 + " MB, working set " + workingSetMegabytes(pid) + " MB");
@@ -138,7 +122,7 @@ class RealHostProjectTest {
     }
 
     /** What Restart code does: the session is asked for on a link made anew and the old worker ends. */
-    private void restartOnAFreshWorker(RealHost host, RobotMapping mapping, Path first, Path second) throws Exception {
+    private void restartOnAFreshWorker(RealHost host, Path first, Path second) throws Exception {
         long previous = -1;
         for (int restart = 1; restart <= 3; restart++) {
             RemoteSimulatorLink link = (RemoteSimulatorLink) host.openLink();
@@ -146,7 +130,7 @@ class RealHostProjectTest {
             assertNotEquals(previous, pid, "a restart is a new worker process");
             LinkRecorder ui = new LinkRecorder(link, Duration.ofMinutes(5));
             try {
-                openSession(link, ui, 1, mapping, restart % 2 == 0 ? first : second);
+                openSession(link, ui, 1, restart % 2 == 0 ? first : second);
                 System.out.println("REAL-HOST-PROJECT> fresh worker " + restart + ": heap in use " + heapUsedAfterCollection(pid) / 1024 + " MB, working set "
                         + workingSetMegabytes(pid) + " MB");
                 assertEquals(List.of(), ui.failures);
@@ -164,12 +148,12 @@ class RealHostProjectTest {
     }
 
     /** Asks for session number {@code number} of this link and waits until it is open. */
-    private static void openSession(RemoteSimulatorLink link, LinkRecorder ui, int number, RobotMapping mapping, Path program) throws InterruptedException {
+    private static void openSession(RemoteSimulatorLink link, LinkRecorder ui, int number, Path program) throws InterruptedException {
         ui.waitFor(() -> !ui.catalogues.isEmpty(), "the catalogue");
         FieldChoice field = ui.catalogues.get(0).fields().stream().filter(choice -> choice.id().equals("decode")).findFirst().orElseThrow();
         StartPose start = field.startPoses().get(0);
         link.open(new SessionRequest(
-                mapping, program.toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
+                program.toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
         ui.waitFor(() -> ui.opened.size() >= number, "session " + number + " to open");
         assertFalse(ui.opened.get(number - 1).opModes().isEmpty(), "the program lists its OpModes");
     }
@@ -192,7 +176,7 @@ class RealHostProjectTest {
         }
     }
 
-    private static Path copyWithoutRobotFile(Path from, Path to) throws IOException {
+    private static Path copy(Path from, Path to) throws IOException {
         Files.walkFileTree(from, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) throws IOException {
@@ -205,9 +189,7 @@ class RealHostProjectTest {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                if (!(file.getParent().equals(from) && file.getFileName().toString().equals("ftcsim.json"))) {
-                    Files.copy(file, to.resolve(from.relativize(file).toString()));
-                }
+                Files.copy(file, to.resolve(from.relativize(file).toString()));
                 return FileVisitResult.CONTINUE;
             }
         });

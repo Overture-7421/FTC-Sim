@@ -10,7 +10,6 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.snapshot.WorldSnapshot;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +18,8 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class WireCodecTest {
+    /** The dashboard address that ends a status: its length and its text. */
+    private static final int DASHBOARD_FIELD_BYTES = 4 + "http://127.0.0.1:8001/".length();
 
     private static Command roundTrip(Command command) throws WireException {
         return WireCodec.decodeCommand(WireCodec.encode(command));
@@ -68,7 +69,7 @@ class WireCodecTest {
                 new Event.Log(List.of("I/System.out: hello", "E/Robot: ")),
                 new Event.Log(List.of()),
                 new Event.Catalogue(Samples.catalogue()),
-                new Event.Catalogue(new Catalogue(List.of(), List.of())));
+                new Event.Catalogue(new Catalogue(List.of())));
 
         for (Event event : events) {
             assertEquals(event, roundTrip(event));
@@ -255,7 +256,8 @@ class WireCodecTest {
     @Test
     void aMatchStateOfNoSuchCodeAndPeriodTimesThatCannotBeAreRefused() {
         byte[] status = WireCodec.encode(new Event.Status(Samples.status(new MatchStatus(MatchState.TELEOP, 5, 10))));
-        int unplaced = 4 + Samples.status().unmapped().stream().mapToInt(device -> 1 + 4 + device.name().getBytes(java.nio.charset.StandardCharsets.UTF_8).length).sum();
+        int unplaced = 4 + Samples.status().unmapped().stream().mapToInt(device -> 1 + 4 + device.name().getBytes(java.nio.charset.StandardCharsets.UTF_8).length).sum()
+                + DASHBOARD_FIELD_BYTES;
         int stateAt = status.length - unplaced - 17;
         byte[] unknown = status.clone();
         unknown[stateAt] = 9;
@@ -272,9 +274,10 @@ class WireCodecTest {
     void theNamesThatTheProfileDoesNotPlaceKeepTheirKindsAndAKindOfNoSuchCodeIsRefused() throws WireException {
         Event.Status back = assertInstanceOf(Event.Status.class, roundTrip(new Event.Status(Samples.status())));
         assertEquals(Samples.status().unmapped(), back.status().unmapped());
+        assertEquals("http://127.0.0.1:8001/", back.status().dashboardUrl());
 
         byte[] status = WireCodec.encode(new Event.Status(Samples.status()));
-        int firstKindAt = status.length - (1 + 4 + "upSensor".length()) - (1 + 4 + "shooterLeft".length());
+        int firstKindAt = status.length - DASHBOARD_FIELD_BYTES - (1 + 4 + "upSensor".length()) - (1 + 4 + "shooterLeft".length());
         byte[] unknown = status.clone();
         unknown[firstKindAt] = 9;
 
@@ -286,7 +289,7 @@ class WireCodecTest {
     @Test
     void aStatusThatClaimsMoreUnplacedNamesThanItHasBytesForIsRefusedBeforeAnythingIsAllocatedForIt() {
         byte[] status = WireCodec.encode(new Event.Status(Samples.status()));
-        int countAt = status.length - (1 + 4 + "upSensor".length()) - (1 + 4 + "shooterLeft".length()) - 4;
+        int countAt = status.length - DASHBOARD_FIELD_BYTES - (1 + 4 + "upSensor".length()) - (1 + 4 + "shooterLeft".length()) - 4;
         byte[] greedy = status.clone();
         greedy[countAt] = 0x00;
         greedy[countAt + 1] = 0x01;
@@ -307,41 +310,6 @@ class WireCodecTest {
         WireException error = assertThrows(WireException.class, () -> WireCodec.decodeEvent(w.finish()));
 
         assertTrue(error.getMessage().contains("the fields"), error.getMessage());
-    }
-
-    @Test
-    void aMappingKeepsEveryNumberBitForBitAndEverySlot() throws WireException {
-        RobotMapping sent = Samples.mapping();
-
-        RobotMapping back = assertInstanceOf(Command.Open.class, roundTrip(new Command.Open(Samples.request()))).request().mapping();
-
-        assertEquals(sent, back);
-        assertEquals(0x7FF8000000001234L, Double.doubleToRawLongBits(back.turretRatio()), "the payload of a NaN is kept");
-        assertEquals(Double.doubleToRawLongBits(-0.0), Double.doubleToRawLongBits(back.camera().y()), "negative zero stays negative");
-        assertEquals(List.of(RobotMapping.Slot.values()), back.motors().stream().map(RobotMapping.MotorMapping::slot).toList());
-    }
-
-    @Test
-    void aMappedMotorOfNoSuchSlotAndAMappingThatClaimsMoreMotorsThanItHasBytesForAreRefused() {
-        WireWriter unknownSlot = new WireWriter(40);
-        unknownSlot.unsignedByte(Protocol.OPEN);
-        unknownSlot.string("robot");
-        unknownSlot.integer(1);
-        unknownSlot.string("motor");
-        unknownSlot.unsignedByte(8);
-        unknownSlot.string("");
-        unknownSlot.bool(false);
-        unknownSlot.doubleBits(0.0);
-        WireWriter greedy = new WireWriter(16);
-        greedy.unsignedByte(Protocol.OPEN);
-        greedy.string("robot");
-        greedy.integer(Protocol.MAX_LIST);
-
-        WireException slot = assertThrows(WireException.class, () -> WireCodec.decodeCommand(unknownSlot.finish()));
-        WireException motors = assertThrows(WireException.class, () -> WireCodec.decodeCommand(greedy.finish()));
-
-        assertTrue(slot.getMessage().contains("slot code"), slot.getMessage());
-        assertTrue(motors.getMessage().contains("the mapped motors"), motors.getMessage());
     }
 
     @Test

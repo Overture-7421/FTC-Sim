@@ -18,6 +18,7 @@ import androidx.compose.ui.Modifier
 import dev.ftcsim.ui.common.FakeHostBanner
 import dev.ftcsim.ui.common.FileChooser
 import dev.ftcsim.ui.common.LogOpener
+import dev.ftcsim.ui.common.UrlOpener
 import dev.ftcsim.ui.common.UpdateBanner
 import dev.ftcsim.ui.common.rememberUpdateStatus
 import dev.ftcsim.ui.controls.ControlsScreen
@@ -26,23 +27,14 @@ import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.practice.Panel
 import dev.ftcsim.ui.practice.PerformanceOverlay
 import dev.ftcsim.ui.practice.PracticeScreen
-import dev.ftcsim.ui.project.ProjectActivity
 import dev.ftcsim.ui.project.ProjectsScreen
-import dev.ftcsim.ui.project.RobotState
-import dev.ftcsim.ui.project.ScanState
-import dev.ftcsim.ui.robot.MappingModel
-import dev.ftcsim.ui.robot.MappingScreen
-import dev.ftcsim.ui.robot.RobotScreen
 import dev.ftcsim.ui.settings.SettingsScreen
 import dev.ftcsim.ui.setup.SetupRules
 import dev.ftcsim.ui.setup.StartPanel
 import dev.ftcsim.ui.setup.StartPositionMenu
-import java.io.IOException
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 
 /**
  * Everything inside the window: the navigation rail and the destination it shows, and above them, on a stand-in host, the
@@ -50,7 +42,8 @@ import kotlinx.coroutines.withContext
  * Simulator does not stop it, and leaving the Project screen does not stop a build. A folder chosen on Home or Project is
  * looked at off the UI thread and leads to the project being opened, or to a message where it was chosen.
  *
- * @param logOpener opens a build log, or the robot description, with the system's program for such files
+ * @param logOpener opens a build log with the system's program for such files
+ * @param urlOpener opens the dashboard of the robot program in the system's browser
  * @param settingsPath where the settings are saved, for the Settings screen to show
  */
 @Composable
@@ -59,6 +52,7 @@ fun AppContent(
     ui: AppUi,
     files: FileChooser,
     logOpener: LogOpener,
+    urlOpener: UrlOpener,
     settingsPath: String?,
     modifier: Modifier = Modifier,
 ) {
@@ -67,13 +61,7 @@ fun AppContent(
     val catalogue by services.session.catalogue.collectAsState()
     val rules = remember(catalogue) { catalogue?.let(SetupRules::of) }
     val navigation by ui.navigator.state.collectAsState()
-    val open by ui.runner.open.collectAsState()
-    val robot by ui.runner.robot.collectAsState()
-    val activity by ui.runner.activity.collectAsState()
-    val unmapped by services.session.unmapped.collectAsState()
-    val scanState by ui.scan.state.collectAsState()
-    val sessionState by services.session.session.collectAsState()
-    val snackbar = remember { SnackbarHostState() }
+   val snackbar = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val navigator = ui.navigator
     val openFolder: (Path, Destination) -> Unit = { folder, from -> scope.launch { ui.openFolder(folder, from) } }
@@ -81,7 +69,6 @@ fun AppContent(
         scope.launch { files.chooseFolder(title, null)?.let { ui.openFolder(it, from) } }
     }
 
-    LaunchedEffect(ui.scan) { ui.scan.run() }
     LaunchedEffect(ui.opModes) { ui.opModes.run() }
     LaunchedEffect(ui.runner) {
         ui.runner.messages.collect { message ->
@@ -107,7 +94,7 @@ fun AppContent(
         val update by rememberUpdateStatus(services.updates)
         UpdateBanner(
             update,
-            onInstall = { scope.launch(Dispatchers.IO) { services.updates.install() } },
+            onInstall = { services.io.execute { services.updates.install() } },
             onDismiss = { services.updates.dismiss() },
         )
         Box(Modifier.weight(1f).fillMaxSize()) {
@@ -134,39 +121,6 @@ fun AppContent(
                         onOpenProject = { chooseFolder("Open a project", Destination.PROJECTS) },
                         onDismissNotice = ui::dismissFolderNotice,
                     )
-                    Destination.ROBOT -> RobotScreen(
-                        project = robot?.project ?: open?.project,
-                        building = activity is ProjectActivity.Building,
-                        onOpenProject = { navigator.go(Destination.PROJECTS) },
-                    ) { project ->
-                        val hasFile = robot is RobotState.FromFile
-                        val turret = MappingModel.hasTurret(ui.setup.input.field)
-                        val model = remember(project, catalogue, turret) { ui.mapping(project, catalogue?.motors().orEmpty(), turret) }
-                        // Read again after every build, since saving restarts the code with the changed file.
-                        LaunchedEffect(model, hasFile, activity) {
-                            if (!hasFile || activity is ProjectActivity.Building) return@LaunchedEffect
-                            val stored = withContext(Dispatchers.IO) {
-                                try {
-                                    services.mappings.find(project.folder).orElse(null)?.mapping()
-                                } catch (unreadable: IOException) {
-                                    null
-                                }
-                            }
-                            stored?.let(model::load)
-                        }
-                        val scanned = (scanState as? ScanState.Scanning)?.opMode ?: (scanState as? ScanState.Done)?.opMode
-                        MappingScreen(
-                            model, sessionState.opModes, scanned, scanState, unmapped,
-                            onScan = { name ->
-                                services.session.selectOpMode(name)
-                                ui.scan.scan(name)
-                            },
-                            onCancelScan = ui.scan::cancel,
-                            primary = if (hasFile) "Save" else "Create",
-                            onPrimary = { model.mapping()?.let(ui.runner::saveRobot) },
-                            onSkip = if (hasFile) null else ui.runner::skipRobot,
-                        )
-                    }
                     Destination.CONTROLS -> ControlsScreen(ui.controls, services.settings, services.router, services.input)
                     Destination.PRACTICE -> PracticeScreen(
                         services.session, services.engine, ui.practice,
@@ -174,8 +128,8 @@ fun AppContent(
                         onReconnect = services::reconnect,
                         onSetup = { navigator.go(Destination.PROJECTS) },
                         restart = ui.runner,
-                        onEditRobot = { navigator.go(Destination.ROBOT) },
                         logOpener = logOpener,
+                        urlOpener = urlOpener,
                         corner = { corner ->
                             if (settings.display.performanceOverlay) PerformanceOverlay(services.performance, corner)
                         },

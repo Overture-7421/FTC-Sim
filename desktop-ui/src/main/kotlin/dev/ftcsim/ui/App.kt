@@ -15,6 +15,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import dev.ftcsim.ui.common.AwtFileChooser
 import dev.ftcsim.ui.common.AwtLogOpener
+import dev.ftcsim.ui.common.AwtUrlOpener
 import dev.ftcsim.ui.common.FAKE_HOST_TITLE
 import dev.ftcsim.ui.common.FtcSimTheme
 import dev.ftcsim.ui.common.rememberUpdateStatus
@@ -51,7 +52,8 @@ object App {
 
     /** Opens the window on [host] with [options], calls [started] once the window's services exist, and returns when it has closed. */
     fun run(host: AppHost, options: AppOptions, started: suspend (AppServices, AppUi) -> Unit) {
-        application {
+        // exitProcessOnExit = false: the caller's code after this returns (closing the host, starting a fetched installer) must run.
+        application(exitProcessOnExit = false) {
             val settingsFile = remember { options.settingsFile ?: UserDirectories.uiSettingsFile() }
             val services = remember { AppServices(host, SettingsStore.forFile(settingsFile)) }
             val ui = remember { AppUi(services) }
@@ -77,8 +79,9 @@ object App {
             }
             // Looking for a newer version waits on the network, so it is not done on the UI thread, and not at all for a scripted run
             // that asked for none. An offer is made in the window; nothing is installed unasked.
+            // On a daemon thread of its own: the application ends only when its coroutines have, and a request must not hold it.
             LaunchedEffect(services.updates) {
-                if (options.checksForUpdates) withContext(Dispatchers.IO) { services.updates.checkNow() }
+                if (options.checksForUpdates) services.io.execute { services.updates.checkNow() }
             }
             // Once the installer of the version the person chose is ready, the window goes: the installer replaces this installation.
             val update by rememberUpdateStatus(services.updates)
@@ -106,7 +109,7 @@ object App {
                     onDispose { window.removeWindowFocusListener(listener) }
                 }
                 val files = remember(window) { AwtFileChooser { window } }
-                FtcSimTheme { AppContent(services, ui, files, AwtLogOpener(), settingsFile?.toString()) }
+                FtcSimTheme { AppContent(services, ui, files, AwtLogOpener(), AwtUrlOpener(), settingsFile?.toString()) }
             }
         }
     }

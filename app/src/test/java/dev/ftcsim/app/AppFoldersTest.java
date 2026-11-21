@@ -40,14 +40,10 @@ class AppFoldersTest {
     }
 
     @Test
-    void aProjectsKeptProfileAndProgramListLiveByTheNameOfItsWorkspace() {
+    void aProjectsProgramListLivesInItsWorkspace() {
         AppFolders folders = new AppFolders(root.resolve("FTC-Sim"));
         Path project = root.resolve("Robot").resolve("Code");
-        String workspaceName = folders.workspace(project).getFileName().toString();
-
-        assertEquals(folders.base().resolve("profiles").resolve(workspaceName + ".json"), folders.keptProfile(project));
         assertEquals(folders.workspace(project).resolve("programs.txt"), folders.programList(project));
-        assertEquals(folders.keptProfile(project), folders.keptProfile(Path.of(project.toString().toUpperCase())));
         assertEquals(folders.programs().resolve(".discarding-ab12"), folders.discarding("ab12"));
     }
 

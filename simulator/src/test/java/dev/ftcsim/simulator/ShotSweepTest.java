@@ -4,7 +4,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.Alliance;
-import dev.ftcsim.simulator.robot.HornetMapping;
 import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
@@ -48,7 +47,7 @@ class ShotSweepTest {
 
     @BeforeAll
     static void sweepBothAlliances() throws IOException {
-        profile = RobotDesign.decode().spec(HornetMapping.mapping());
+        profile = RobotDesign.decode().spec();
         for (Alliance alliance : Alliance.values()) {
             List<ShotSweep.Result> results = ShotSweep.run(profile, ShotSweep.spots(profile, alliance), SPEEDS, AIMS);
             RESULTS.put(alliance, results);

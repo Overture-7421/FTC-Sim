@@ -7,17 +7,19 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.robot.GamepadState;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.contracts.world.Vec3;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.MotorMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.Slot;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.robot.ServoCatalog;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -42,17 +44,18 @@ class MechanismsSessionTest {
     private static final double GEARED = 13.7;
     private static final double TURRET_RATIO = 3.0;
     private static final double SERVO_TURRET_RATIO = 2.75;
+    private static final String BARE = MotorCatalog.GOBILDA_BARE;
 
     /** Hornet's robot but for the names its OpMode of the fixture uses: four wheels, the roller, the belt and two flywheels. */
     private static final RobotMapping MAPPING = RobotMapping.empty("mechanism test rig").withMotors(List.of(
-            new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
-            new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
-            new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-            new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-            new MotorMapping("intake", Slot.INTAKE, "", false, GEARED),
-            new MotorMapping("up", Slot.CONVEYOR, "", false, GEARED),
-            new MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
-            new MotorMapping("shooterRight", Slot.SHOOTER, "", false)));
+            new MotorMapping("frontLeft", Slot.FRONT_LEFT, BARE, true),
+            new MotorMapping("backLeft", Slot.REAR_LEFT, BARE, true),
+            new MotorMapping("frontRight", Slot.FRONT_RIGHT, BARE, false),
+            new MotorMapping("backRight", Slot.REAR_RIGHT, BARE, false),
+            new MotorMapping("intake", Slot.INTAKE, BARE, false, GEARED),
+            new MotorMapping("up", Slot.CONVEYOR, BARE, false, GEARED),
+            new MotorMapping("shooterLeft", Slot.SHOOTER, BARE, false),
+            new MotorMapping("shooterRight", Slot.SHOOTER, BARE, false)));
 
     private static GamepadState pad(float rightTrigger, boolean a) {
         return new GamepadState(
@@ -150,11 +153,8 @@ class MechanismsSessionTest {
     /** The robot of the BIOBUZZ game with the turret the fixture OpMode holds at an angle of the left stick's choosing; it has no wheels. */
     private static RobotSpec turretRobot(boolean mirrored) {
         List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
-        motors.add(new MotorMapping("turret", Slot.TURRET, "", mirrored));
-        RobotMapping geared = new RobotMapping(
-                "turret test rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), TURRET_RATIO,
-                MAPPING.hubLogo(), MAPPING.hubUsb(), MAPPING.camera());
-        return RobotDesign.biobuzz().spec(geared);
+        motors.add(new MotorMapping("turret", Slot.TURRET, BARE, mirrored));
+        return RobotDesign.biobuzz().spec(rig("turret test rig", motors, TURRET_RATIO, RobotMapping.TurretParts.NONE));
     }
 
     /**
@@ -208,11 +208,9 @@ class MechanismsSessionTest {
     /** The robot of the BIOBUZZ game whose turret a continuous-rotation servo turns, 2.75 servo turns to one of the turret's. */
     private static RobotSpec servoTurretRobot(boolean mirrored) {
         List<MotorMapping> motors = new ArrayList<>(MAPPING.motors().subList(5, 8));
-        RobotMapping geared = new RobotMapping(
-                "servo turret rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), SERVO_TURRET_RATIO,
-                MAPPING.hubLogo(), MAPPING.hubUsb(), MAPPING.camera(),
-                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", mirrored), List.of(), 0, 0, false));
-        return RobotDesign.biobuzz().spec(geared);
+        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
+                new RobotMapping.ServoMapping("turretServo", ServoCatalog.AXON_MINI_PLUS, mirrored), List.of(), 0, 0, false, List.of());
+        return RobotDesign.biobuzz().spec(rig("servo turret rig", motors, SERVO_TURRET_RATIO, parts));
     }
 
     /** Turns the turret with the left stick pushed {@code stickX} for a second, then shoots; the heading the piece leaves along and the turret's yaw, in degrees. */
@@ -268,12 +266,15 @@ class MechanismsSessionTest {
         RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
                 null, List.of(), 0, 0, false,
                 List.of(
-                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hoodServo", "", false)),
-                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopperServo", "", false))));
-        RobotMapping mapping = new RobotMapping(
-                "hood rig", motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), 1.0, MAPPING.hubLogo(), MAPPING.hubUsb(),
-                MAPPING.camera(), parts);
-        return RobotDesign.biobuzz().spec(mapping);
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hoodServo", ServoCatalog.GOBILDA_SUPER_SPEED, false)),
+                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopperServo", ServoCatalog.GOBILDA_TORQUE_5_TURN, false))));
+        return RobotDesign.biobuzz().spec(rig("hood rig", motors, 1.0, parts));
+    }
+
+    private static RobotMapping rig(String name, List<MotorMapping> motors, double turretRatio, RobotMapping.TurretParts parts) {
+        return new RobotMapping(
+                name, motors, MAPPING.massKg(), MAPPING.wheelDiameterMm(), MAPPING.driveMotor(), turretRatio, MAPPING.hubLogo(), MAPPING.hubUsb(),
+                MAPPING.camera(), parts, MAPPING.driveRatio(), MAPPING.colorSensors());
     }
 
     private static GamepadState hoodPad(float stickX, boolean flywheels, boolean conveyor, boolean open) {
@@ -309,15 +310,15 @@ class MechanismsSessionTest {
     void theStopperHoldsThePieceUntilItsServoOpensAndTheHoodSetsHowSteeplyItLeaves() throws IOException {
         double[] closed = hoodShot(-1f, false);
         double[] low = hoodShot(-1f, true);
-        double[] mid = hoodShot(-0.95f, true);
+        double[] mid = hoodShot(-0.5f, true);
         double[] high = hoodShot(1f, true);
 
         assertEquals(0.0, closed[0], "the belt cannot push the piece out past a closed stopper");
         assertEquals(1.0, low[0], "and it leaves once the stopper is open");
         assertEquals(1.0, high[0]);
         assertEquals(45.0, low[1], 3.0, "the hood at its lowest, 1 degree, sends it up at 45 degrees (a little less by the time it is looked at)");
-        // The hood's servo has five turns: position 0.025 is 45 degrees of servo, 8.9 degrees of hood over the 5.07 to 1 gears.
-        assertEquals(45.0 + 45.0 / RobotDesign.HOOD_RATIO, mid[1], 3.0, "position 0.025 raises the hood 8.9 degrees");
+        // The hood's servo is a Super Speed of 300 degrees: position 0.25 is 75 degrees of servo, 14.8 degrees of hood over the 5.07 to 1 gears.
+        assertEquals(45.0 + 75.0 / RobotDesign.HOOD_RATIO, mid[1], 3.0, "position 0.25 raises the hood 14.8 degrees");
         // A piece leaving at 89 degrees has hardly any sideways speed, so by the time it is looked at (up to 10 ms later) gravity has taken
         // it a long way down in angle: it reads over 70, which the old 24 degree stop (69 at launch) cannot. RobotDesignTest has the exact 89.
         assertTrue(high[1] > 70.0 && high[1] > mid[1] + 10.0, "the servo's travel is more than the hood's: its stop holds it, 44 degrees up: " + high[1]);

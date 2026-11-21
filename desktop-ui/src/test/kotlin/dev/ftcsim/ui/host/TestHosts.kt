@@ -15,12 +15,10 @@ private val workRoot: Path by lazy {
 fun newWorkFolder(): Path = Files.createTempDirectory(workRoot, "run")
 
 /**
- * A fake host for tests: a link that opens at once, unless told otherwise, a preparer that plays on [scheduler] and
- * [mappings], which by default know no project.
+ * A fake host for tests: a link that opens at once, unless told otherwise, and a preparer that plays on [scheduler].
  */
 fun testHost(
     scheduler: ManualScheduler = ManualScheduler(),
     work: Path = newWorkFolder(),
     links: FakeAppHost.LinkOpener = FakeAppHost.LinkOpener { FakeSimulatorLink() },
-    mappings: FakeProjectMappings = FakeProjectMappings(work),
-): FakeAppHost = FakeAppHost(FakeProgramPreparer(scheduler, work), mappings, links)
+): FakeAppHost = FakeAppHost(FakeProgramPreparer(scheduler, work), links)

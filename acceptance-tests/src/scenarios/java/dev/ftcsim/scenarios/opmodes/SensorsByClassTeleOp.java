@@ -35,10 +35,10 @@ public final class SensorsByClassTeleOp extends OpMode {
         ask("pinpoint", GoBildaPinpointDriver.class, "my odometry computer");
         ask("same pinpoint", GoBildaPinpointDriver.class, "my odometry computer");
         ask("second pinpoint", GoBildaPinpointDriver.class, "another one");
-        ask("colour range", ColorRangeSensor.class, "colour");
-        ask("colour normalized", NormalizedColorSensor.class, "colour");
-        ask("colour legacy", ColorSensor.class, "colour");
-        ask("colour v3", RevColorSensorV3.class, "colour");
+        ask("colour range", ColorRangeSensor.class, "upSensor");
+        ask("colour normalized", NormalizedColorSensor.class, "upSensor");
+        ask("colour legacy", ColorSensor.class, "upSensor");
+        ask("colour v3", RevColorSensorV3.class, "upSensor");
         ask("second colour", ColorRangeSensor.class, "other colour");
         ask("octoquad", OctoQuad.class, "octo");
         ask("external imu", Rev9AxisImu.class, "extImu");

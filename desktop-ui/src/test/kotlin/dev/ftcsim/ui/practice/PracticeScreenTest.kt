@@ -29,6 +29,7 @@ import androidx.compose.ui.test.v2.runComposeUiTest
 import dev.ftcsim.contracts.field.Score
 import dev.ftcsim.contracts.robot.RobotPhase
 import dev.ftcsim.contracts.session.MatchState
+import dev.ftcsim.ui.common.FakeUrlOpener
 import dev.ftcsim.ui.common.FtcSimTheme
 import dev.ftcsim.ui.input.ViewportInput
 import dev.ftcsim.ui.render.OrbitCamera
@@ -54,6 +55,7 @@ class PracticeScreenTest {
         val engine = ViewportEngine(feed, camera, input)
         val session = PracticeSession(feed, camera).also { it.attach(link) }
         val ui = PracticeUi()
+        val urls = FakeUrlOpener()
         var setupRequests = 0
         var retries = 0
         var reconnects = 0
@@ -70,7 +72,7 @@ class PracticeScreenTest {
         }
     }
 
-    private fun ComposeUiTest.show(rig: Rig, session: PracticeSession = rig.session, editRobot: (() -> Unit)? = null) {
+    private fun ComposeUiTest.show(rig: Rig, session: PracticeSession = rig.session) {
         setContent {
             FtcSimTheme(darkTheme = true) {
                 PracticeScreen(
@@ -78,11 +80,45 @@ class PracticeScreenTest {
                     onRetry = { rig.retries++ },
                     onReconnect = { rig.reconnects++ },
                     onSetup = { rig.setupRequests++ },
-                    onEditRobot = editRobot,
+                    urlOpener = rig.urls,
                     viewport = { _, modifier -> Box(modifier) },
                 )
             }
         }
+    }
+
+    @Test
+    fun theDashboardButtonIsThereOnlyWhileTheStatusNamesADashboardAndOpensItInTheBrowser() = runComposeUiTest {
+        val rig = Rig()
+        show(rig)
+        rig.openSession()
+        waitForIdle()
+        onNodeWithText("Open dashboard").assertDoesNotExist()
+
+        rig.listener.status(Fixtures.status(dashboardUrl = "http://127.0.0.1:8001/"))
+        waitForIdle()
+        onNodeWithText("Open dashboard").performClick()
+        waitForIdle()
+        assertEquals(listOf("http://127.0.0.1:8001/"), rig.urls.opened)
+
+        rig.listener.status(Fixtures.status())
+        waitForIdle()
+        onNodeWithText("Open dashboard").assertDoesNotExist()
+    }
+
+    @Test
+    fun aBrowserThatCannotBeOpenedIsSaidInASnackbar() = runComposeUiTest {
+        val rig = Rig()
+        rig.urls.problem = "No browser is set up on this computer."
+        show(rig)
+        rig.openSession()
+        rig.listener.status(Fixtures.status(dashboardUrl = "http://127.0.0.1:8001/"))
+        waitForIdle()
+
+        onNodeWithText("Open dashboard").performClick()
+        waitForIdle()
+
+        onNodeWithText("No browser is set up on this computer.").assertExists()
     }
 
     @Test
@@ -97,34 +133,6 @@ class PracticeScreenTest {
         onNodeWithText("Telemetry").assertExists()
         onNodeWithText("Details").performClick()
         onNodeWithText("Telemetry").assertDoesNotExist()
-    }
-
-    @Test
-    fun theProblemsTabLeadsToTheRobotScreenWhenThereIsOne() = runComposeUiTest {
-        var opened = 0
-        val rig = Rig()
-        show(rig, editRobot = { opened++ })
-        rig.openSession()
-        waitForIdle()
-
-        onNodeWithText("Details").performClick()
-        onNodeWithText("Problems", substring = true).performClick()
-        onNodeWithText("Set up robot").performClick()
-
-        assertEquals(1, opened)
-    }
-
-    @Test
-    fun withoutARobotScreenTheProblemsTabHasNoSetUpButton() = runComposeUiTest {
-        val rig = Rig()
-        show(rig)
-        rig.openSession()
-        waitForIdle()
-
-        onNodeWithText("Details").performClick()
-        onNodeWithText("Problems", substring = true).performClick()
-
-        onNodeWithText("Set up robot").assertDoesNotExist()
     }
 
     @Test

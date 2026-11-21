@@ -4,7 +4,6 @@ import dev.ftcsim.contracts.session.SimulatorLink;
 import dev.ftcsim.link.WorkerLauncher;
 import dev.ftcsim.ui.host.AppHost;
 import dev.ftcsim.ui.host.ProgramPreparer;
-import dev.ftcsim.ui.host.ProjectMappings;
 import dev.ftcsim.ui.host.UpdateService;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -34,7 +33,6 @@ public final class RealHost implements AppHost, AutoCloseable {
     private final Source<AppClasspath> classpath;
     private final Path java;
     private final ImporterPreparer preparer;
-    private final ProjectMappings mappings;
     private Duration connectTimeout = Duration.ofSeconds(60);
     private Duration shutdownGrace = Duration.ofSeconds(3);
     private UpdateService updates = UpdateService.NONE;
@@ -55,7 +53,6 @@ public final class RealHost implements AppHost, AutoCloseable {
         this.classpath = classpath;
         this.java = java;
         this.preparer = ImporterPreparer.forThisMachine(folders, machine, classpath);
-        this.mappings = new ProjectMappingsImpl(folders);
     }
 
     /** How long to wait for the worker to connect after it started; the default suits a user, a test may want longer. */
@@ -101,11 +98,6 @@ public final class RealHost implements AppHost, AutoCloseable {
     @Override
     public ProgramPreparer preparer() {
         return preparer;
-    }
-
-    @Override
-    public ProjectMappings mappings() {
-        return mappings;
     }
 
     /** How this host keeps the application up to date; none unless given one (a development build has no version to update from). */

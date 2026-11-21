@@ -14,9 +14,6 @@ import dev.ftcsim.contracts.field.StartPose;
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.FieldChoice;
 import dev.ftcsim.contracts.session.RobotInfo;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.field.Field;
 import dev.ftcsim.field.FieldRun;
@@ -27,6 +24,9 @@ import dev.ftcsim.physics.PieceSpec;
 import dev.ftcsim.simulator.SessionConfig;
 import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.MotorMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.Slot;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -70,26 +70,17 @@ class SessionFactoryTest {
         return folder;
     }
 
-    private static RobotMapping wheels() {
-        return RobotMapping.empty("Test robot").withMotors(List.of(
-                new MotorMapping("fl", Slot.FRONT_LEFT, "", true),
-                new MotorMapping("bl", Slot.REAR_LEFT, "", true),
-                new MotorMapping("fr", Slot.FRONT_RIGHT, "", false),
-                new MotorMapping("br", Slot.REAR_RIGHT, "", false),
-                new MotorMapping("shooter", Slot.SHOOTER, "", false)));
-    }
-
-    private SessionRequest request(RobotMapping mapping, String program, String field) {
-        return new SessionRequest(mapping, program, field, Alliance.BLUE, 99L, 1.5, -2.0, 0.5, 2.0);
+    private SessionRequest request(String program, String field) {
+        return new SessionRequest(program, field, Alliance.BLUE, 99L, 1.5, -2.0, 0.5, 2.0);
     }
 
     @Test
     void aRequestBecomesTheConfigurationTheSimulatorRuns() throws IOException {
         Path storage = folder.resolve("sdcard");
 
-        SessionConfig config = factory(new FieldRegistry()).config(request(wheels(), program().toString(), "none"), storage);
+        SessionConfig config = factory(new FieldRegistry()).config(request(program().toString(), "none"), storage);
 
-        assertEquals(RobotDesign.decode().spec(wheels()), config.robot());
+        assertEquals(RobotDesign.decode().spec(), config.robot());
         assertEquals(List.of(folder.resolve("classes")), config.program().robotClasspath());
         assertNull(config.field());
         assertEquals(new FieldSetup(99L, Alliance.BLUE), config.fieldSetup());
@@ -106,15 +97,15 @@ class SessionFactoryTest {
         SessionFactory factory = factory(fields);
         String program = program().toString();
 
-        Field first = factory.config(request(wheels(), program, "fake"), folder).field();
-        Field second = factory.config(request(wheels(), program, "fake"), folder).field();
+        Field first = factory.config(request(program, "fake"), folder).field();
+        Field second = factory.config(request(program, "fake"), folder).field();
 
         assertEquals("fake", first.description().id());
         assertNotSame(first, second);
     }
 
     @Test
-    void theCatalogueListsTheBareFloorFirstThenEachFieldWithWhatItOffersAndTheMotorsAMappingMayName() {
+    void theCatalogueListsTheBareFloorFirstThenEachFieldWithWhatItOffers() {
         Catalogue catalogue = factory(new FieldRegistry().register("fake", FakeField::new)).catalogue();
 
         assertEquals(
@@ -122,26 +113,16 @@ class SessionFactoryTest {
                         new FieldChoice("none", "Bare floor", List.of(), List.of()),
                         new FieldChoice("fake", "Fake", List.of(new StartPose("origin", 0, 0, 0)), List.of(new HumanAction("feed", "Feed")))),
                 catalogue.fields());
-        assertEquals(MotorCatalog.choices(), catalogue.motors());
-        assertEquals("goBILDA-bare-6000", catalogue.motors().get(0).id(), "the base motors, the Yellow Jacket first");
     }
 
     @Test
-    void theRobotOfTheGameOfTheFieldIsBuiltAndAMappingWithProblemsIsRefusedWithAllOfThem() throws IOException {
+    void theRobotOfTheGameOfTheFieldIsItsBuiltInProfile() {
         SessionFactory factory = factory(new FieldRegistry());
-        RobotMapping turret = RobotMapping.empty("Test robot").withMotors(List.of(new MotorMapping("aim", Slot.TURRET, "", false)));
 
-        assertNotNull(factory.robot("biobuzz", turret).motors().get("aim").shaft());
-        IOException noTurret = assertThrows(IOException.class, () -> factory.robot("decode", turret));
-        assertTrue(noTurret.getMessage().contains("aim: this game's robot has no turret"), noTurret.getMessage());
-        RobotMapping wrong = RobotMapping.empty("").withMotors(List.of(new MotorMapping("fl", Slot.FRONT_LEFT, "", false)));
-        String message = assertThrows(IOException.class, () -> factory.robot("decode", wrong)).getMessage();
-        assertTrue(
-                message.contains("the robot mapping is wrong") && message.contains("The robot has no name")
-                        && message.contains("Map all four wheels or none"),
-                message);
-        RobotMapping unknownModel = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("fly", Slot.SHOOTER, "nonsense", false)));
-        assertTrue(assertThrows(IOException.class, () -> factory.robot("decode", unknownModel)).getMessage().contains("nonsense"));
+        assertEquals("BIOBUZZ", factory.robot("biobuzz").name());
+        assertNotNull(factory.robot("biobuzz").motors().get("intake").shaft());
+        assertEquals("Hornet 2026 (estimated)", factory.robot("decode").name());
+        assertEquals("Hornet 2026 (estimated)", factory.robot("none").name());
     }
 
     @Test
@@ -159,21 +140,30 @@ class SessionFactoryTest {
         assertTrue(layoutMessage.contains("is not a prepared robot program") && layoutMessage.contains("program.properties"), layoutMessage);
 
         String fieldMessage =
-                assertThrows(IOException.class, () -> factory.config(request(wheels(), program, "decode"), folder)).getMessage();
+                assertThrows(IOException.class, () -> factory.config(request(program, "decode"), folder)).getMessage();
         assertTrue(fieldMessage.contains("no field 'decode'") && fieldMessage.contains("none, fake"), fieldMessage);
     }
 
     @Test
-    void theRobotIsDescribedByItsMotorsInTheOrderOfTheMappingAndItsBody() {
-        RobotSpec driving = RobotDesign.decode().spec(wheels());
-        RobotSpec arm = RobotDesign.decode().spec(RobotMapping.empty("Arm only").withMotors(List.of(new MotorMapping("arm", Slot.SHOOTER, "", false))));
+    void theRobotIsDescribedByItsMotorsInTheOrderOfTheProfileAndItsBody() {
+        RobotSpec driving = RobotDesign.decode().spec();
+        RobotSpec arm = RobotDesign.decode().spec(
+                RobotMapping.empty("Arm only").withMotors(List.of(new MotorMapping("arm", Slot.SHOOTER, MotorCatalog.GOBILDA_BARE, false))));
 
         RobotInfo info = SessionFactory.robotInfo(driving);
 
         MecanumConfig body = driving.chassis();
-        assertEquals(new RobotInfo("Test robot", body.lengthM(), body.widthM(), body.heightM(), List.of("fl", "bl", "fr", "br", "shooter"), List.of(), List.of()), info);
+        assertEquals(
+                new RobotInfo(
+                        "Hornet 2026 (estimated)", body.lengthM(), body.widthM(), body.heightM(),
+                        List.of("frontLeft", "backLeft", "frontRight", "backRight", "shooterLeft", "shooterRight", "intake", "upMotor"),
+                        List.of(), List.of()),
+                info);
         assertTrue(body.lengthM() > 0 && body.widthM() > 0 && body.heightM() > 0);
         assertEquals(List.of("arm"), SessionFactory.robotInfo(arm).motors());
         assertEquals(0, SessionFactory.robotInfo(arm).lengthM(), "a robot that does not drive has no body to draw");
+        assertEquals(
+                List.of("turretServo", "hood", "stopper", "colibriLeft", "colibriRight"),
+                SessionFactory.robotInfo(RobotDesign.biobuzz().spec()).servos());
     }
 }

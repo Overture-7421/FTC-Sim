@@ -7,8 +7,9 @@ import java.util.List;
  * it the first time robot code looks a device up by name, so a robot program never has to be told what is
  * plugged in where. A motor, servo or pin the robot mapping does not place still gets a working port, the next
  * free one, and the answer says so, so the simulator can show it as unbound instead of pretending it is wired to
- * something real. The robot's sensors are fixed: robot code finds each by the driver class it asks for, under any
- * name, and anything else is recorded as unsupported.
+ * something real. The robot's sensors are fixed: robot code finds the Pinpoint, the IMU and the OctoQuad by the driver
+ * class it asks for, under any name, and each colour sensor by the name the robot declares for it; anything else is
+ * recorded as unsupported.
  */
 public interface HardwareDirectory {
 
@@ -19,8 +20,6 @@ public interface HardwareDirectory {
     enum Sensor {
         /** The goBILDA Pinpoint odometry computer. */
         PINPOINT(1),
-        /** The REV colour sensor. */
-        COLOR_SENSOR(2),
         /** The Digital Chicken Labs OctoQuad, on a robot whose design puts encoders on it. */
         OCTOQUAD(3);
 
@@ -81,10 +80,22 @@ public interface HardwareDirectory {
      */
     I2cWiring sensor(String name, Sensor kind);
 
-    /** Whether the robot has a sensor of that kind; every robot has the Pinpoint and the colour sensor, few have an OctoQuad. */
+    /** Whether the robot has a sensor of that kind; every robot has the Pinpoint, few have an OctoQuad. */
     default boolean hasSensor(Sensor kind) {
         return true;
     }
+
+    /** The names of the robot's REV colour sensors, in the order the robot declares them; empty if it has none. */
+    List<String> colorSensorNames();
+
+    /**
+     * Where the colour sensor the robot declares under {@code name} is. Colour sensors are bound by name, as in a robot
+     * configuration, so only a declared name finds one; asking again finds the same wiring.
+     *
+     * @throws IllegalArgumentException if the robot declares no colour sensor of that name; the message lists the
+     *                                  declared names
+     */
+    I2cWiring colorSensor(String name);
 
     /**
      * Where the IMU is for robot code that asks for an IMU, the {@code IMU} interface or {@code BNO055IMU}, under
@@ -98,8 +109,8 @@ public interface HardwareDirectory {
     I2cWiring imu(String name);
 
     /**
-     * Records a device robot code asked for that the simulator cannot provide, such as an OctoQuad, a second sensor of a
-     * kind or a webcam, so that the session lists it among its problems. The device is not bound.
+     * Records a device robot code asked for that the simulator cannot provide, such as an OctoQuad, a colour sensor the
+     * robot does not declare or a webcam, so that the session lists it among its problems. The device is not bound.
      *
      * @param name what robot code called it
      * @param what the kind of device, as robot code asked for it

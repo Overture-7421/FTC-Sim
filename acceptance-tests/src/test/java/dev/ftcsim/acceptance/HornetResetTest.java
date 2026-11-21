@@ -10,9 +10,10 @@ import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotSpec;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -40,7 +41,7 @@ class HornetResetTest {
     @Test
     void theRobotProgramStopsTheRobotAndThePiecesGoBackAndTheProgramRunsAgainWithoutBeingLoadedAgain() throws Exception {
         RobotProgram program = HornetFixture.program(HornetFixture.prepared());
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         DecodeField field = new DecodeField();
 
         try (TestSessions.Handle handle = TestSessions.open(

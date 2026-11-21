@@ -6,7 +6,6 @@ import dev.ftcsim.ui.glfw.GamepadPoller
 import dev.ftcsim.ui.glfw.GlfwThread
 import dev.ftcsim.ui.host.AppHost
 import dev.ftcsim.ui.host.ProgramPreparer
-import dev.ftcsim.ui.host.ProjectMappings
 import dev.ftcsim.ui.host.UpdateService
 import dev.ftcsim.ui.input.GamepadRouter
 import dev.ftcsim.ui.input.ViewportInput
@@ -43,9 +42,6 @@ class AppServices(private val host: AppHost, val settings: SettingsStore) : Auto
     val router = GamepadRouter({ gamepad, state -> session.setGamepad(gamepad, state) }, input.keys())
     val performance = PerformanceMeter(engine, feed)
     val preparer: ProgramPreparer = host.preparer()
-
-    /** The robot mappings that live in the team's projects. */
-    val mappings: ProjectMappings = host.mappings()
 
     /** Whether the window runs on a stand-in host that runs no robot code, which it says everywhere. */
     val isFake: Boolean = host.isFake()

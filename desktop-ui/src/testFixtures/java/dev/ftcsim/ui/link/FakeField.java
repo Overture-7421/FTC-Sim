@@ -13,7 +13,6 @@ import dev.ftcsim.contracts.robot.OpModeDescriptor;
 import dev.ftcsim.contracts.robot.OpModeKind;
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.FieldChoice;
-import dev.ftcsim.contracts.session.MotorChoice;
 import dev.ftcsim.contracts.session.RobotInfo;
 import java.util.ArrayList;
 import java.util.List;
@@ -128,9 +127,7 @@ final class FakeField {
                 List.of(
                         new FieldChoice("none", "Bare floor", List.of(), List.of()),
                         new FieldChoice("decode", "DECODE", startPoses(), humanActions()),
-                        new FieldChoice("biobuzz", "BIOBUZZ", startPoses(), humanActions())),
-                List.of(new MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
-                        new MotorChoice("rev-hd-hex-6000", "REV HD Hex")));
+                        new FieldChoice("biobuzz", "BIOBUZZ", startPoses(), humanActions())));
     }
 
     static RobotInfo robot() {

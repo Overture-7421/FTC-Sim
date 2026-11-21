@@ -21,6 +21,7 @@ import java.util.Objects;
  * @param match         where a timed match is and how far into its period; {@link MatchStatus#NONE} in free practice
  * @param unmapped      what the robot program asked the hardware map for under a name the robot mapping does not place, in
  *                      the order it asked; empty when the mapping places everything the program uses
+ * @param dashboardUrl  the address a browser on this machine opens to see the robot program's dashboard, when the program has one that listens on the machine; empty when it has none
  */
 public record SessionStatus(
         long simTimeNanos,
@@ -33,13 +34,15 @@ public record SessionStatus(
         double achievedSpeed,
         boolean paused,
         MatchStatus match,
-        List<UnmappedDevice> unmapped) {
+        List<UnmappedDevice> unmapped,
+        String dashboardUrl) {
 
     public SessionStatus {
         problems = List.copyOf(problems);
         hardware = List.copyOf(hardware);
         unmapped = List.copyOf(unmapped);
         Objects.requireNonNull(match, "match");
+        Objects.requireNonNull(dashboardUrl, "dashboardUrl");
     }
 
     /** A status of a run whose mapping places everything its program uses. */
@@ -54,7 +57,7 @@ public record SessionStatus(
             double achievedSpeed,
             boolean paused,
             MatchStatus match) {
-        this(simTimeNanos, phase, telemetry, score, problems, hardware, speed, achievedSpeed, paused, match, List.of());
+        this(simTimeNanos, phase, telemetry, score, problems, hardware, speed, achievedSpeed, paused, match, List.of(), "");
     }
 
     /** A status of free practice, with no timed match. */

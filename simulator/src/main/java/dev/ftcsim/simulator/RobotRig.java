@@ -4,7 +4,6 @@ import dev.ftcsim.contracts.field.FieldTag;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.robot.RobotEnvironment;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.snapshot.BodyKinds;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.contracts.snapshot.RobotJoint;
@@ -34,6 +33,7 @@ import dev.ftcsim.physics.WheelPosition;
 import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotException;
+import dev.ftcsim.simulator.robot.RobotMapping;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.robot.ServoCatalog;
 import java.util.ArrayList;
@@ -144,6 +144,9 @@ public final class RobotRig {
         for (HardwareDirectory.Hub hub : spec.hubs()) {
             wiring.hub(hub.address(), hub.name(), hub.parent(), hub.embedded());
         }
+        for (RobotSpec.ColorSensor sensor : spec.colorSensors()) {
+            wiring.colorSensor(sensor.name(), sensor.hubAddress(), sensor.bus());
+        }
         if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
             wiring.sensor(HardwareDirectory.Sensor.OCTOQUAD);
         }
@@ -252,8 +255,8 @@ public final class RobotRig {
     }
 
     /**
-     * Attaches the robot's fixed sensors: the IMU inside every Control Hub on its bus 0, the Pinpoint and the colour
-     * sensor on the buses of the parent hub that are theirs, the OctoQuad with the turret's encoders if the design has
+     * Attaches the robot's fixed sensors: the IMU inside every Control Hub on its bus 0, the Pinpoint on its bus of
+     * the parent hub, every colour sensor on the hub and bus it is declared on, the OctoQuad with the turret's encoders if the design has
      * them, and plugs in the Limelight.
      */
     private static CameraRack sensors(RobotSpec spec, int parent, Map<Integer, LynxHub> hubs, DeviceHost devices, long noiseSeed) {
@@ -269,9 +272,13 @@ public final class RobotRig {
             LynxHub parentHub = hubs.get(parent);
             parentHub.attach(
                     HardwareDirectory.Sensor.PINPOINT.bus(), models.create(DeviceModels.PINPOINT, "Pinpoint", Map.of(), devices));
-            parentHub.attach(
-                    HardwareDirectory.Sensor.COLOR_SENSOR.bus(),
-                    models.create(DeviceModels.COLOR_SENSOR, "colour sensor", spec.colorSensor().settings(), devices));
+            for (RobotSpec.ColorSensor sensor : spec.colorSensors()) {
+                LynxHub hub = hubs.get(sensor.hubAddress());
+                if (hub == null) {
+                    throw new IllegalArgumentException("colour sensor " + sensor.name() + " is on hub " + sensor.hubAddress() + ", which the robot does not declare");
+                }
+                hub.attach(sensor.bus(), models.create(DeviceModels.COLOR_SENSOR, sensor.name(), sensor.settings(), devices));
+            }
             if (spec.turret() != null && !spec.turret().encoders().isEmpty()) {
                 parentHub.attach(
                         HardwareDirectory.Sensor.OCTOQUAD.bus(),

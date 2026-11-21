@@ -123,7 +123,6 @@ class WiringTableTest {
         WiringTable table = controlHubAndExpansionHub().build();
 
         assertEquals(new HardwareDirectory.I2cWiring(173, 1, true), table.sensor("odopods", Sensor.PINPOINT));
-        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.sensor("upSensor", Sensor.COLOR_SENSOR));
         assertEquals(table.sensor("odopods", Sensor.PINPOINT), table.sensor("odopods", Sensor.PINPOINT), "the same name finds it again");
         assertEquals(List.of(), table.unmappedNames());
     }
@@ -136,7 +135,42 @@ class WiringTableTest {
         IllegalStateException refused = assertThrows(IllegalStateException.class, () -> table.sensor("other", Sensor.PINPOINT));
 
         assertTrue(refused.getMessage().contains("\"other\"") && refused.getMessage().contains("\"pinpoint\" already is it"), refused.getMessage());
-        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.sensor("other", Sensor.COLOR_SENSOR), "another kind of sensor is free");
+    }
+
+    @Test
+    void aColourSensorIsFoundOnlyByTheNameItIsDeclaredUnderAndAskingAgainFindsTheSameWiring() {
+        WiringTable table = controlHubAndExpansionHub().colorSensor("upSensor", 173, 2).build();
+
+        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.colorSensor("upSensor"));
+        assertEquals(table.colorSensor("upSensor"), table.colorSensor("upSensor"));
+        assertEquals(List.of("upSensor"), table.colorSensorNames());
+        assertEquals(List.of(), table.unmappedNames());
+    }
+
+    @Test
+    void anUndeclaredColourSensorNameIsRefusedAndTheMessageListsTheDeclaredOnes() {
+        WiringTable table = controlHubAndExpansionHub().colorSensor("upSensor", 173, 2).colorSensor("intakeSensor", 2, 0).build();
+
+        IllegalArgumentException refused = assertThrows(IllegalArgumentException.class, () -> table.colorSensor("colour"));
+
+        assertTrue(refused.getMessage().contains("\"colour\"") && refused.getMessage().contains("[\"upSensor\", \"intakeSensor\"]"), refused.getMessage());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().build().colorSensor("upSensor"), "a robot may have none");
+    }
+
+    @Test
+    void twoColourSensorsOnDifferentHubsAndBusesAreEachFoundWhereTheyAre() {
+        WiringTable table = controlHubAndExpansionHub().colorSensor("upSensor", 173, 2).colorSensor("intakeSensor", 2, 0).build();
+
+        assertEquals(new HardwareDirectory.I2cWiring(173, 2, true), table.colorSensor("upSensor"));
+        assertEquals(new HardwareDirectory.I2cWiring(2, 0, true), table.colorSensor("intakeSensor"));
+    }
+
+    @Test
+    void aColourSensorOnABusAnotherOneUsesOnAnUnknownHubOrBusOrUnderATakenNameIsRejected() {
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().colorSensor("a", 173, 2).colorSensor("b", 173, 2).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().colorSensor("a", 99, 2).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().colorSensor("a", 173, 4).build());
+        assertThrows(IllegalArgumentException.class, () -> controlHubAndExpansionHub().colorSensor("a", 173, 2).colorSensor("a", 2, 0).build());
     }
 
     @Test

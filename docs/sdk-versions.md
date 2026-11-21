@@ -13,7 +13,7 @@ The simulator bundles no FTC SDK. The importer packs the SDK jars the team's pro
 
 Everything else ran on 2026-11-17 (the fixture suite includes the BIOBUZZ stub, which moves every mechanism of the robot and reads the OctoQuad through each release's `OctoQuadImpl`). 11.1.0 is the build's default.
 
-- The acceptance suite has 196 tests. 18 need a prepared Hornet program (and `HornetImportTest` in `project-import` needs a checkout); they skip without one, leaving the 178.
+- The acceptance suite has 253 tests. 18 need a prepared Hornet program (and `HornetImportTest` in `project-import` needs a checkout); they skip without one, leaving the 235.
 - The 19 Hornet tests are all those needing the checkout, run with it on 11.1.0. The 9 on 12.0.0 are the rehearsal.
 - To run the matrix: `.\gradlew.bat :acceptance-tests:test -PftcSdk=<version>` (quote it in PowerShell: `'-PftcSdk=12.0.0'`). The build accepts every `ftcSdk*` version of `gradle/libs.versions.toml` and refuses any other, so a new release needs one catalog line ([development.md](development.md), recipes).
 - SDK 12 moved the AprilTag singleton fields to `AprilTagSingleDetection`. That touches the vision portal, which the simulator does not run, not the Limelight, which speaks REST.

@@ -13,15 +13,17 @@ import java.util.Set;
 /**
  * Where each named device is plugged in. The motors are where the robot mapping put them; a motor, servo or pin the
  * mapping does not place gets the next free port, once and for all, and is remembered so the simulator can show it as
- * unbound. The robot's sensors are fixed and found by kind: the IMU of the embedded hub and each {@link Sensor} are
- * bound to the first name robot code asks for them under, and a second name for the same sensor is refused and
- * recorded as unsupported, as is anything else the simulator cannot provide.
+ * unbound. The robot's sensors are fixed. The IMU of the embedded hub and each {@link Sensor} are found by kind and bound
+ * to the first name robot code asks for them under, and a second name for the same sensor is refused. Each colour sensor
+ * is declared with its name, hub and bus and found only by that name. Whatever is refused is recorded as unsupported, as
+ * is anything else the simulator cannot provide.
  */
 public final class WiringTable implements HardwareDirectory {
     private static final int MOTOR_PORTS = 4;
     private static final int SERVO_PORTS = 6;
     private static final int DIGITAL_CHANNELS = 8;
     private static final int ANALOG_CHANNELS = 4;
+    private static final int I2C_BUSES = 4;
 
     private record Slot(int hub, int index) {}
 
@@ -35,7 +37,9 @@ public final class WiringTable implements HardwareDirectory {
     private final Set<Slot> usedServoPorts = new LinkedHashSet<>();
     private final Set<Slot> usedDigitalChannels = new LinkedHashSet<>();
     private final Set<Slot> usedAnalogChannels = new LinkedHashSet<>();
+    private final Set<Slot> usedI2cBuses = new LinkedHashSet<>();
     private final List<UnmappedDevice> assigned = new ArrayList<>();
+    private final Map<String, I2cWiring> colorSensors = new LinkedHashMap<>();
     private final Map<Sensor, String> sensorNames = new EnumMap<>(Sensor.class);
     private final Set<String> unsupported = new LinkedHashSet<>();
     private final Set<Sensor> optionalSensorsPresent;
@@ -108,6 +112,21 @@ public final class WiringTable implements HardwareDirectory {
     }
 
     @Override
+    public synchronized List<String> colorSensorNames() {
+        return List.copyOf(colorSensors.keySet());
+    }
+
+    @Override
+    public synchronized I2cWiring colorSensor(String name) {
+        I2cWiring wiring = colorSensors.get(name);
+        if (wiring == null) {
+            throw new IllegalArgumentException("\"" + name + "\" asks for a colour sensor, but this robot's colour sensors are "
+                    + colorSensors.keySet().stream().map(declared -> "\"" + declared + "\"").toList());
+        }
+        return wiring;
+    }
+
+    @Override
     public synchronized I2cWiring imu(String name) {
         Hub embedded = hubs.stream().filter(Hub::embedded).findFirst().orElseThrow(() -> new IllegalStateException(
                 "\"" + name + "\" asks for the IMU of a Control Hub, but this robot has no Control Hub: its hubs are "
@@ -168,7 +187,6 @@ public final class WiringTable implements HardwareDirectory {
     private static String describe(Sensor kind) {
         return switch (kind) {
             case PINPOINT -> "Pinpoint odometry computer";
-            case COLOR_SENSOR -> "colour sensor";
             case OCTOQUAD -> "OctoQuad";
         };
     }
@@ -198,6 +216,27 @@ public final class WiringTable implements HardwareDirectory {
         /** Says that the robot has this sensor, which only some robots have (the OctoQuad); the others every robot has. */
         public Builder sensor(Sensor kind) {
             optionalSensors.add(kind);
+            return this;
+        }
+
+        /** Declares a REV colour sensor under the name robot code finds it by, on bus {@code bus} of the hub at {@code hubAddress}. */
+        public Builder colorSensor(String name, int hubAddress, int bus) {
+            placements.add(() -> {
+                if (hubs.stream().noneMatch(declared -> declared.address() == hubAddress)) {
+                    throw new IllegalArgumentException("colour sensor \"" + name + "\" is wired to hub " + hubAddress + ", which the robot does not declare");
+                }
+                if (bus < 0 || bus >= I2C_BUSES) {
+                    throw new IllegalArgumentException("I2C bus " + bus + " does not exist; there are " + I2C_BUSES);
+                }
+                if (table.colorSensors.containsKey(name)) {
+                    throw new IllegalArgumentException("two colour sensors are named \"" + name + "\"");
+                }
+                if (!table.usedI2cBuses.add(new Slot(hubAddress, bus))) {
+                    throw new IllegalArgumentException("colour sensor \"" + name + "\" is wired to I2C bus " + bus + " of hub " + hubAddress
+                            + ", which another device already uses");
+                }
+                table.colorSensors.put(name, new I2cWiring(hubAddress, bus, true));
+            });
             return this;
         }
 

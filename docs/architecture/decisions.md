@@ -64,7 +64,7 @@ Windows only. Every number was measured on one development desktop unless stated
 
 ## 9. Repeatability is not promised
 
-- **Decision (product owner).** Two runs of the same program, mapping, field, seed and inputs are not promised to give the same world, bit for bit or at all. The goal is to test a team's code and practise driving, not accuracy or repeatability.
+- **Decision (product owner).** Two runs of the same program, field, seed and inputs are not promised to give the same world, bit for bit or at all. The goal is to test a team's code and practise driving, not accuracy or repeatability.
 - **Why.** The promise cost more than it was worth: waiting in real time for every library thread before time could move, rewriting every source of randomness, a state hash pinned across JVM flags, and flags on runs the simulator could not vouch for. Some of it (Panels' start-up thread against the OpMode thread) caused waits and failures of its own.
 - **Gone:** waiting for foreign threads, reproducibility flags, randomness virtualisation, state hashes, recording and replay. The field's own seed (`FieldSetup.seed`: reserve order, layout noise) stays, since a field is laid out from it.
 
@@ -86,12 +86,13 @@ An OpMode sees the same sleep durations and readings however the caller slices t
 
 What a robot program can reach outside its class loader, and what the simulator answers. The rule: the robot's clock is the simulated clock, and nothing it reaches touches the machine's network. Where the simulator cannot answer for the robot thread, the run reports a problem (`KernelDiagnostics.problems()`, `SimulationSession.problems()`). Randomness and the timed waits of library code are the machine's own (section 9).
 
-**Network policy.** The robot world never listens or connects on the real network: a listening socket makes Windows ask a student about its firewall, and traffic makes a run depend on the outside.
+**Network policy.** The robot world does not listen or connect on the real network, with one exception: a listening socket on a non-loopback address makes Windows ask a student about its firewall, and traffic makes a run depend on the outside.
 - Every JDK way to bind, listen, connect or send is rewritten to `NetworkHooks` (table: `NetworkRules`; a test fails when a JDK member that reaches the network is missing).
 - Listening (`ServerSocket`, `ServerSocketChannel`) gets a *simulated listener*: it holds the port in a private network of the robot world, binds nothing on the machine, `accept` waits until closed, and no client can connect. Each is recorded (`NetworkHooks.simulatedRequests()`).
 - Everything else is declined, fails the way a closed port fails, and is recorded (`declinedRequests()`).
-- Hornet's Panels listens on 8001, 8002 and 5800, 5801, 5805, 5807 (the Limelight proxy): all simulated. Binding the wildcard address is left out on purpose, since it could itself make Windows ask.
-- When a session closes its listeners close. A thread that keeps accepting on its closed socket waits for good instead of failing again and again (Panels' proxy otherwise logged 2.8 million lines in a few seconds).
+- **The exception, approved by the owner: the Panels ports.** Panels (the dashboard library teams use) serves its page on 8001 and its websocket on 8002, and a browser has to reach them. A `ServerSocket` that binds one of those two ports (`KernelConfig.loopbackPorts`, set by `SimulationSession`) gets a *real* listener on `127.0.0.1`: the wildcard address the library asks for is replaced by the loopback address and never bound (Windows asks only about non-loopback listeners, and nothing beyond this machine can connect), the reuse flag is not passed on (on Windows it would let a second FTC-Sim share the port), and accepted sockets are the JDK's, served to the library's own threads in real time. A port another program holds leaves a simulated listener and a problem of the session (`NetworkHooks.realListenerFailures()`); real ones are in `realRequests()`. `ServerSocketChannel`, a bind to another address and every other port stay simulated. `SessionStatus.dashboardUrl` carries `http://127.0.0.1:8001/` while 8001 is real and the window offers it as a button.
+- Hornet's Panels also listens on 5800, 5801, 5805, 5807 (the Limelight proxy): simulated. Binding the wildcard address stays out.
+- When a session closes its listeners close, the real ones too and the ports are free at once. A thread that keeps accepting on its closed socket waits for good instead of failing again and again (Panels' proxy otherwise logged 2.8 million lines in a few seconds).
 
 **Lifecycle hooks.** `ControllerLifecycle` does what the Robot Controller app does around the robot's life, through the SDK's own `AnnotatedHooksClassFilter`: it calls the libraries' `@OnCreate` hooks, gives them the event loop (`@OnCreateEventLoop`) and an in-process web handler manager (`@WebHandlerRegistrar`), and calls `@OnDestroy` at the end. The SDK logs and swallows what a hook throws, so a failed hook, like a thread that dies of an unhandled exception, becomes a warning on the Driver Station.
 
@@ -126,8 +127,13 @@ Each was considered and decided against; adding one back is the product owner's 
 
 - **Replay and recording of runs.** Nothing in the product needs it; a new run is a new session.
 - **Bit-exact repeatability and golden hashes.** Never the goal; the machinery cost waits, flaky corners and tests of its own (section 9).
-- **TOML and YAML robot files.** One format, JSON (`ftcsim.json`, read and written whole by `ProjectMappingsImpl`): no second parser to keep in step.
+- **Robot description files of any kind** (`ftcsim.json`, TOML, YAML) **and a robot editor.** The robots are built into the simulator (section 12); nothing is read from a team's project.
 - **Air drag.** Excessive for what the shot tests need. The launcher is fitted by angle and efficiency to the robot's shooter table (`robots/hornet-fit.md`), and a far shot scores by banking off the back of the goal, as real ones do (`fields/decode.md`, "Friction, bounce and bank shots").
 - **Mechanisms that push on the chassis** (section 8), **foul and ranking-point rules, an opposing or second robot**, **features for other seasons.** The aim is to test code and practise driving, not to referee or design a robot.
-- **A browser dashboard for Panels.** Its server gets a simulated listener nobody can connect to (section 10): the program runs, the page does not exist.
 - **A Rust core or sidecar** (section 1) and **platforms other than Windows.**
+
+## 12. The robots are built into the simulator
+
+- **Decision (product owner).** FTC-Sim runs a team's unmodified robot project on **two built-in robots**, Hornet's (on DECODE and the bare floor) and BIOBUZZ's, whose numbers are literal data in `RobotProfiles` (`simulator`). The simulator is the team's own, so a team supplies nothing: no `ftcsim.json`, no robot screen, no sensor settings, and nothing about the robot is read from the project (the importer no longer treats such a file specially). The robot is chosen by the field (`biobuzz` gets BIOBUZZ's, every other field Hornet's). A name the team's code asks for that the robot lacks is an unmapped device, reported in the session's problems.
+- **Why.** The only teams that use the simulator are the ones whose robots are built in; a mapping window and a file format were the largest part of the window for no one's use, and a fixed robot makes a session's request a field, an alliance and a pose.
+- **Consequences.** Refitting a robot means editing `RobotProfiles` and the numbers its test pins ([development](../development.md)). Hardware names are the profile's: the colour sensors are bound by declared name (`upSensor`, and BIOBUZZ's `intakeSensor`); the Pinpoint, IMU and OctoQuad are bound by class under any name. An old `ftcsim.json`, `%LOCALAPPDATA%\FTC-Sim\profiles` and the settings keys `scanOpMode` and `robotSkipped` are neither read nor written.

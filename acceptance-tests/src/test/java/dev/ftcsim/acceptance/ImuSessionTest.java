@@ -5,12 +5,13 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.robot.GamepadState;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
-import dev.ftcsim.simulator.SimulationSession;
 import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotMapping;
+import dev.ftcsim.simulator.robot.RobotProfiles;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -32,7 +33,7 @@ class ImuSessionTest {
 
     @BeforeAll
     static void loadProfile() {
-        hornet = HornetMapping.spec();
+        hornet = RobotDesign.decode().spec();
     }
 
     /** The number a telemetry line shows as "caption : value". */
@@ -131,10 +132,10 @@ class ImuSessionTest {
 
     @Test
     void aHubMountedOnItsEdgeGivesTheRightAnglesToCodeThatSaysSoAndNoSecondNameIsFoundForIt() throws IOException {
-        RobotMapping base = HornetMapping.mapping();
+        RobotMapping base = RobotProfiles.hornet();
         RobotSpec onEdge = RobotDesign.decode().spec(new RobotMapping(
                 base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), base.turretRatio(), "LEFT", "UP",
-                base.camera()));
+                base.camera(), base.turretParts(), base.driveRatio(), base.colorSensors()));
 
         try (TestSessions.Handle handle = TestSessions.open(onEdge, 0, 0, 0)) {
             SimulationSession session = handle.session;

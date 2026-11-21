@@ -122,6 +122,16 @@ public interface RobotHooks {
     }
 
     /**
+     * Whether a simulated listener bound to this TCP port is a real one on the loopback address of the machine, so
+     * that a browser on it can connect, for the dashboard of the program. Only a bind to the wildcard or the loopback
+     * address qualifies and it is always made on the loopback address, so no firewall prompt appears and nothing
+     * beyond the machine can connect; if the port is taken the listener stays simulated. The default is no.
+     */
+    default boolean listenOnLoopback(int port) {
+        return false;
+    }
+
+    /**
      * Whether the calling thread is one the host orders in simulated time: the robot thread and the simulator
      * thread. Any other thread, such as a library's timer, runs in real time next to the simulation and must not move
      * simulated time; code that reaches into the host, such as the hub wire, asks so that the host can treat such a

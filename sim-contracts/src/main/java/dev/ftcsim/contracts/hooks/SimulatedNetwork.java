@@ -4,7 +4,9 @@ import java.net.BindException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 
 /**
  * The private network of the robot world: the ports its simulated listeners hold. Nothing outside the robot world
@@ -39,6 +41,30 @@ final class SimulatedNetwork {
 
     synchronized void release(int port, SimulatedListener listener) {
         held.remove(port, listener);
+    }
+
+    /** The ports with a real listener that is still open. */
+    Set<Integer> realPorts() {
+        Map<Integer, SimulatedListener> snapshot;
+        synchronized (this) {
+            snapshot = new TreeMap<>(held);
+        }
+        Set<Integer> ports = new TreeSet<>();
+        snapshot.forEach((port, listener) -> {
+            if (listener.real() != null) {
+                ports.add(port);
+            }
+        });
+        return ports;
+    }
+
+    /** Closes the listeners that hold a port of the machine, with their world. */
+    void closeRealListeners() {
+        List<SimulatedListener> listeners;
+        synchronized (this) {
+            listeners = new ArrayList<>(held.values());
+        }
+        listeners.stream().filter(listener -> listener.real() != null).forEach(SimulatedListener::closeWithTheWorld);
     }
 
     /** Closes every listener, which is what the end of the robot's process does to its sockets. */

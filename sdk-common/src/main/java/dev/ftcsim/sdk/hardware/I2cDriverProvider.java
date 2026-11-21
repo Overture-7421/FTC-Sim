@@ -27,13 +27,14 @@ import java.util.Set;
 
 /**
  * The SDK drivers of the robot's I2C sensors, built by the same constructor the SDK uses for a configured device, on
- * the SDK's own I2C transport (wrapped in its synchronous client for the older drivers that take one). The robot has
- * three fixed sensors and robot code finds each by the driver class it asks for, under any name:
+ * the SDK's own I2C transport (wrapped in its synchronous client for the older drivers that take one). Robot code finds
+ * the Pinpoint, the IMU and the OctoQuad by the driver class it asks for, under any name, and each colour sensor by the
+ * name the robot declares for it:
  *
  * <ul>
  *   <li>{@code GoBildaPinpointDriver} is the Pinpoint;
  *   <li>{@code ColorRangeSensor}, {@code NormalizedColorSensor}, {@code ColorSensor} and {@code RevColorSensorV3} are
- *       the REV colour sensor;
+ *       the REV colour sensors, each found only under the name the robot declares for it;
  *   <li>{@code IMU}, {@code BNO055IMU} and the Control Hub's own driver classes are the BNO055 inside the Control Hub.
  *       {@code IMU} gets the new driver of the hub's own IMU and {@code BNO055IMU} the legacy one; the same name can be
  *       asked for by both, as a robot configuration with both drivers allows;
@@ -41,7 +42,8 @@ import java.util.Set;
  *       encoders on one.
  * </ul>
  *
- * Each sensor has one name: a second name for the same sensor is refused, as in a real configuration. Every other I2C
+ * The Pinpoint, the IMU and the OctoQuad have one name each: a second name is refused, as in a real configuration. A colour
+ * sensor name the robot does not declare is refused and the message lists the declared ones. Every other I2C
  * driver (an external IMU, {@code BHI260IMU}, because the simulated Control Hub is the older one, or an OctoQuad on a
  * robot that has none) is unsupported: the lookup fails with a message and the directory records it, so that it is among
  * the session's problems.
@@ -59,8 +61,8 @@ final class I2cDriverProvider implements DeviceProvider {
     @Override
     public String family() {
         return "I2C sensor (GoBildaPinpointDriver as the Pinpoint; ColorRangeSensor, NormalizedColorSensor, ColorSensor and"
-                + " RevColorSensorV3 as the REV colour sensor; IMU and BNO055IMU as the IMU inside the Control Hub; OctoQuad"
-                + " as the OctoQuad of a robot that has one; each under any name)";
+                + " RevColorSensorV3 as the REV colour sensors, by the names the robot declares; IMU and BNO055IMU as the IMU inside the Control Hub; OctoQuad"
+                + " as the OctoQuad of a robot that has one; all but the colour sensors under any name)";
     }
 
     @Override
@@ -112,18 +114,25 @@ final class I2cDriverProvider implements DeviceProvider {
         if (kind == Kind.OCTOQUAD && !directory.hasSensor(HardwareDirectory.Sensor.OCTOQUAD)) {
             directory.unsupported(name, requested.getSimpleName() + ", which this robot does not have");
             throw new IllegalArgumentException("Unable to find a hardware device with name \"" + name + "\" and type "
-                    + requested.getSimpleName() + ": this robot has no OctoQuad. Its design puts one on the robot only when the"
-                    + " turret's encoders are mapped (ftcsim.json, turret encoders).");
+                    + requested.getSimpleName() + ": this robot has no OctoQuad. Only a robot whose turret has encoders (BIOBUZZ's)"
+                    + " has one.");
         }
         HardwareDirectory.I2cWiring wiring;
         try {
             wiring = switch (kind) {
                 case IMU -> directory.imu(name);
                 case PINPOINT -> directory.sensor(name, HardwareDirectory.Sensor.PINPOINT);
-                case COLOR_SENSOR -> directory.sensor(name, HardwareDirectory.Sensor.COLOR_SENSOR);
+                case COLOR_SENSOR -> directory.colorSensor(name);
                 case OCTOQUAD -> directory.sensor(name, HardwareDirectory.Sensor.OCTOQUAD);
                 case UNSUPPORTED -> throw unsupported(directory, requested, name);
             };
+        } catch (IllegalArgumentException undeclared) {
+            if (kind != Kind.COLOR_SENSOR) {
+                throw undeclared;
+            }
+            directory.unsupported(name, requested.getSimpleName() + ", which this robot does not declare");
+            throw new IllegalArgumentException("Unable to find a hardware device with name \"" + name + "\" and type "
+                    + requested.getSimpleName() + ": " + undeclared.getMessage(), undeclared);
         } catch (IllegalStateException refused) {
             directory.unsupported(name, requested.getSimpleName() + " under a second name");
             throw new IllegalArgumentException("Unable to find a hardware device with name \"" + name + "\" and type "
@@ -148,7 +157,7 @@ final class I2cDriverProvider implements DeviceProvider {
                 ? "the simulated Control Hub is the older one, whose IMU is a BNO055, and the simulator does not model the BHI260AP of"
                         + " the newer one. Ask for the IMU interface instead, hardwareMap.get(IMU.class, \"" + name
                         + "\"), which is the same program on both kinds of Control Hub (or BNO055IMU for the legacy driver)"
-                : "the simulator provides the Pinpoint, the REV colour sensor, the Control Hub's IMU and the OctoQuad of a robot that has one, and no other I2C device";
+                : "the simulator provides the Pinpoint, the REV colour sensors the robot declares, the Control Hub's IMU and the OctoQuad of a robot that has one, and no other I2C device";
         return new IllegalArgumentException("Unable to find a hardware device with name \"" + name + "\" and type "
                 + requested.getSimpleName() + ": " + why + ".");
     }
@@ -169,7 +178,7 @@ final class I2cDriverProvider implements DeviceProvider {
         return requested == BNO055IMU.class ? LynxEmbeddedIMU.class : requested;
     }
 
-    /** The driver class that answers a request: the REV colour sensor for its interfaces, the OctoQuad's for its interface, the requested class otherwise. */
+    /** The driver class that answers a request: the REV colour sensor driver for its interfaces, the OctoQuad's for its interface, the requested class otherwise. */
     private static Class<?> driverOf(Class<?> requested) {
         if (requested == OctoQuad.class) {
             return OctoQuadImpl.class;

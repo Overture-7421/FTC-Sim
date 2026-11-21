@@ -26,11 +26,11 @@ Why a separate process: [decisions.md](decisions.md) section 6. Tests serve the 
 Hand-written, big-endian, no serialisation framework, deterministic (floats and doubles travel as IEEE bits, so a `WorldSnapshot` comes back bit for bit).
 
 - Every length is checked against a bound before anything is allocated. Unknown content, a message that ends early or has bytes left over is an error, never skipped.
-- **The current version is 13** (`Protocol.VERSION`). Snapshots end with the AprilTag ids in the Limelight's latest
+- **The current version is 15** (`Protocol.VERSION`). Snapshots end with the AprilTag ids in the Limelight's latest
   completed frame. Field parts carry opacity after their RGB colour (it affects drawing,
   not sensors) and a shape may be a wedge, a triangular prism for gables. The version changes whenever a message gains, loses or reorders a field. The format and the version list are
   in the package description of `dev.ftcsim.link.wire`.
-- The worker never reads `ftcsim.json`: it builds the robot with `RobotDesign.forField(request.field()).spec(request.mapping())` from the mapping `Open` carries.
+- The request names no robot: the worker builds it from the field, `RobotDesign.forField(request.field()).spec()`, which uses the built-in `RobotProfiles` (Hornet's on every field but BIOBUZZ's).
 - The worker tees `System.out`, `System.err` (`LineCapture`) and the SDK's log calls into a `WorkerLog` sink that sends them in order as `Log` events (a `Log` is never dropped for a newer one); the window shows them as its console. The worker does not log what it sends, so a failing connection cannot feed itself.
 
 ## Threads and what the UI can rely on
@@ -46,7 +46,7 @@ Hand-written, big-endian, no serialisation framework, deterministic (floats and 
   - a match is armed or running and the command would disturb it;
   - Start has nothing initialised;
   - the simulation says no (with a sentence a person can act on).
-- **`failed(message)`: about the session or the worker, never about one command.** A requested session could not be opened (a mapping with problems, which the message lists; a program that is not there; a field the worker does not know), or the open session cannot go on, or the worker is gone.
+- **`failed(message)`: about the session or the worker, never about one command.** A requested session could not be opened (a program that is not there; a field the worker does not know), or the open session cannot go on, or the worker is gone.
   - While `isUsable()` is true, a new `open` or a `reset` may be tried.
   - **`reset` is in place:** the robot program stays loaded and only the world is rebuilt (`SimulationSession.resetWorld`). Hubs, devices and wiring are kept, as a real robot's electronics are when carried back to its start; simulated time goes on. It takes milliseconds where `open` takes seconds. The worker answers with `opened` again.
   - **When the worker dies**, `failed` comes once, with how it ended and the last lines of its error output; `isUsable()` turns false and later calls do nothing.
@@ -56,8 +56,7 @@ Hand-written, big-endian, no serialisation framework, deterministic (floats and 
 
 Right after the handshake the worker sends a `Catalogue` once (the UI cannot ask for anything before it):
 
-- for each field (from `FieldRegistry`) a `FieldChoice`: `id` as a `SessionRequest` takes it, display name, start poses, human actions; `none` (bare floor, no start poses) comes first;
-- the motors a robot mapping may name (`MotorChoice`, from `MotorCatalog`, default first).
+- for each field (from `FieldRegistry`) a `FieldChoice`: `id` as a `SessionRequest` takes it, display name, start poses, human actions; `none` (bare floor, no start poses) comes first.
 
 The UI applies a start pose by copying `x`, `y`, `headingRadians` into `startX`, `startY`, `startHeading` of the request.
 
@@ -69,5 +68,6 @@ The simulator plays a match in **simulated time**, never the UI's clock, so paus
 - The field has no transition phase and counts it as autonomous.
 - `SessionStatus.match` is `MatchStatus(state, phaseElapsedNanos, phaseDurationNanos)`; the UI shows that instead of a clock of its own. States: NONE, ARMED, AUTONOMOUS, TRANSITION, TELEOP, ENDED; elapsed and duration are 0 in NONE, ARMED and ENDED. Free practice never leaves NONE.
 - While a match is armed or under way `init` and `start` are refused. After it ends practice may follow; another match needs `reset`.
+- `SessionStatus.dashboardUrl` is `http://127.0.0.1:8001/` while the robot program has a real listener on port 8001 (Panels' page), else empty ([decisions](decisions.md), section 10); the window shows an **Open dashboard** button only then.
 - A robot that crashes or cannot be started does not stop the clock; what the robot controller refused is added to the status `problems`.
 - The UI should offer arming only when the robot is IDLE and the match state is NONE, and starting only when ARMED. Whatever slips through comes back as `refused`; only `failed` ends what is on screen.

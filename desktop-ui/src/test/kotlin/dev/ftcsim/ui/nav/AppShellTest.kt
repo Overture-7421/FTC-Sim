@@ -67,7 +67,7 @@ class AppShellTest {
         show()
         onNodeWithContentDescription("Back").assertIsNotEnabled()
 
-        onNodeWithText("Robot").performClick()
+        onNodeWithText("Settings").performClick()
         waitForIdle()
         onNodeWithContentDescription("Back").assertIsEnabled()
         onNodeWithContentDescription("Back").performClick()
@@ -80,7 +80,7 @@ class AppShellTest {
     @Test
     fun controlNumberKeysGoToTheDestinationsInTheOrderOfTheRailWhereverTheFocusIs() = runComposeUiTest {
         show()
-        val digits = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five)
+        val digits = listOf(Key.One, Key.Two, Key.Three, Key.Four)
         assertEquals(digits.size, Destination.entries.size, "a digit for every destination")
 
         for ((index, destination) in Destination.entries.withIndex().reversed()) {
@@ -128,7 +128,7 @@ class AppShellTest {
     @Test
     fun theBackButtonExplainsItselfInATooltipWhenThePointerRestsOnIt() = runComposeUiTest {
         show()
-        navigator.go(Destination.ROBOT)
+        navigator.go(Destination.SETTINGS)
         waitForIdle()
 
         onNodeWithContentDescription("Back").performMouseInput { moveTo(center) }

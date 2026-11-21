@@ -6,25 +6,19 @@ import java.util.Map;
 import java.util.TreeMap;
 
 /**
- * The continuous-rotation servos a mapping can name, with the no-load speed each has on a hub's 5 V servo port.
+ * The servos of the two robots, with the no-load speed each has on a hub's 5 V servo port.
  *
  * <p>The speeds come from the makers' speed per 60 degrees at 4.8 V and 6.0 V, interpolated to 5 V (the Axon Mini+ takes
- * 0.110 s and 0.090 s; the Axon MAX 0.140 s and 0.115 s; the goBILDA 25-2 turns 40 and 50 rpm). They are the servo's
+ * 0.110 s and 0.090 s; the Super Speed 0.055 s and 0.043 s; the Torque servo turns 40 and 50 rpm). They are the servo's
  * positional speed, which is what its continuous mode is taken to reach at full command. The lag is an estimate.
  */
 public final class ServoCatalog {
 
     public static final String AXON_MINI_PLUS = "axon-mini-plus";
-    public static final String AXON_MAX = "axon-max";
-    public static final String GOBILDA_TORQUE = "gobilda-2000-torque";
-    /** The same servo with five turns of travel (1800 degrees), as the BIOBUZZ hood has. */
+    /** The goBILDA Torque servo with five turns of travel (1800 degrees): BIOBUZZ's colibri arms and stopper. */
     public static final String GOBILDA_TORQUE_5_TURN = "gobilda-2000-torque-5turn";
-
-    /** The usual servo of a mechanism, which moves to a position: the goBILDA Torque servo. */
-    public static final String USUAL_POSITIONAL = GOBILDA_TORQUE;
-
-    /** The usual servo of a mapping. */
-    public static final String USUAL = AXON_MINI_PLUS;
+    /** The goBILDA Dual Mode Super Speed servo (2000-0025-0004), 300 degrees: BIOBUZZ's hood. */
+    public static final String GOBILDA_SUPER_SPEED = "gobilda-2000-superspeed";
 
     /** The time constant of every servo's speed response, estimated. */
     static final double LAG_SECONDS = 0.03;
@@ -37,8 +31,7 @@ public final class ServoCatalog {
     static {
         double turn = Math.toRadians(300.0);
         MODELS.put(AXON_MINI_PLUS, new Model(AXON_MINI_PLUS, fromSecondsPer60Degrees(0.110, 0.090), turn));
-        MODELS.put(AXON_MAX, new Model(AXON_MAX, fromSecondsPer60Degrees(0.140, 0.115), turn));
-        MODELS.put(GOBILDA_TORQUE, new Model(GOBILDA_TORQUE, fromRpm(40.0, 50.0), turn));
+        MODELS.put(GOBILDA_SUPER_SPEED, new Model(GOBILDA_SUPER_SPEED, fromSecondsPer60Degrees(0.055, 0.043), turn));
         MODELS.put(GOBILDA_TORQUE_5_TURN, new Model(GOBILDA_TORQUE_5_TURN, fromRpm(40.0, 50.0), Math.toRadians(1800.0)));
     }
 
@@ -79,3 +72,4 @@ public final class ServoCatalog {
         return model;
     }
 }
+

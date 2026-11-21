@@ -100,14 +100,14 @@ public final class BiobuzzShotSolver {
     /** The shot may ask for this share of the top speed, which leaves the flywheels room to recover between balls. */
     static final double MAX_SHARE_OF_TOP_SPEED = 0.95;
     /**
-     * The launch angle is {@code BASE} degrees with the hood servo at 0 and rises with the servo: the servo has five turns (1800
-     * degrees) behind 365:72 gears (5.0694444), so a whole turn of it is 71 degrees of hood, and the hood's stop holds it at 44 degrees,
-     * which is position 0.12. The code keeps its commands under that.
+     * The launch angle is {@code BASE} degrees with the hood servo at 0 and rises with the servo: the servo (a Super Speed, 300
+     * degrees) is behind 365:72 gears (5.0694444), so the whole of it is 59 degrees of hood, and the hood's stop holds it at 44 degrees,
+     * which is position 0.7435. The code keeps its commands under that.
      */
     static final double ELEVATION_BASE_DEGREES = 45.0;
     /** The lob the idle flywheel speed is worked out for: the middle of the steep lobs that work. */
     static final double NOMINAL_ELEVATION_DEGREES = 65.0;
-    static final double HOOD_DEGREES_PER_POSITION = 1800.0 / (365.0 / 72.0);
+    static final double HOOD_DEGREES_PER_POSITION = 300.0 / (365.0 / 72.0);
     static final double HOOD_RANGE_DEGREES = 44.0;
     public static final double HOOD_MAX_POSITION = HOOD_RANGE_DEGREES / HOOD_DEGREES_PER_POSITION;
 

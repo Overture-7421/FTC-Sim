@@ -42,9 +42,7 @@ internal object SettingsCodec {
             val prefix = "project.$index."
             out.setProperty(prefix + "folder", project.folder)
             out.setProperty(prefix + "name", project.name)
-            project.scanOpMode?.let { out.setProperty(prefix + "scanOpMode", it) }
             project.opMode?.let { out.setProperty(prefix + "opMode", it) }
-            if (project.robotSkipped) out.setProperty(prefix + "robotSkipped", "true")
             project.run?.let { run ->
                 out.setProperty(prefix + "run.field", run.field)
                 out.setProperty(prefix + "run.alliance", run.alliance.name)
@@ -113,9 +111,7 @@ internal object SettingsCodec {
     private fun decodeProject(p: Properties, prefix: String): RecentProject? {
         val folder = p.text(prefix + "folder") ?: return null
         val name = p.text(prefix + "name") ?: folder
-        return RecentProject(
-            folder, name, decodeRun(p, prefix + "run."), p.text(prefix + "scanOpMode"), p.text(prefix + "robotSkipped") == "true", p.text(prefix + "opMode"),
-        )
+        return RecentProject(folder, name, decodeRun(p, prefix + "run."), p.text(prefix + "opMode"))
     }
 
     /**

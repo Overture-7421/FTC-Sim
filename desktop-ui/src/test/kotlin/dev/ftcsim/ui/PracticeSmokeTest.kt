@@ -87,7 +87,7 @@ class PracticeSmokeTest {
     }
 
     @Test
-    fun aProjectIsBuiltItsRobotDescribedAndItsMatchPlayedOnTheFakeLink() {
+    fun aProjectIsBuiltAndItsMatchPlayedOnTheFakeLink() {
         val scheduler = ManualScheduler()
         val work = newWorkFolder()
         val project = Files.createDirectories(work.resolve("TeamProject"))
@@ -105,13 +105,7 @@ class PracticeSmokeTest {
             app.savePng(app.settle(), "flow-3-game.png")
             app.ui.runner.continueWithGame()
             assertTrue(app.pump { app.ui.runner.open.value != null && app.ui.runner.activity.value == ProjectActivity.Idle }, "the simulator starts after the choice")
-            assertTrue(
-                app.pump { app.ui.navigator.state.value.current == Destination.ROBOT },
-                "a project without ftcsim.json describes its robot next",
-            )
-            app.savePng(app.settle(), "flow-4-devices.png")
-            app.ui.runner.skipRobot()
-            assertEquals(Destination.PRACTICE, app.ui.navigator.state.value.current)
+            assertEquals(Destination.PRACTICE, app.ui.navigator.state.value.current, "a built project goes straight to the Simulator")
             app.awaitViewport()
             app.savePng(app.settle(), "flow-5-simulator.png")
 
@@ -226,7 +220,6 @@ class PracticeSmokeTest {
         HeadlessApp(startViewport = false).use { app ->
             for ((destination, name) in listOf(
                 Destination.PROJECTS to "projects.png",
-                Destination.ROBOT to "robot.png",
                 Destination.CONTROLS to "controls.png",
                 Destination.SETTINGS to "settings.png",
                 Destination.PRACTICE to "practice-empty.png",

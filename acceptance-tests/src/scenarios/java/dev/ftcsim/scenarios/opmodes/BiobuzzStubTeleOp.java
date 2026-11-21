@@ -35,8 +35,8 @@ public final class BiobuzzStubTeleOp extends OpMode {
     private static final double TURN_RATE_LIMIT = 60.0;
     /** And while the robot drives faster than this, in metres a second: a frame is about a tenth of a second old when the program has it. */
     private static final double SPEED_LIMIT = 0.2;
-    /** How fast the hood moves per second of the D-pad: its servo has five turns, up to position 0.12 for the hood's 44 degrees. */
-    private static final double HOOD_PER_SECOND = 0.05;
+    /** How fast the hood moves per second of the D-pad: its servo has 300 degrees, up to position 0.74 for the hood's 44 degrees. */
+    private static final double HOOD_PER_SECOND = 0.3;
 
     private BiobuzzHardware hw;
     private double hoodPosition;
@@ -121,6 +121,8 @@ public final class BiobuzzStubTeleOp extends OpMode {
         hw.setFlywheels(gamepad1.right_trigger > 0.3 ? 0.6 : 0.0);
         double indexerPower = gamepad1.b ? BiobuzzHardware.FEED_POWER : intaking && !gamepad1.x ? BiobuzzHardware.STAGING_POWER : 0.0;
         hw.indexer.setPower(indexerPower);
+        telemetry.addData("Sensors", String.format(Locale.ROOT, "up=%.1f intake=%.1f",
+                hw.upSensor.getDistance(DistanceUnit.CM), hw.intakeSensor.getDistance(DistanceUnit.CM)));
         telemetry.addData("Mechanisms", String.format(Locale.ROOT, "hood=%.3f stopper=%s colibri=%s intake=%s flywheels=%.0f indexer=%s",
                 hoodPosition, gamepad1.x ? "open" : "shut", gamepad1.y ? "up" : "down",
                 intaking ? "on" : "off", flywheelTicks, indexerPower > 0 ? "on" : "off"));

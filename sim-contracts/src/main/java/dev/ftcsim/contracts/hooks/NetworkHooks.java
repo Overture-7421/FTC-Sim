@@ -2,6 +2,7 @@ package dev.ftcsim.contracts.hooks;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.BindException;
 import java.net.DatagramPacket;
 import java.net.DatagramSocket;
 import java.net.InetAddress;
@@ -27,6 +28,7 @@ import java.nio.channels.ServerSocketChannel;
 import java.nio.channels.SocketChannel;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Future;
 import javax.net.ServerSocketFactory;
@@ -41,7 +43,9 @@ import javax.net.SocketFactory;
  * <p>Listening is different when the host simulates listeners ({@link RobotHooks#simulateListeners}, which is the
  * default): a {@code ServerSocket} or {@code ServerSocketChannel} then gets a listener in the private network of
  * the robot world, which binds nothing on the machine and which nobody can connect to. The request is remembered in
- * {@link #simulatedRequests()}, so that a host can tell its user that the program's ports are simulated.
+ * {@link #simulatedRequests()}, so that a host can tell its user that the program's ports are simulated. The one
+ * exception is a port the host lets listen on the loopback address ({@link RobotHooks#listenOnLoopback}), which a
+ * {@code ServerSocket} bound to it, and nothing else, gets as a real listener, see {@link #realRequests()}.
  *
  * <p>An instance method becomes a static method whose first parameter is the receiver, and a constructor becomes
  * a factory method returning the new object. Only operations that bind, listen, connect or send are covered;
@@ -55,6 +59,8 @@ public final class NetworkHooks {
 
     private static final RequestLog DECLINED = new RequestLog();
     private static final RequestLog SIMULATED = new RequestLog();
+    private static final RequestLog REAL = new RequestLog();
+    private static final RequestLog FAILED_REAL = new RequestLog();
     private static volatile SimulatedNetwork network = new SimulatedNetwork();
 
     private NetworkHooks() {}
@@ -72,16 +78,35 @@ public final class NetworkHooks {
         return SIMULATED.snapshot();
     }
 
-    /** Forgets the recorded requests, the declined and the simulated ones. */
-    public static void clearDeclinedRequests() {
-        DECLINED.clear();
-        SIMULATED.clear();
+    /**
+     * The requests to listen that were answered with a real listener on the loopback address, because the host let
+     * the port listen there ({@link RobotHooks#listenOnLoopback}); the request names the address the program asked
+     * for, the listener is on the loopback address. Oldest first, most recent 256 distinct ones.
+     */
+    public static Map<NetworkRequest, Long> realRequests() {
+        return REAL.snapshot();
     }
 
     /**
-     * Closes the listeners of the robot world, which wakes the threads that wait to accept on them with the exception a
-     * closed socket gives. The end of a robot's process does that to its sockets; a host calls it when it ends the robot
-     * world and the JVM goes on.
+     * The requests that would have got a real listener but found the port taken on the machine, and were answered
+     * with a simulated one, which is also in {@link #simulatedRequests()}. Oldest first, most recent 256 distinct ones.
+     */
+    public static Map<NetworkRequest, Long> realListenerFailures() {
+        return FAILED_REAL.snapshot();
+    }
+
+    /** Forgets the recorded requests, the declined, the simulated and the real ones. */
+    public static void clearDeclinedRequests() {
+        DECLINED.clear();
+        SIMULATED.clear();
+        REAL.clear();
+        FAILED_REAL.clear();
+    }
+
+    /**
+     * Closes the listeners of the robot world, real ones included, which wakes the threads that wait to accept on them
+     * with the exception a closed socket gives. The end of a robot's process does that to its sockets; a host calls it
+     * when it ends the robot world and the JVM goes on.
      */
     public static void closeSimulatedListeners() {
         network.closeAll();
@@ -89,11 +114,20 @@ public final class NetworkHooks {
 
     /**
      * Starts an empty private network; hosts do this by installing their hooks, so that the ports of one world are
-     * free in the next. The listeners of the network that ended are left as they are: their world is gone, and a
-     * library that loops on {@code accept} would spin if they were closed under it.
+     * free in the next. The simulated listeners of the network that ended are left as they are: their world is gone, and
+     * a library that loops on {@code accept} would spin if they were closed under it. The real ones hold ports of the
+     * machine, so they are closed; their threads wait for good like those of a simulated listener closed with its world.
      */
     static void reset() {
+        network.closeRealListeners();
         network = new SimulatedNetwork();
+        REAL.clear();
+        FAILED_REAL.clear();
+    }
+
+    /** The ports on which the robot world has a real listener open on the loopback address right now, ascending. */
+    public static Set<Integer> realPorts() {
+        return network.realPorts();
     }
 
     /** What was asked, with how often, most recent 256 distinct requests. */
@@ -162,6 +196,49 @@ public final class NetworkHooks {
      * network, so a second listener on a port that is held, whatever the address, fails as it would on a machine.
      */
     static void bindSimulated(SimulatedListener listener, SocketAddress endpoint) throws IOException {
+        InetSocketAddress address = claim(listener, endpoint);
+        SIMULATED.record(new NetworkRequest(NetworkRequest.Kind.LISTEN, endpoint(address)));
+    }
+
+    /**
+     * Binds the listener of a {@code ServerSocket}: as {@link #bindSimulated}, except that a bind of a port the host
+     * lets listen on the loopback address (see {@link RobotHooks#listenOnLoopback}) to the wildcard or a loopback
+     * address also opens a real listener on the loopback address, which the listener then closes with itself. A port
+     * that is taken on the machine leaves the listener simulated and is recorded in {@link #realListenerFailures()}.
+     * Nothing is passed on of what the robot code asked for besides the port: not the address, not the reuse flag,
+     * because on Windows a reusable port may be shared with a second process.
+     *
+     * @return the real socket, or null when the listener is simulated
+     */
+    static ServerSocket bindSimulated(SimulatedListener listener, SocketAddress endpoint, int backlog, int receiveBuffer)
+            throws IOException {
+        InetSocketAddress address = claim(listener, endpoint);
+        NetworkRequest request = new NetworkRequest(NetworkRequest.Kind.LISTEN, endpoint(address));
+        if (address.getPort() == 0
+                || !(address.getAddress().isAnyLocalAddress() || address.getAddress().isLoopbackAddress())
+                || !Hooks.listenOnLoopback(address.getPort())) {
+            SIMULATED.record(request);
+            return null;
+        }
+        ServerSocket real = new ServerSocket();
+        try {
+            real.setReceiveBufferSize(receiveBuffer);
+            real.bind(new InetSocketAddress(InetAddress.getLoopbackAddress(), address.getPort()), backlog);
+        } catch (BindException taken) {
+            real.close();
+            FAILED_REAL.record(request);
+            SIMULATED.record(request);
+            return null;
+        } catch (IOException | RuntimeException failure) {
+            real.close();
+            throw failure;
+        }
+        listener.attachReal(real);
+        REAL.record(request);
+        return real;
+    }
+
+    private static InetSocketAddress claim(SimulatedListener listener, SocketAddress endpoint) throws IOException {
         if (endpoint != null && !(endpoint instanceof InetSocketAddress)) {
             throw new IllegalArgumentException("Unsupported address type");
         }
@@ -170,7 +247,7 @@ public final class NetworkHooks {
             throw new SocketException("Unresolved address");
         }
         listener.bind(address);
-        SIMULATED.record(new NetworkRequest(NetworkRequest.Kind.LISTEN, endpoint(address)));
+        return address;
     }
 
     // ServerSocket

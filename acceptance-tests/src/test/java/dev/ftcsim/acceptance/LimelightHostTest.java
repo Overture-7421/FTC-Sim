@@ -16,6 +16,7 @@ import dev.ftcsim.hardware.device.scripted.ScriptedBody;
 import dev.ftcsim.physics.PhysicsWorld;
 import dev.ftcsim.physics.RayHit;
 import dev.ftcsim.physics.Vector3;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -72,7 +73,7 @@ class LimelightHostTest {
 
     /** The camera of the fixed DECODE robot mapped as Hornet: the same mount and pipeline the simulator gives a robot. */
     private static Map<String, Object> hornetCamera() {
-        return HornetMapping.spec().limelight().settings();
+        return RobotDesign.decode().spec().limelight().settings();
     }
 
     private static TestRobot.Builder robot(ScriptedBody chassis, FieldRays field) throws IOException {

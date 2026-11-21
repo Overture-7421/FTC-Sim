@@ -18,7 +18,9 @@ import java.util.Set;
  * A {@code ServerSocket} that listens in the private network of the robot world: it binds nothing on the machine,
  * {@code accept} waits until it is closed and then fails as it does on a socket closed during an accept, and no
  * client can ever connect, because there are none. It answers everything else from what it was given, as a
- * socket that is open does.
+ * socket that is open does. A bind to a port the host lets listen on the loopback address makes it a real
+ * listener there instead: {@code accept}, the timeout, the addresses and {@code close} are the real socket's, and
+ * it is closed with the robot world; the reuse flag is kept here and never passed on.
  */
 final class SimulatedServerSocket extends ServerSocket {
     private static final int DEFAULT_RECEIVE_BUFFER = 65_536;
@@ -43,12 +45,16 @@ final class SimulatedServerSocket extends ServerSocket {
 
     @Override
     public void bind(SocketAddress endpoint, int backlog) throws IOException {
-        NetworkHooks.bindSimulated(listener, endpoint);
+        ServerSocket real = NetworkHooks.bindSimulated(listener, endpoint, backlog, receiveBuffer);
+        if (real != null) {
+            real.setSoTimeout(timeoutMillis);
+        }
     }
 
     @Override
     public InetAddress getInetAddress() {
-        return listener.address();
+        ServerSocket real = listener.real();
+        return real != null ? real.getInetAddress() : listener.address();
     }
 
     @Override
@@ -58,7 +64,8 @@ final class SimulatedServerSocket extends ServerSocket {
 
     @Override
     public SocketAddress getLocalSocketAddress() {
-        return listener.local();
+        ServerSocket real = listener.real();
+        return real != null ? real.getLocalSocketAddress() : listener.local();
     }
 
     @Override
@@ -70,6 +77,10 @@ final class SimulatedServerSocket extends ServerSocket {
         if (!isBound()) {
             throw new SocketException("Socket is not bound yet");
         }
+        ServerSocket real = listener.real();
+        if (real != null) {
+            return real.accept();
+        }
         listener.awaitClose(timeoutMillis);
         throw new SocketException("Socket closed");
     }
@@ -77,6 +88,11 @@ final class SimulatedServerSocket extends ServerSocket {
     @Override
     public void close() {
         listener.close();
+    }
+
+    /** The real listener behind this socket, or null while it is simulated. */
+    ServerSocket real() {
+        return listener.real();
     }
 
     @Override
@@ -101,6 +117,10 @@ final class SimulatedServerSocket extends ServerSocket {
             throw new IllegalArgumentException("timeout < 0");
         }
         timeoutMillis = timeout;
+        ServerSocket real = listener.real();
+        if (real != null) {
+            real.setSoTimeout(timeout);
+        }
     }
 
     @Override

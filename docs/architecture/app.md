@@ -9,7 +9,6 @@ Main  ->  dev.ftcsim.ui.App.run(RealHost, args)               the window (deskto
 RealHost implements AppHost
    openLink()  ->  WorkerLauncher (sim-link)  ->  worker process   (Java 25, the same Java as this program)
    preparer()  ->  ImporterPreparer           ->  ProjectImporter (project-import), on a JDK 17 to 21
-   mappings()  ->  ProjectMappingsImpl                              the project's ftcsim.json
 ```
 
 `checkModuleRules` allows `app` -> `sim-contracts`, `sim-link`, `desktop-ui`, `project-import`. The worker and the robot world are reached as processes and files, not code (see "Where the worker's jars are").
@@ -38,7 +37,6 @@ The application itself looks for nothing else: no `PATH`, no registry, no `JAVA_
 | `programs\<name>-<12 hex>\` | A built program: the project's name plus 12 hex digits of the hash of all its source and build files. Same source, same folder. |
 | `programs\<name>-<12 hex>.build.log` | The full build output, beside the folder because a program's folder holds only what its manifest lists. |
 | `programs\.making-<hex>\`, `.discarding-<hex>\` | A program being made (moved into place only when complete, removed if the build fails) and an old one being thrown away. |
-| `profiles\<name>-<hash>.json` | FTC-Sim's copy of a project's `ftcsim.json`, only for a project whose folder is not writable. |
 
 ### Which programs are kept
 
@@ -47,15 +45,6 @@ Restart code rebuilds whenever the source changed, so a team restarting all day 
 - Only programs named in the project's `programs.txt` are removed.
 - Windows refuses to move a folder with open files, so a program a session still has open stays listed for next time. One that can be moved is renamed to `.discarding-<hex>` first, so a crash halfway leaves a recognisable leftover.
 - Deleting a folder under `programs` by hand is always safe; delete one to force a rebuild of unchanged source.
-
-### The project's robot file
-
-`ProjectMappingsImpl` reads and writes `ftcsim.json` at the project root, the mapping a team shares through its repository (format: [fixed-robots.md](../robots/fixed-robots.md)). It is the only file FTC-Sim adds to a project. The importer ignores it (not in the source hash, the snapshot or the unchanged-original check), so writing it never causes a rebuild. It is schema 2, read and written **whole** with Jackson: no section splicing, no promise to keep a person's formatting.
-
-- `find` looks in the project, else in `profiles\`, and returns the mapping and the `run` defaults. Every key but `schema` is optional and defaults to `RobotMapping.empty` (the robot's name is the project folder's). An unknown key, a wrongly typed value, a motor with no slot or a duplicate key is refused.
-- A refused file is still found, with a `problem` ("ftcsim.json is from an older version" for schema 1, "from a newer version", or "cannot be read: why") and no mapping; the window treats the project as having none.
-- `save` writes the whole mapping, keeping the file's `run` block, through a temporary file and a move. A file found with a problem is first copied to `ftcsim.old.json`. A project with no file gets one at its root; when that folder is not writable the file goes to `profiles\`, the answer says so, and that copy is the project's file from then on. A non-finite number is refused.
-- `saveRunDefaults` rewrites the file with its mapping and the new `run`; it refuses an unreadable file.
 
 ## Where the worker's jars are
 

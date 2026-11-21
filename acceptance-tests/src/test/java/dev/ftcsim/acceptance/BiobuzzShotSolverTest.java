@@ -71,8 +71,8 @@ class BiobuzzShotSolverTest {
         assertTrue(near.elevationDegrees > middle.elevationDegrees && middle.elevationDegrees > far.elevationDegrees,
                 near.elevationDegrees + " " + middle.elevationDegrees + " " + far.elevationDegrees);
         assertTrue(near.elevationDegrees > 70.0, "a lob that comes down into a CELL that is open at the end of its arm: " + near.elevationDegrees);
-        assertEquals(45.0 + near.hoodPosition * 1800.0 / (365.0 / 72.0), near.elevationDegrees, 1e-9, "the hood servo's five turns behind the 365:72 gears");
-        assertEquals(44.0 / (1800.0 / (365.0 / 72.0)), BiobuzzShotSolver.HOOD_MAX_POSITION, 1e-12, "the hood's stop is position 0.12 of the servo");
+        assertEquals(45.0 + near.hoodPosition * 300.0 / (365.0 / 72.0), near.elevationDegrees, 1e-9, "the hood servo's 300 degrees behind the 365:72 gears");
+        assertEquals(44.0 / (300.0 / (365.0 / 72.0)), BiobuzzShotSolver.HOOD_MAX_POSITION, 1e-12, "the hood's stop is position 0.7435 of the servo");
     }
 
     @Test

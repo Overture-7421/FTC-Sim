@@ -19,7 +19,6 @@ import java.util.Locale;
  * programs\NAME-FINGERPRINT\        a prepared program: the project's name and the first digits of the hash of its source
  * programs\NAME-FINGERPRINT.build.log   the output of the build that made it
  * import\work\NAME-HASH\programs.txt    the programs made from that project, oldest first, so that old ones can be removed
- * profiles\NAME-HASH.json               FTC-Sim's copy of a robot description that could not be written into its project
  * </pre>
  *
  * Windows limits a path to 260 characters and an Android build nests files deeply, so the names are short.
@@ -84,14 +83,6 @@ public final class AppFolders {
     /** Where the build log of a prepared program is kept: beside the program, because a program's folder holds only what its manifest lists. */
     public Path buildLog(Path program) {
         return program.resolveSibling(program.getFileName() + ".build.log");
-    }
-
-    /**
-     * FTC-Sim's own copy of a project's robot description, for a project whose folder cannot be written to. Named like the
-     * project's workspace, so the same project always finds it.
-     */
-    public Path keptProfile(Path projectFolder) {
-        return base.resolve("profiles").resolve(workspace(projectFolder).getFileName() + ".json");
     }
 
     /** The list of the program folders made from a project, oldest first, kept in its workspace to prune the old ones. */

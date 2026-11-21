@@ -102,14 +102,13 @@ Ask before going against a product-owner decision ([architecture/decisions.md](a
 | To | Read | Do |
 |---|---|---|
 | Add an ideal sensor (I2C model or camera) | [adding-a-device](architecture/adding-a-device.md) | One model class, one registry line (`DeviceModels.standard()`, `CameraModels.standard()`), a `HardwareDirectory.Sensor`, the binding in `I2cDriverProvider`, the rig's attachment. The SDK's own driver is the specification |
-| Add a motor | [fixed-robots](robots/fixed-robots.md) | One `MotorCatalog` entry (`simulator\robot`) with its constants and gearbox |
-| Map another robot | [fixed-robots](robots/fixed-robots.md), [hornet-fit](robots/hornet-fit.md) | The **Robot** screen writes `ftcsim.json` (schema 2) at the root of the robot project; no code |
+| Add a motor | [fixed-robots](robots/fixed-robots.md) | One `MotorCatalog` entry (`simulator\robot`) with its constants and gearbox, then name it in `RobotProfiles` |
+| Refit a robot profile | [fixed-robots](robots/fixed-robots.md), [hornet-fit](robots/hornet-fit.md) | Edit the literal data of `RobotProfiles.hornet()` or `biobuzz()` (motor names, models, ratios, mirroring, wheels, servos, colour-sensor mounts, camera) and the numbers `RobotProfilesTest` pins, in the same change; a Hornet chassis number is fitted, do not move it; re-run the shot sweep. `HornetAutoRunTest` is optional, only when requested. No window, file or wire change is needed
 | Virtualise another JDK member | `package-info` of `dev.ftcsim.runtime`, [decisions](architecture/decisions.md) | A row in `TimeRules`, `NetworkRules` or `RewriteRules`, a method with the implied descriptor in the hooks class (`contracts.hooks`), a probe and a rewrite test. The rule tests scan the JDK and fail for a missing member |
 | Support another FTC SDK release | [sdk-versions](sdk-versions.md) | Add an `ftcSdk...` version to `gradle\libs.versions.toml`, run the fixture suite on it, add it to the table. Keep any difference behind one seam |
 | Change the window-worker link | [link](architecture/link.md) | A message that gains, loses or reorders a field bumps `Protocol.VERSION`; update the codec, the package description table and `link.md` together |
 | Change what the importer does | [prepared-program](architecture/prepared-program.md) | A change that makes packages come out different or better raises `IMPORTER_REVISION`, so kept packages are made again |
 | Change the bundled runtime or the Java major version | [distribution](architecture/distribution.md), [decisions](architecture/decisions.md) | `runtimeModules` in `app\runtime.gradle.kts`, or `jdk` in `gradle\libs.versions.toml` and `gradle\gradle-daemon-jvm.properties` (the only pin); then `:app:dist`, `--self-test`, and the module list in `DistributionLayoutTest`. Real-host Hornet tests on the runtime are optional, only when requested |
-| Refit the fixed robot | [hornet-fit](robots/hornet-fit.md) | Edit the constants of `RobotDesign` in `simulator`; the chassis numbers are fitted, do not move them; update the numbers `RobotDesignTest` spells out in the same change; re-run the shot sweep. `HornetAutoRunTest` is optional, only when requested |
 
 ## Hand-over checklist
 

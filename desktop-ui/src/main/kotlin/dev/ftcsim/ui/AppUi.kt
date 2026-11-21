@@ -3,19 +3,15 @@ package dev.ftcsim.ui
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
-import dev.ftcsim.contracts.session.MotorChoice
 import dev.ftcsim.ui.controls.ControlsModel
 import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.nav.Navigator
 import dev.ftcsim.ui.practice.PracticeUi
 import dev.ftcsim.ui.prepare.FolderFound
 import dev.ftcsim.ui.prepare.PrepareModel
-import dev.ftcsim.ui.prepare.Project
 import dev.ftcsim.ui.prepare.look
-import dev.ftcsim.ui.project.HardwareScan
 import dev.ftcsim.ui.project.OpModeMemory
 import dev.ftcsim.ui.project.ProjectRunner
-import dev.ftcsim.ui.robot.MappingModel
 import dev.ftcsim.ui.setup.SetupModel
 import java.nio.file.InvalidPathException
 import java.nio.file.Path
@@ -23,7 +19,7 @@ import java.util.concurrent.ThreadLocalRandom
 
 /**
  * What each screen remembers while another one is shown: where the person is, the Simulator screen's menus and tab, the
- * Setup form, the Robot page, the Controls screen's rebinding and the build, and the [runner] that opens projects and
+ * Setup form, the Controls screen's rebinding and the build, and the [runner] that opens projects and
  * restarts their code. Nothing here is simulation state; it lives as long as the application and is used from the UI
  * thread, apart from what the runner documents.
  */
@@ -40,22 +36,10 @@ class AppUi(
     val controls = ControlsModel(services.settings)
     val prepare = PrepareModel(services.preparer)
     val runner = ProjectRunner(services, prepare, setup, navigator, services.io)
-    val scan = HardwareScan(services.session, services.settings, runner.open)
     val opModes = OpModeMemory(services.session, services.settings, runner.open)
 
     var folderNotice by mutableStateOf<FolderNotice?>(null)
         private set
-
-    private var mapping: Pair<Path, MappingModel>? = null
-
-    /**
-     * The Robot page of [project], with what has been placed so far: the same one for as long as the project, the motors on
-     * offer and whether its game has a turret are the same, so that leaving the screen in the middle of it loses nothing.
-     */
-    fun mapping(project: Project, motors: List<MotorChoice>, turret: Boolean): MappingModel {
-        mapping?.takeIf { it.first == project.folder && it.second.motors == motors && it.second.turret == turret }?.let { return it.second }
-        return MappingModel(project.name, motors, turret).also { mapping = project.folder to it }
-    }
 
     /**
      * The person chose [folder] on [from]: finds out what it is, off the UI thread, and goes where it leads. A team's
@@ -73,8 +57,7 @@ class AppUi(
     /**
      * Opens the project that was open when the application last closed, the way Open project does: the program built
      * from the same source is reused, and a changed project is built with its progress shown. A project that is no
-     * longer there is said so on Projects, and so is one that is no longer set up for the simulator (it stays there instead
-     * of leading to the Robot page). Does nothing when there is no last project.
+     * longer there is said so on Projects. Does nothing when there is no last project.
      */
     suspend fun openLast() {
         val last = services.settings.state.value.projects.firstOrNull() ?: return
@@ -85,7 +68,7 @@ class AppUi(
         }
         val found = folder?.let { services.preparer.look(it) }
         if (found is FolderFound.IsProject) {
-            runner.openAtStart(found.project)
+            runner.open(found.project)
         } else {
             folderNotice = FolderNotice(Destination.PROJECTS, "${last.name} is no longer at ${last.folder}")
         }

@@ -20,8 +20,9 @@ Ask the owner before going against any of these.
   team's classes (Hornet included).
 - **Lockstep virtual time stays**: robot and simulator threads take turns on simulated time. Repeatability and accuracy are
   not goals; testing code and practising are.
-- **Fixed robots, fixed ideal sensors.** A team supplies only a mapping (`ftcsim.json`). No editable mechanisms, no sensor
-  settings (`docs/robots/fixed-robots.md`). Mechanisms never push on the chassis.
+- **Fixed robots, fixed ideal sensors.** The robots are built into the simulator: Hornet's and BIOBUZZ's, as literal data
+  in `RobotProfiles`. A team supplies nothing: no robot file, no robot screen, no editable mechanisms, no sensor settings
+  (`docs/robots/fixed-robots.md`). Mechanisms never push on the chassis.
 - **Only DECODE and BIOBUZZ, only Windows.** Java 25 is bundled in the distribution; nothing is downloaded and the user's
   Java is never searched for.
 - **Not wanted unless asked:** replay or recording, TOML/YAML files, air drag, a Rust sidecar, foul and ranking rules, an

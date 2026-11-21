@@ -11,9 +11,10 @@ import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.importer.pack.PreparedProgram;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.Locale;
 import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
@@ -77,7 +78,7 @@ class HornetTeleopTest {
     private static void withTeleop(Alliance alliance, double[] start, Scene scene) throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         try (TestSessions.Handle handle = TestSessions.open(
                 profile, program, new DecodeField(), new FieldSetup(1, alliance), start[0], start[1], start[2])) {
             SimulationSession session = handle.session;

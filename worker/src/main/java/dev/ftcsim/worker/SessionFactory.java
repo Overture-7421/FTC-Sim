@@ -2,14 +2,12 @@ package dev.ftcsim.worker;
 
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.RobotInfo;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.field.Field;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SessionConfig;
-import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
@@ -23,7 +21,7 @@ import java.util.stream.Collectors;
 
 /**
  * Turns what a person asked for, which is names and paths so that it can cross a process boundary, into what the
- * simulator needs: the robot built from a mapping, the prepared program, the field and where the robot starts.
+ * simulator needs: the built-in robot of the field, the prepared program, the field and where the robot starts.
  */
 final class SessionFactory {
 
@@ -44,17 +42,17 @@ final class SessionFactory {
         this.log = log;
     }
 
-    /** What a request may name: the fields with the start poses each offers, and the motors a mapping may name. */
+    /** What a request may name: the fields with the start poses each offers. */
     Catalogue catalogue() {
-        return new Catalogue(fields.choices(), MotorCatalog.choices());
+        return new Catalogue(fields.choices());
     }
 
     /**
      * @param storageRoot an empty directory for the simulated robot controller's external storage
-     * @throws IOException if the mapping, the program or the field cannot be had; the message says which and why
+     * @throws IOException if the program or the field cannot be had; the message says which and why
      */
     SessionConfig config(SessionRequest request, Path storageRoot) throws IOException {
-        RobotSpec robot = robot(request.field(), request.mapping());
+        RobotSpec robot = robot(request.field());
         RobotProgram program = program(request.program());
         Optional<Field> field;
         try {
@@ -67,19 +65,11 @@ final class SessionFactory {
                 request.startX(), request.startY(), request.startHeading(), log);
     }
 
-    /** The robot the game of this field fixes, as the mapping says its motors and numbers are. */
-    RobotSpec robot(String fieldId, RobotMapping mapping) throws IOException {
-        RobotDesign design = RobotDesign.forField(fieldId);
-        List<String> problems = mapping.problems(design.turret());
-        if (!problems.isEmpty()) {
-            throw new IOException("the robot mapping is wrong: " + String.join("; ", problems));
-        }
-        try {
-            return design.spec(mapping);
-        } catch (IllegalArgumentException cannotBuild) {
-            throw new IOException("the robot mapping is wrong: " + cannotBuild.getMessage(), cannotBuild);
-        }
+    /** The robot the game of this field fixes: BIOBUZZ's on its field, Hornet's on any other. */
+    RobotSpec robot(String fieldId) {
+        return RobotDesign.forField(fieldId).spec();
     }
+
     RobotProgram program(String reference) throws IOException {
         if (reference.isBlank()) {
             throw new IOException("the request names no robot program");

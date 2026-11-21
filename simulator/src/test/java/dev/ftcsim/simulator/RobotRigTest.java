@@ -11,17 +11,20 @@ import dev.ftcsim.contracts.field.Pose3;
 import dev.ftcsim.contracts.hardware.CameraWire;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.HubWire;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.hardware.device.bosch.Bno055Model;
 import dev.ftcsim.hardware.device.gobilda.GoBildaPinpointModel;
 import dev.ftcsim.hardware.device.rev.RevColorSensorV3Model;
 import dev.ftcsim.hardware.lynx.Datagram;
 import dev.ftcsim.hardware.lynx.DekaCommand;
 import dev.ftcsim.hardware.lynx.MalformedFrameException;
+import dev.ftcsim.simulator.robot.MotorCatalog;
 import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.CameraMount;
+import dev.ftcsim.simulator.robot.RobotMapping.ColorSensorMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.MotorMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.Slot;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.robot.ServoCatalog;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
@@ -51,8 +54,25 @@ class RobotRigTest {
                 }, seed));
     }
 
+    private static RobotSpec withColorSensors(RobotSpec spec, List<RobotSpec.ColorSensor> sensors) {
+        return new RobotSpec(
+                spec.name(), spec.hubs(), spec.chassis(), spec.motors(), spec.servos(), spec.turret(), spec.storages(), spec.captures(),
+                spec.launches(), spec.imu(), sensors, spec.limelight(), spec.joints());
+    }
+
+    private RobotRig rigOf(RobotSpec spec) {
+        return RobotRig.build(
+                spec, null, 1, 0, 0, 0, clock::get, (origin, direction, maxMeters) -> null,
+                new RobotRig.Vision(List.of(TAG), id -> {
+                    throw new IllegalArgumentException("no bodies");
+                }, 1));
+    }
+
     private RobotRig rig() {
-        return rig(RobotMapping.empty("sensors").withMotors(List.of(new MotorMapping("slide", Slot.CONVEYOR, "", false))), 1);
+        RobotMapping mapping = RobotMapping.empty("sensors")
+                .withMotors(List.of(new MotorMapping("slide", Slot.CONVEYOR, MotorCatalog.GOBILDA_BARE, false)))
+                .withColorSensors(List.of(new ColorSensorMapping("upSensor", 0.0, 0.0, 0.2, 0.0)));
+        return rig(mapping, 1);
     }
 
     private void runFor(RobotRig rig, long nanos) {
@@ -96,12 +116,12 @@ class RobotRigTest {
     }
 
     @Test
-    void everyRobotHasTheControlHubsImuThePinpointAndTheColourSensorOnTheBusesTheirKindsHave() {
+    void everyRobotHasTheControlHubsImuThePinpointAndItsDeclaredColourSensorOnTheirBuses() {
         RobotRig rig = rig();
 
         assertTrue(rig.hub(CONTROL_HUB).answersAt(HardwareDirectory.EMBEDDED_IMU_BUS, Bno055Model.ADDRESS));
         assertTrue(rig.hub(CONTROL_HUB).answersAt(HardwareDirectory.Sensor.PINPOINT.bus(), GoBildaPinpointModel.ADDRESS));
-        assertTrue(rig.hub(CONTROL_HUB).answersAt(HardwareDirectory.Sensor.COLOR_SENSOR.bus(), RevColorSensorV3Model.ADDRESS));
+        assertTrue(rig.hub(CONTROL_HUB).answersAt(2, RevColorSensorV3Model.ADDRESS));
         assertFalse(rig.hub(EXPANSION_HUB).answersAt(HardwareDirectory.EMBEDDED_IMU_BUS, Bno055Model.ADDRESS), "the Expansion Hub has no IMU of its own here");
     }
 
@@ -110,7 +130,10 @@ class RobotRigTest {
         RobotMapping base = RobotMapping.empty("servo");
         RobotMapping mapping = new RobotMapping(
                 base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
-                base.camera(), new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(), 0, 0, false));
+                base.camera(),
+                new RobotMapping.TurretParts(
+                        new RobotMapping.ServoMapping("turretServo", ServoCatalog.AXON_MINI_PLUS, false), List.of(), 0, 0, false, List.of()),
+                base.driveRatio(), base.colorSensors());
         RobotRig rig = RobotRig.build(
                 RobotDesign.biobuzz().spec(mapping), null, 1, 0, 0, 0, clock::get, (origin, direction, maxMeters) -> null, RobotRig.Vision.NONE);
         assertEquals(new HardwareDirectory.ServoWiring(CONTROL_HUB, 0, true), rig.wiring().servo("turretServo"));
@@ -140,14 +163,31 @@ class RobotRigTest {
     }
 
     @Test
-    void theSensorsAreFoundByKindUnderAnyNameAndAreNotReportedAsUnmappedButASecondNameIsRefused() {
+    void theSensorsAreFoundByKindOrDeclaredNameAndAreNotReportedAsUnmappedButASecondNameIsRefused() {
         RobotRig rig = rig();
 
         assertEquals(new HardwareDirectory.I2cWiring(CONTROL_HUB, 1, true), rig.wiring().sensor("odopods", HardwareDirectory.Sensor.PINPOINT));
-        assertEquals(new HardwareDirectory.I2cWiring(CONTROL_HUB, 2, true), rig.wiring().sensor("whatever", HardwareDirectory.Sensor.COLOR_SENSOR));
+        assertEquals(new HardwareDirectory.I2cWiring(CONTROL_HUB, 2, true), rig.wiring().colorSensor("upSensor"));
         assertEquals(new HardwareDirectory.I2cWiring(CONTROL_HUB, 0, true), rig.wiring().imu("gyro"));
         assertEquals(List.of(), rig.wiring().unmappedNames());
         assertThrows(IllegalStateException.class, () -> rig.wiring().sensor("second", HardwareDirectory.Sensor.PINPOINT));
+        assertThrows(IllegalArgumentException.class, () -> rig.wiring().colorSensor("whatever"));
+    }
+
+    @Test
+    void everyDeclaredColourSensorIsAttachedOnItsOwnHubAndBusAndARobotWithoutOneHasNone() {
+        RobotSpec design = RobotDesign.decode().spec(RobotMapping.empty("sensors"));
+        RobotRig two = rigOf(withColorSensors(design, List.of(
+                new RobotSpec.ColorSensor("upSensor", CONTROL_HUB, 2, 0.0, 0.0, 0.2, 0.0),
+                new RobotSpec.ColorSensor("intakeSensor", EXPANSION_HUB, 0, 0.0, 0.0, 0.2, 0.0))));
+        RobotRig none = rigOf(withColorSensors(design, List.of()));
+
+        assertEquals(new HardwareDirectory.I2cWiring(CONTROL_HUB, 2, true), two.wiring().colorSensor("upSensor"));
+        assertEquals(new HardwareDirectory.I2cWiring(EXPANSION_HUB, 0, true), two.wiring().colorSensor("intakeSensor"));
+        assertTrue(two.hub(CONTROL_HUB).answersAt(2, RevColorSensorV3Model.ADDRESS));
+        assertTrue(two.hub(EXPANSION_HUB).answersAt(0, RevColorSensorV3Model.ADDRESS));
+        assertFalse(none.hub(CONTROL_HUB).answersAt(2, RevColorSensorV3Model.ADDRESS));
+        assertEquals(List.of(), none.wiring().colorSensorNames());
     }
 
     @Test
@@ -173,7 +213,8 @@ class RobotRigTest {
         RobotMapping base = RobotMapping.empty("turned");
         RobotMapping turned = new RobotMapping(
                 base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), base.turretRatio(),
-                base.hubLogo(), base.hubUsb(), new CameraMount(0.16, 0.0, 0.25, 90.0, 20.0, 0.0));
+                base.hubLogo(), base.hubUsb(), new CameraMount(0.16, 0.0, 0.25, 90.0, 20.0, 0.0), base.turretParts(), base.driveRatio(),
+                base.colorSensors());
         RobotRig rig = rig(turned, 1);
         rig.environment().cameras().connect("limelight");
 

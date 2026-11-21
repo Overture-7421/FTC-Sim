@@ -14,10 +14,8 @@ import dev.ftcsim.contracts.session.Catalogue
 import dev.ftcsim.contracts.session.FieldChoice
 import dev.ftcsim.contracts.session.MatchState
 import dev.ftcsim.contracts.session.MatchStatus
-import dev.ftcsim.contracts.session.MotorChoice
 import dev.ftcsim.contracts.session.Readout
 import dev.ftcsim.contracts.session.RobotInfo
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionInfo
 import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.contracts.session.SessionStatus
@@ -96,9 +94,9 @@ object Fixtures {
         SessionInfo(null, modes, RobotInfo("robot", 0.4, 0.4, 0.3, emptyList(), emptyList(), emptyList()))
 
     fun request(seed: Long = 0L, alliance: Alliance = Alliance.RED, startHeading: Double = 0.0) =
-        SessionRequest(RobotMapping.empty("fake"), "", "none", alliance, seed, 0.0, 0.0, startHeading, 1.0)
+        SessionRequest("", "none", alliance, seed, 0.0, 0.0, startHeading, 1.0)
 
-    /** Two fields, one with named start poses and actions, and two motors, as a worker would list them. */
+    /** Two fields, one with named start poses and actions, as a worker would list them. */
     fun catalogue() = Catalogue(
         listOf(
             FieldChoice("none", "Bare floor", emptyList(), emptyList()),
@@ -112,7 +110,6 @@ object Fixtures {
                 listOf(HumanAction("feed", "Feed a piece")),
             ),
         ),
-        listOf(MotorChoice("goBILDA-bare-6000", "Yellow Jacket"), MotorChoice("rev-hd-hex-6000", "REV HD Hex")),
     )
 
     fun match(state: MatchState, elapsedSeconds: Long = 0L, durationSeconds: Long = 0L) =
@@ -132,8 +129,9 @@ object Fixtures {
         score: Score = Score(emptyList()),
         match: MatchStatus = MatchStatus.NONE,
         unmapped: List<UnmappedDevice> = emptyList(),
+        dashboardUrl: String = "",
     ) = SessionStatus(
         simTimeNanos, phase, TelemetrySnapshot(lines, warnings, error), score, problems, hardware, speed, achievedSpeed, paused, match,
-        unmapped,
+        unmapped, dashboardUrl,
     )
 }

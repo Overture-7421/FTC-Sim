@@ -7,10 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.world.Vec3;
 import dev.ftcsim.mechanisms.CaptureSpec;
 import dev.ftcsim.mechanisms.Condition;
@@ -20,6 +16,9 @@ import dev.ftcsim.mechanisms.Volume;
 import dev.ftcsim.physics.DcMotor;
 import dev.ftcsim.physics.MecanumConfig;
 import dev.ftcsim.physics.WheelPosition;
+import dev.ftcsim.simulator.robot.RobotMapping.CameraMount;
+import dev.ftcsim.simulator.robot.RobotMapping.MotorMapping;
+import dev.ftcsim.simulator.robot.RobotMapping.Slot;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -31,8 +30,8 @@ class RobotDesignTest {
 
     /** The numbers Hornet was fitted with, spelled out, so that a change to any of them fails here and is made on purpose. */
     @Test
-    void theDecodeRobotMappedAsHornetHasTheNumbersHornetWasFittedWith() {
-        RobotSpec spec = RobotDesign.decode().spec(HornetMapping.mapping());
+    void hornetsRobotHasTheNumbersHornetWasFittedWith() {
+        RobotSpec spec = RobotDesign.decode().spec();
 
         assertEquals("Hornet 2026 (estimated)", spec.name());
         assertEquals(
@@ -80,7 +79,7 @@ class RobotDesignTest {
                 spec.launches(),
                 "efficiency, direction, flywheels and the feed condition");
 
-        assertEquals(new RobotSpec.ColorSensor(-0.12, 0.09, 0.26, -90.0), spec.colorSensor());
+        assertEquals(List.of(new RobotSpec.ColorSensor("upSensor", 173, 2, -0.12, 0.09, 0.26, -90.0)), spec.colorSensors());
         assertEquals(
                 new RobotSpec.Limelight(new CameraMount(0.16, 0.0, 0.25, 0.0, 20.0, 0.0), "field", "1280x960"), spec.limelight());
         assertEquals(new RobotSpec.ImuMount("UP", "FORWARD"), spec.imu());
@@ -100,12 +99,61 @@ class RobotDesignTest {
         return new RobotSpec.Motor(2, port, model, null, new RobotSpec.Shaft(inertia, friction));
     }
 
+    private static final String BARE = MotorCatalog.GOBILDA_BARE;
+
+    private static MotorMapping motor(String name, Slot slot, boolean mirrored) {
+        return new MotorMapping(name, slot, BARE, mirrored);
+    }
+
+    private static RobotMapping mapping(List<MotorMapping> motors) {
+        return RobotMapping.empty("Test").withMotors(motors);
+    }
+
+    private static RobotMapping.ServoMapping servo(String name, String model, boolean mirrored) {
+        return new RobotMapping.ServoMapping(name, model, mirrored);
+    }
+
+    private static RobotMapping.MechanismServo mechanism(RobotMapping.ServoRole role, String name, String model) {
+        return new RobotMapping.MechanismServo(role, servo(name, model, false));
+    }
+
+    /** The empty robot with the given turret ratio and camera. */
+    private static RobotMapping mounted(RobotMapping base, double turretRatio, CameraMount camera) {
+        return new RobotMapping(
+                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), turretRatio, base.hubLogo(),
+                base.hubUsb(), camera, base.turretParts(), base.driveRatio(), base.colorSensors());
+    }
+
+    @Test
+    void biobuzzsRobotIsBuiltFromItsProfileAndEveryOtherFieldGetsHornets() {
+        assertEquals(RobotDesign.biobuzz().spec(RobotProfiles.biobuzz()), RobotDesign.forField("biobuzz").spec());
+        assertEquals(RobotDesign.decode().spec(RobotProfiles.hornet()), RobotDesign.forField("decode").spec());
+        assertEquals("Hornet 2026 (estimated)", RobotDesign.forField("none").spec().name());
+        assertEquals("BIOBUZZ", RobotDesign.forField("biobuzz").spec().name());
+    }
+
+    @Test
+    void colourSensorsGoToTheControlHubsBus2ThenTheExpansionHubsBus0() {
+        RobotSpec biobuzz = RobotDesign.biobuzz().spec();
+
+        assertEquals(
+                List.of(
+                        new RobotSpec.ColorSensor("upSensor", 173, 2, 0.089, 0.065, 0.060, -90.0),
+                        new RobotSpec.ColorSensor("intakeSensor", 2, 0, 0.187, 0.065, -0.112, -90.0)),
+                biobuzz.colorSensors());
+        assertTrue(RobotDesign.decode().spec(RobotMapping.empty("Test")).colorSensors().isEmpty());
+        RobotException refused = assertThrows(
+                RobotException.class,
+                () -> RobotDesign.decode().spec(RobotMapping.empty("Test").withColorSensors(List.of(
+                        new RobotMapping.ColorSensorMapping("a", 0, 0, 0, 0), new RobotMapping.ColorSensorMapping("b", 0, 0, 0, 0),
+                        new RobotMapping.ColorSensorMapping("c", 0, 0, 0, 0)))));
+        assertTrue(refused.getMessage().contains("At most 2 colour sensors"), refused.getMessage());
+    }
+
     @Test
     void aMirroredMotorTurnsItsPartTheOtherWayRoundAndTheConditionsFollow() {
-        RobotMapping mapping = RobotMapping.empty("Test").withMotors(List.of(
-                new MotorMapping("roll", Slot.INTAKE, "", true),
-                new MotorMapping("belt", Slot.CONVEYOR, "", false),
-                new MotorMapping("fly", Slot.SHOOTER, "", true)));
+        RobotMapping mapping = mapping(List.of(
+                motor("roll", Slot.INTAKE, true), motor("belt", Slot.CONVEYOR, false), motor("fly", Slot.SHOOTER, true)));
 
         RobotSpec spec = RobotDesign.decode().spec(mapping);
 
@@ -120,7 +168,7 @@ class RobotDesignTest {
     @Test
     void aPartExistsOnlyWhenTheMappingGivesItAMotor() {
         RobotSpec none = RobotDesign.decode().spec(RobotMapping.empty("Test"));
-        RobotSpec shooterOnly = RobotDesign.decode().spec(RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("fly", Slot.SHOOTER, "", false))));
+        RobotSpec shooterOnly = RobotDesign.decode().spec(mapping(List.of(motor("fly", Slot.SHOOTER, false))));
 
         assertTrue(none.storages().isEmpty() && none.captures().isEmpty() && none.launches().isEmpty());
         assertTrue(shooterOnly.captures().isEmpty(), "no intake motor, no intake");
@@ -129,84 +177,67 @@ class RobotDesignTest {
     }
 
     @Test
-    void aMotorModelThatWasChosenIsUsedAndOneTheCatalogueLacksIsRefused() {
-        RobotMapping chosen = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("fly", Slot.SHOOTER, "rev-hd-hex-6000", false)));
-        assertEquals("rev-hd-hex-6000", RobotDesign.decode().spec(chosen).motors().get("fly").model());
-        RobotMapping usual = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("fly", Slot.SHOOTER, "", false)));
-        assertEquals(MotorCatalog.GOBILDA_BARE, RobotDesign.decode().spec(usual).motors().get("fly").model());
+    void theMotorModelOfAMappingIsUsedAndOneTheCatalogueLacksIsRefusedByTheRig() {
+        RobotMapping spike = mapping(List.of(new MotorMapping("fly", Slot.SHOOTER, MotorCatalog.SWYFT_SPIKE, false)));
+        assertEquals(MotorCatalog.SWYFT_SPIKE, RobotDesign.decode().spec(spike).motors().get("fly").model());
 
-        RobotMapping unknown = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("fly", Slot.SHOOTER, "nonsense", false)));
+        RobotMapping unknown = mapping(List.of(new MotorMapping("fly", Slot.SHOOTER, "nonsense", false)));
         assertThrows(IllegalArgumentException.class, () -> RobotDesign.decode().spec(unknown));
     }
 
     @Test
-    void theMassAndTheWheelDiameterOfTheMappingReachTheChassis() {
-        RobotMapping base = HornetMapping.mapping();
+    void theMassAndTheWheelDiameterAndTheDriveOfTheMappingReachTheChassis() {
+        RobotMapping base = RobotProfiles.hornet();
         RobotMapping heavier = new RobotMapping(
-                base.name(), base.motors(), 15.0, 104.0, "andymark-neverest-40", base.turretRatio(), base.hubLogo(), base.hubUsb(), base.camera());
+                base.name(), base.motors(), 15.0, 104.0, MotorCatalog.SWYFT_SPIKE, base.turretRatio(), base.hubLogo(), base.hubUsb(),
+                base.camera(), base.turretParts(), 12.7, base.colorSensors());
 
         MecanumConfig chassis = RobotDesign.decode().spec(heavier).chassis();
 
         assertEquals(15.0, chassis.massKg());
         assertEquals(0.052, chassis.wheelRadiusM(), 1e-12);
-        assertEquals(MotorCatalog.motor("andymark-neverest-40", RobotMapping.DEFAULT_DRIVE_RATIO), chassis.motor(), "a mapping built without a ratio has the usual one");
+        assertEquals(MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 12.7), chassis.motor());
     }
 
     @Test
     void motorsAreGivenFreePortsExpansionHubFirstAndTooManyAreRefused() {
-        RobotSpec spec = RobotDesign.decode().spec(HornetMapping.mapping());
+        RobotSpec spec = RobotDesign.decode().spec(RobotProfiles.hornet());
         assertEquals(2, spec.motors().get("shooterLeft").hub());
         assertEquals(0, spec.motors().get("shooterLeft").port());
         assertEquals(3, spec.motors().get("upMotor").port());
 
         List<MotorMapping> nine = new ArrayList<>();
         for (int i = 0; i < 9; i++) {
-            nine.add(new MotorMapping("m" + i, Slot.SHOOTER, "", false));
+            nine.add(motor("m" + i, Slot.SHOOTER, false));
         }
-        RobotException refused = assertThrows(RobotException.class, () -> RobotDesign.decode().spec(RobotMapping.empty("Test").withMotors(nine)));
+        RobotException refused = assertThrows(RobotException.class, () -> RobotDesign.decode().spec(mapping(nine)));
         assertTrue(refused.getMessage().contains("At most 8 motors"), refused.getMessage());
     }
 
     @Test
     void theTurretBelongsToBiobuzzAndTurnsItsLauncherByItsRatioAndMirroring() {
-        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
-                new MotorMapping("fly", Slot.SHOOTER, "", false),
-                new MotorMapping("belt", Slot.CONVEYOR, "", false),
-                new MotorMapping("turret", Slot.TURRET, "", true),
-                new MotorMapping("spare turret", Slot.TURRET, "", false)));
-        RobotMapping geared = new RobotMapping(
-                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 3.5, base.hubLogo(), base.hubUsb(), base.camera());
+        RobotMapping base = mapping(List.of(
+                motor("fly", Slot.SHOOTER, false), motor("belt", Slot.CONVEYOR, false), motor("turret", Slot.TURRET, true)));
+        RobotMapping geared = mounted(base, 3.5, base.camera());
 
-        assertThrows(RobotException.class, () -> RobotDesign.decode().spec(geared));
+        assertNull(RobotDesign.decode().spec(geared).turret(), "DECODE's robot has no turret");
         RobotSpec spec = RobotDesign.biobuzz().spec(geared);
 
         assertNotNull(spec.motors().get("turret").shaft());
-        assertEquals(new LaunchSpec.Turret("turret", 3.5, -1), spec.launches().get(0).turret(), "the first turret motor, mirrored, at the mapped ratio");
+        assertEquals(new LaunchSpec.Turret("turret", 3.5, -1), spec.launches().get(0).turret(), "the turret motor, mirrored, at the mapped ratio");
         assertNull(RobotDesign.biobuzz().spec(base.withMotors(base.motors().subList(0, 2))).launches().get(0).turret(), "no turret motor, a fixed launcher");
         assertTrue(RobotDesign.forField("biobuzz").turret());
         assertTrue(!RobotDesign.forField("decode").turret() && !RobotDesign.forField("none").turret());
     }
 
     @Test
-    void aMotorsRatioDrivesItsRollerAndItsFlywheelAndTheDriveRatioTheWheelsAndNoRatioIsOneToOne() {
-        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
-                new MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true), new MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
-                new MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false), new MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-                new MotorMapping("fly", Slot.SHOOTER, MotorCatalog.GOBILDA_BARE, false, 43.0 / 30.0),
-                new MotorMapping("belt", Slot.CONVEYOR, MotorCatalog.GOBILDA_BARE, false, 2.0),
-                new MotorMapping("roll", Slot.INTAKE, MotorCatalog.GOBILDA_BARE, false)))
-                .withDrive(MotorCatalog.SWYFT_SPIKE, 12.7);
-        RobotMapping withStopper = base.withTurretParts(new RobotMapping.TurretParts(
-                null, List.of(), 0, 0, false,
-                List.of(new RobotMapping.MechanismServo(
-                        RobotMapping.ServoRole.STOPPER, new RobotMapping.ServoMapping("stopper", "", false)))));
-
-        RobotSpec biobuzz = RobotDesign.biobuzz().spec(withStopper);
-        RobotSpec decode = RobotDesign.decode().spec(base.withDrive(RobotMapping.DEFAULT_DRIVE_MOTOR, 0.0));
+    void aMotorsRatioDrivesItsRollerAndItsFlywheelAndTheDriveRatioTheWheels() {
+        RobotSpec biobuzz = RobotDesign.biobuzz().spec();
+        RobotSpec decode = RobotDesign.decode().spec();
 
         assertEquals(MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 12.7), biobuzz.chassis().motor());
         assertEquals(0.056, biobuzz.chassis().wheelRadiusM(), 1e-9, "112 mm wheels");
-        assertEquals(MotorCatalog.motor(MotorCatalog.GOBILDA_BARE), decode.chassis().motor(), "no drive ratio is 1:1");
+        assertEquals(MotorCatalog.motor(MotorCatalog.GOBILDA_BARE, 13.7), decode.chassis().motor());
         assertEquals(0.048, decode.chassis().wheelRadiusM(), 1e-9);
         assertEquals(0.0381 / (43.0 / 30.0), biobuzz.launches().get(0).wheels().get(0).radiusM(), 1e-9,
                 "a 3 in wheel behind a 43:30 belt, per radian of the motor");
@@ -214,52 +245,41 @@ class RobotDesignTest {
                 "the stopper holds the pieces at the foot of the column");
         assertNull(decode.storages().get(0).gate());
         assertEquals(0.02 / 2.0, biobuzz.storages().get(0).drives().get(1).radiusM(), 1e-12, "the indexer's rollers turn at half the motor's speed (2:1)");
-        assertEquals(0.025, biobuzz.storages().get(0).drives().get(0).radiusM(), 1e-12, "a motor with no ratio drives its roller one to one");
+        assertEquals(0.025 / 2.0, biobuzz.storages().get(0).drives().get(0).radiusM(), 1e-12, "and the intake's at half too");
         assertEquals(43.0 / 30.0, biobuzz.joints().flywheelRatio(), 1e-12, "and the picture turns the flywheel by it");
         assertEquals(2.0, biobuzz.joints().conveyorRatio(), 1e-12);
-        assertEquals(1.0, biobuzz.joints().intakeRatio(), 1e-12);
-        assertEquals(List.of(Condition.atLeast("belt", 20.0 * 2.0)), biobuzz.launches().get(0).active(), "the belt feeds when the indexer, not the motor, turns fast enough");
-        RobotMapping named = new RobotMapping(
-                base.name(), base.motors(), base.massKg(), 80.0, "andymark-neverest-40", 2.75, base.hubLogo(), base.hubUsb(), base.camera());
-        RobotSpec chosen = RobotDesign.biobuzz().spec(named.withDrive("andymark-neverest-40", 0.0));
-        assertEquals(MotorCatalog.motor("andymark-neverest-40"), chosen.chassis().motor(), "a gearmotor with no drive ratio is itself");
-        assertEquals(0.040, chosen.chassis().wheelRadiusM(), 1e-9, "and a wheel size the mapping gives is kept");
+        assertEquals(2.0, biobuzz.joints().intakeRatio(), 1e-12);
+        assertEquals(List.of(Condition.atLeast("up", 20.0 * 2.0)), biobuzz.launches().get(0).active(), "the belt feeds when the indexer, not the motor, turns fast enough");
     }
 
     @Test
-    void theHoodsServoHasFiveTurnsAndItsStopHoldsItAt45Degrees() {
-        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
-                new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
-        RobotMapping.TurretParts parts = new RobotMapping.TurretParts(
-                null, List.of(), 0, 0, false,
-                List.of(
-                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
-                        new RobotMapping.MechanismServo(RobotMapping.ServoRole.COLIBRI_LEFT, new RobotMapping.ServoMapping("arm", "", false))));
-        RobotSpec spec = RobotDesign.biobuzz().spec(new RobotMapping(
-                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 1.0, base.hubLogo(), base.hubUsb(),
-                base.camera(), parts));
+    void theHoodsServoStopHoldsItAt89DegreesAndTheJointFollowsIt() {
+        RobotMapping base = mapping(List.of(motor("fly", Slot.SHOOTER, false), motor("belt", Slot.CONVEYOR, false)))
+                .withTurretParts(new RobotMapping.TurretParts(
+                        null, List.of(), 0, 0, false,
+                        List.of(
+                                mechanism(RobotMapping.ServoRole.HOOD, "hood", ServoCatalog.GOBILDA_SUPER_SPEED),
+                                mechanism(RobotMapping.ServoRole.COLIBRI_LEFT, "arm", ServoCatalog.GOBILDA_TORQUE_5_TURN))));
+        RobotSpec spec = RobotDesign.biobuzz().spec(base);
 
-        assertEquals(ServoCatalog.GOBILDA_TORQUE_5_TURN, spec.servos().get("hood").model(), "the hood's servo has five turns");
-        assertEquals(ServoCatalog.GOBILDA_TORQUE, spec.servos().get("arm").model(), "the others have the usual 300 degrees");
+        assertEquals(ServoCatalog.GOBILDA_SUPER_SPEED, spec.servos().get("hood").model());
+        assertEquals(ServoCatalog.GOBILDA_TORQUE_5_TURN, spec.servos().get("arm").model());
         LaunchSpec.Hood hood = spec.launches().get(0).hood();
         assertEquals(Math.toRadians(45.0), hood.elevationRadians(0.0), 1e-9, "the servo at 0: 45 degrees");
         assertEquals(Math.toRadians(45.0 + 100.0 / RobotDesign.HOOD_RATIO), hood.elevationRadians(Math.toRadians(100.0)), 1e-9,
                 "100 degrees of servo are 19.7 degrees of hood: 64.7 degrees");
         assertEquals(Math.toRadians(89.0), hood.elevationRadians(Math.toRadians(44.0 * RobotDesign.HOOD_RATIO)), 1e-9, "the stop is 44 degrees of hood: 89");
-        assertEquals(hood.elevationRadians(Math.toRadians(44.0 * RobotDesign.HOOD_RATIO)), hood.elevationRadians(Math.toRadians(1800.0)), 1e-12, "no further");
+        assertEquals(hood.elevationRadians(Math.toRadians(44.0 * RobotDesign.HOOD_RATIO)), hood.elevationRadians(Math.toRadians(300.0)), 1e-12, "no further");
         assertEquals(Math.toRadians(44.0), spec.joints().servos().get(0).limit(), 1e-12, "and the drawn hood stops there too");
     }
 
     @Test
     void aTurretServoTurnsTheLauncherByItsRatioAndMirroringAndTakesThePortOfAServoNotOfAMotor() {
-        RobotMapping base = RobotMapping.empty("Test").withMotors(List.of(
-                new MotorMapping("fly", Slot.SHOOTER, "", false), new MotorMapping("belt", Slot.CONVEYOR, "", false)));
-        RobotMapping servo = new RobotMapping(
-                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
-                base.camera(),
-                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", true), List.of(), 0.05, -0.02, true));
+        RobotMapping base = mapping(List.of(motor("fly", Slot.SHOOTER, false), motor("belt", Slot.CONVEYOR, false)));
+        RobotMapping withServo = mounted(base, 2.75, base.camera()).withTurretParts(
+                new RobotMapping.TurretParts(servo("turretServo", ServoCatalog.AXON_MINI_PLUS, true), List.of(), 0.05, -0.02, true, List.of()));
 
-        RobotSpec spec = RobotDesign.biobuzz().spec(servo);
+        RobotSpec spec = RobotDesign.biobuzz().spec(withServo);
 
         assertEquals(Map.of("turretServo", new RobotSpec.Servo(173, 0, ServoCatalog.AXON_MINI_PLUS)), spec.servos());
         assertEquals(
@@ -269,47 +289,33 @@ class RobotDesignTest {
         assertEquals(Math.toRadians(-90), spec.turret().yawRadians(Math.PI / 2 * 2.75), 1e-12, "a mirrored servo turns the turret clockwise");
         assertTrue(spec.limelight().onTurret());
         assertNull(RobotDesign.biobuzz().spec(base).turret().shaft(), "nothing turns a turret that has no motor and no servo");
-        assertNull(RobotDesign.decode().spec(base).turret(), "DECODE's robot has no turret");
-        assertEquals(RobotDesign.BIOBUZZ_CAMERA, spec.limelight().mount(), "BIOBUZZ's Limelight is on the 45 degree panel unless the mapping moves it");
-        assertEquals(RobotMapping.DEFAULT_CAMERA, RobotDesign.decode().spec(base).limelight().mount());
-        RobotMapping moved = new RobotMapping(
-                base.name(), base.motors(), base.massKg(), base.wheelDiameterMm(), base.driveMotor(), 2.75, base.hubLogo(), base.hubUsb(),
-                new CameraMount(0.1, 0.0, 0.2, 0.0, 10.0, 0.0));
-        assertEquals(new CameraMount(0.1, 0.0, 0.2, 0.0, 10.0, 0.0), RobotDesign.biobuzz().spec(moved).limelight().mount());
+        assertEquals(RobotDesign.BIOBUZZ_CAMERA, RobotDesign.biobuzz().spec().limelight().mount());
+        CameraMount moved = new CameraMount(0.1, 0.0, 0.2, 0.0, 10.0, 0.0);
+        assertEquals(moved, RobotDesign.biobuzz().spec(mounted(base, 1.0, moved)).limelight().mount());
     }
 
     @Test
     void theServoCataloguePinsTheSpeedsTheDatasheetsGiveAt5VoltsAndRefusesAnUnknownServo() {
         assertEquals(Math.toRadians(60.0) / (0.110 - 0.020 / 6.0), ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MINI_PLUS), 1e-9);
         assertEquals(9.82, ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MINI_PLUS), 0.01);
-        assertEquals(7.71, ServoCatalog.noLoadRadPerSec(ServoCatalog.AXON_MAX), 0.01);
-        assertEquals(4.36, ServoCatalog.noLoadRadPerSec(ServoCatalog.GOBILDA_TORQUE), 0.01);
-        RobotMapping unknown = RobotMapping.empty("Test").withTurretParts(
-                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("t", "nonsense", false), List.of(), 0, 0, false));
-        assertThrows(IllegalArgumentException.class, () -> RobotDesign.biobuzz().spec(unknown));
+        assertEquals(19.76, ServoCatalog.noLoadRadPerSec(ServoCatalog.GOBILDA_SUPER_SPEED), 0.01);
+        assertEquals(4.36, ServoCatalog.noLoadRadPerSec(ServoCatalog.GOBILDA_TORQUE_5_TURN), 0.01);
+        assertThrows(IllegalArgumentException.class, () -> ServoCatalog.noLoadRadPerSec("nonsense"));
     }
 
     @Test
-    void theEncodersOfATurretTakeTheUsualModelWhenNoneIsNamedAndAnUnknownOneIsRefused() {
-        RobotMapping.TurretEncoder bare = new RobotMapping.TurretEncoder(0, "", 5.5, 12.0, false);
+    void theEncodersOfTheTurretReachTheSpecAsTheyAreMapped() {
         RobotMapping.TurretEncoder first = new RobotMapping.TurretEncoder(1, "rev-tbe-v1", 44.0 / 7.0, 0.0, true);
-        RobotMapping mapping = RobotMapping.empty("Test").withTurretParts(
-                new RobotMapping.TurretParts(new RobotMapping.ServoMapping("turretServo", "", false), List.of(bare, first), 0, 0, false));
+        RobotMapping.TurretEncoder bare = new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.0, false);
+        RobotMapping mapping = RobotMapping.empty("Test").withTurretParts(new RobotMapping.TurretParts(
+                servo("turretServo", ServoCatalog.AXON_MINI_PLUS, false), List.of(bare, first), 0, 0, false, List.of()));
 
-        RobotSpec spec = RobotDesign.biobuzz().spec(mapping);
-
-        assertEquals(
-                List.of(new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, 12.0, false), first),
-                spec.turret().encoders(), "the unnamed encoder is a version 2 and the named one keeps its model");
-        RobotMapping unknown = RobotMapping.empty("Test").withTurretParts(new RobotMapping.TurretParts(
-                new RobotMapping.ServoMapping("turretServo", "", false),
-                List.of(new RobotMapping.TurretEncoder(0, "nonsense", 5.5, 0, false)), 0, 0, false));
-        assertThrows(IllegalArgumentException.class, () -> RobotDesign.biobuzz().spec(unknown));
+        assertEquals(List.of(bare, first), RobotDesign.biobuzz().spec(mapping).turret().encoders());
     }
 
     @Test
     void theIntakeOfEachGameTakesOnlyItsOwnPieces() {
-        RobotMapping mapping = RobotMapping.empty("Test").withMotors(List.of(new MotorMapping("roll", Slot.INTAKE, "", false)));
+        RobotMapping mapping = mapping(List.of(motor("roll", Slot.INTAKE, false)));
 
         CaptureSpec decode = RobotDesign.decode().spec(mapping).captures().get(0);
         CaptureSpec biobuzz = RobotDesign.biobuzz().spec(mapping).captures().get(0);
@@ -323,7 +329,8 @@ class RobotDesignTest {
     @Test
     void theHubMountingAndTheLimelightMountOfTheMappingAreTheOnlySensorSettings() {
         CameraMount camera = new CameraMount(0.1, -0.05, 0.3, 15.0, 10.0, 2.0);
-        RobotMapping turned = new RobotMapping("Test", List.of(), 11.3, 96, MotorCatalog.GOBILDA_BARE, 1.0, "LEFT", "UP", camera);
+        RobotMapping turned = new RobotMapping(
+                "Test", List.of(), 11.3, 96, MotorCatalog.GOBILDA_BARE, 1.0, "LEFT", "UP", camera, RobotMapping.TurretParts.NONE, 13.7, List.of());
 
         RobotSpec spec = RobotDesign.decode().spec(turned);
 
@@ -337,3 +344,4 @@ class RobotDesignTest {
         assertEquals(2.0, limelight.get("mount.rollDegrees"));
     }
 }
+

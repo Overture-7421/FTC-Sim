@@ -6,16 +6,15 @@ import dev.ftcsim.ui.AppUi
 import dev.ftcsim.ui.common.FakeFileChooser
 import dev.ftcsim.ui.common.FakeLogOpener
 import dev.ftcsim.ui.host.FakeAppHost
-import dev.ftcsim.contracts.session.RobotMapping
-import dev.ftcsim.ui.host.FakeProjectMappings
-import dev.ftcsim.ui.host.RunDefaults
 import dev.ftcsim.ui.host.newWorkFolder
 import dev.ftcsim.ui.practice.Fixtures
 import dev.ftcsim.ui.practice.LinkState
 import dev.ftcsim.ui.practice.StubLink
 import dev.ftcsim.ui.prepare.Project
 import dev.ftcsim.ui.prepare.ScriptedPreparer
+import dev.ftcsim.ui.settings.RecentProject
 import dev.ftcsim.ui.settings.SettingsStore
+import dev.ftcsim.ui.setup.SetupInput
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -42,12 +41,11 @@ import kotlinx.coroutines.withTimeout
 class ProjectRig(private val linkFailure: IOException? = null) : AutoCloseable {
     val preparer = ScriptedPreparer()
     val work: Path = newWorkFolder()
-    val mappings = FakeProjectMappings(work)
     val settings = SettingsStore(null, Executor { it.run() })
     val links = CopyOnWriteArrayList<StubLink>()
     val seedsDrawn = AtomicInteger()
     val services = AppServices(
-        FakeAppHost(preparer, mappings, FakeAppHost.LinkOpener { open() }),
+        FakeAppHost(preparer, FakeAppHost.LinkOpener { open() }),
         settings,
     )
     val ui = AppUi(services) {
@@ -75,10 +73,13 @@ class ProjectRig(private val linkFailure: IOException? = null) : AutoCloseable {
         }
     }
 
-    /** A project folder the preparer will call a project, whose game is named so that it is not asked for; [run] is what its `ftcsim.json` says about a run, or null for a project without one, and [mapping] is what it maps. */
-    fun project(name: String = "TeamProject", run: RunDefaults? = RunDefaults("decode", null, null), mapping: RobotMapping = RobotMapping.empty(name)): Project {
+    /**
+     * A project folder the preparer will call a project. [run] is what it was last run with, which names its game so that it is not asked
+     * for; null for a project that never ran here.
+     */
+    fun project(name: String = "TeamProject", run: SetupInput? = SetupInput(field = "decode")): Project {
         val folder = Files.createDirectories(work.resolve("projects").resolve(name))
-        if (run != null) mappings.withMapping(folder, mapping, run)
+        if (run != null) settings.update { it.withProject(RecentProject(folder.toString(), name, run)) }
         return Project(folder, name, "")
     }
 

@@ -22,9 +22,6 @@ public interface AppHost {
     /** Prepares team projects. */
     ProgramPreparer preparer();
 
-    /** Reads and writes the robot mappings that live in the team's projects. */
-    ProjectMappings mappings();
-
     /**
      * Whether this host runs no robot code at all: a stand-in for developing the window, which the window says in
      * its title and on every screen so that nobody mistakes it for the simulator.

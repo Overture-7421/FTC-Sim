@@ -11,7 +11,7 @@ public final class Protocol {
     public static final int MAGIC = 0x46544353;
 
     /** Changes whenever a message gains, loses or reorders a field. Both ends must speak the same one. */
-    public static final int VERSION = 13;
+    public static final int VERSION = 15;
 
     /** The longest payload of one frame, kind byte included. */
     public static final int MAX_FRAME_BYTES = 16 * 1024 * 1024;

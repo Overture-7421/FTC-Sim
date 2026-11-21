@@ -6,6 +6,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.hardware.UnmappedDevice;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.List;
@@ -32,7 +33,7 @@ class PinsSessionTest {
 
     @Test
     void pinsNobodyConnectedAnythingToReadHighAndZeroVoltsAndEachIsReportedOnceAsUnmappedAndUnbound() throws IOException {
-        try (TestSessions.Handle handle = TestSessions.open(HornetMapping.spec(), 0, 0, 0)) {
+        try (TestSessions.Handle handle = TestSessions.open(RobotDesign.decode().spec(), 0, 0, 0)) {
             SimulationSession session = handle.session;
             start(session, "Unbound Pins");
             session.runFor(SECOND);
@@ -64,7 +65,7 @@ class PinsSessionTest {
 
     @Test
     void underBulkCachingTheHubCannotTellWhichPinWasReadSoOnlyTheNamesAreReported() throws IOException {
-        try (TestSessions.Handle handle = TestSessions.open(HornetMapping.spec(), 0, 0, 0)) {
+        try (TestSessions.Handle handle = TestSessions.open(RobotDesign.decode().spec(), 0, 0, 0)) {
             SimulationSession session = handle.session;
             start(session, "Unbound Bulk Pins");
             session.runFor(SECOND);
@@ -84,7 +85,7 @@ class PinsSessionTest {
 
     @Test
     void aNameCannotBeBothATouchSensorAndADigitalChannelAndTheSdksErrorSaysWhatItAlreadyIs() throws IOException {
-        try (TestSessions.Handle handle = TestSessions.open(HornetMapping.spec(), 0, 0, 0)) {
+        try (TestSessions.Handle handle = TestSessions.open(RobotDesign.decode().spec(), 0, 0, 0)) {
             SimulationSession session = handle.session;
             session.init("Wrong Pin Type");
             session.runFor(SECOND);

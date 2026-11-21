@@ -63,8 +63,8 @@ public final class BiobuzzHoldShooter {
     static final double FLYWHEEL_TOLERANCE = 0.03;
     static final double STILL_SPEED_MPS = 0.1;
     static final double STILL_TURN_DEGREES_PER_SECOND = 15.0;
-    /** The hood's servo (five turns, about 250 degrees a second) takes this long for a whole range, and a little more to settle. */
-    static final double HOOD_SECONDS_PER_POSITION = 1800.0 / 250.0;
+    /** The hood's servo (a Super Speed, 300 degrees, about 1130 degrees a second) takes this long for a whole range, and a little more to settle. */
+    static final double HOOD_SECONDS_PER_POSITION = 300.0 / 1132.0;
     static final double HOOD_SETTLE_MARGIN_SECONDS = 0.15;
     /** A hood that is only a little off stays where it is (in degrees of hood: a position is 355 of them): every move costs the servo its time. */
     static final double HOOD_DEADBAND = 0.5 / BiobuzzShotSolver.HOOD_DEGREES_PER_POSITION;

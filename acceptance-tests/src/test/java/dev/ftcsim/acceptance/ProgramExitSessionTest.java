@@ -4,8 +4,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.contracts.robot.RobotPhase;
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.Test;
@@ -18,7 +19,7 @@ class ProgramExitSessionTest {
 
     @Test
     void aProgramThatCallsExitOrHaltIsAProblemOfTheSessionAndItsShutdownHooksNeverRun() throws IOException {
-        RobotSpec hornet = HornetMapping.spec();
+        RobotSpec hornet = RobotDesign.decode().spec();
         for (String how : List.of("System.exit", "Runtime.exit", "Runtime.halt", "method reference")) {
             System.setProperty("ftcsim.test.exitHow", how);
             try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {

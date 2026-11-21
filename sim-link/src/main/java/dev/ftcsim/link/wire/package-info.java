@@ -63,10 +63,9 @@
  *   <tr><td>0x40<td>Opened<td>flag and field description; OpModes; robot info (see {@code SessionInfo})
  *   <tr><td>0x41<td>Snapshot<td>step index, simulated time (64 bits each); bodies; visible AprilTag ids (list of 32-bit ids)
  *   <tr><td>0x42<td>Status<td>see {@code SessionStatus}; the match is followed by the unplaced names, each a kind (one byte:
- *       motor, servo, I2C device, digital pin, analog pin) and the name (text)
+ *       motor, servo, I2C device, digital pin, analog pin) and the name (text), then the dashboard address (text, empty when\n *       the robot program has none that listens on this machine)
  *   <tr><td>0x43<td>Failed<td>message (text): a session that was asked for could not be opened, or cannot go on
- *   <tr><td>0x44<td>Catalogue<td>fields (id, name, start poses,  human actions); the motors a mapping may name (id,
- *       name) (see {@code Catalogue})
+ *   <tr><td>0x44<td>Catalogue<td>fields (id, name, start poses,  human actions) (see {@code Catalogue})
  *   <tr><td>0x45<td>Refused<td>message (text): a command was refused and nothing else changed
  *   <tr><td>0x46<td>Log<td>batches of lines the robot program wrote, which the window shows as its console
  * </table>
@@ -97,6 +96,8 @@
  *   <li>11: every field part ends with its opacity (float), after its colour
  *   <li>12: a field part's shape may also be a wedge (code 3: a triangular prism, three half extents)
  *   <li>13: snapshots end with the AprilTag ids in the Limelight's latest completed frame
+ *   <li>14: the robots are built into the simulator: {@code Open} carries no mapping and the {@code Catalogue} no motors
+ *   <li>15: {@code Status} ends with the dashboard address (text)
  * </ul>
  */
 package dev.ftcsim.link.wire;

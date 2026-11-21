@@ -50,9 +50,9 @@ class PracticeSession(
     private val mutableTelemetry = MutableStateFlow(TelemetrySnapshot(emptyList(), "", ""))
     private val mutableHardware = MutableStateFlow<List<Readout>>(emptyList())
     private val mutableUnmapped = MutableStateFlow<List<UnmappedDevice>>(emptyList())
+    private val mutableDashboard = MutableStateFlow("")
     private val mutableOpenings = MutableStateFlow(0)
     private val mutableHolds = MutableStateFlow<Set<Hold>>(emptySet())
-    private val openedListeners = java.util.concurrent.CopyOnWriteArrayList<(SessionInfo) -> Unit>()
 
     /** What the robot program and the SDK logged during the session that is open; the newest lines only. */
     val console = OutputLog()
@@ -72,7 +72,6 @@ class PracticeSession(
     private var failure: String? = null
     private var awaitingIdle = false
     private var shownSimTime = -TIMING_PERIOD_NANOS
-    @Volatile private var openingNumber = 0
     @Volatile private var generation = 0L
 
     val session: StateFlow<SessionState> = mutableSession.asStateFlow()
@@ -81,38 +80,22 @@ class PracticeSession(
     val telemetry: StateFlow<TelemetrySnapshot> = mutableTelemetry.asStateFlow()
     val hardware: StateFlow<List<Readout>> = mutableHardware.asStateFlow()
 
-    /** What the robot program asked the hardware map for that the robot mapping does not place; the Robot page offers the motors among them. */
+    /** What the robot program asked the hardware map for that the robot has no part for. */
     val unmapped: StateFlow<List<UnmappedDevice>> = mutableUnmapped.asStateFlow()
+
+    /** Where a browser finds the dashboard of the robot program; empty while the program has none that listens. */
+    val dashboardUrl: StateFlow<String> = mutableDashboard.asStateFlow()
 
     /** How many times a session has opened, a reset or a restart included; two sessions with equal descriptions are still two. */
     val openings: StateFlow<Int> = mutableOpenings.asStateFlow()
 
     /**
      * Why the run controls (Init, Start, Stop) are off although a session is open. The simulator opens a session before
-     * its robot program has stopped, and the application runs an OpMode of its own to find the hardware, so the phase
-     * the status shows is not always the driver's: until a hold ends, nothing of the driver's may be started on it. A
-     * session that opens starts with none, apart from the ones [whenOpened] claims at once.
+     * its robot program has stopped, so the phase the status shows is not always the driver's: until a hold ends,
+     * nothing of the driver's may be started on it. A session that opens starts with none.
      */
     val holds: StateFlow<Set<Hold>> = mutableHolds.asStateFlow()
 
-    /** Takes [hold] for the session that is open now; returns which opening that is, for [release]. */
-    fun hold(hold: Hold): Int {
-        mutableHolds.update { it + hold }
-        return openingNumber
-    }
-
-    /** Ends [hold], unless a session has opened since [opening], which then owns it. */
-    fun release(hold: Hold, opening: Int) {
-        if (opening == openingNumber) mutableHolds.update { it - hold }
-    }
-
-    /**
-     * Calls [listener] on the link's thread as soon as a session opens, before the controls can be used on it, so that
-     * it can [hold] them without a moment in between.
-     */
-    fun whenOpened(listener: (SessionInfo) -> Unit) {
-        openedListeners += listener
-    }
     val score: StateFlow<Score> = mutableScore.asStateFlow()
     val problems: StateFlow<List<Problem>> = mutableProblems.asStateFlow()
 
@@ -135,7 +118,7 @@ class PracticeSession(
     val refusals: SharedFlow<String> = mutableRefusals.asSharedFlow()
 
     /**
-     * The OpModes the person chose, one at a time: picked in the top bar (or for a scan), or the autonomous a match was
+     * The OpModes the person chose, one at a time: picked in the top bar, or the autonomous a match was
      * armed with. The one a session starts with by itself is not among them.
      */
     val picks: SharedFlow<String> = mutablePicks.asSharedFlow()
@@ -200,6 +183,7 @@ class PracticeSession(
             mutableHolds.value = emptySet()
             mutableMatch.value = MatchDisplay.NONE
             mutableUnmapped.value = emptyList()
+            mutableDashboard.value = ""
             mutablePlan.value = null
             refreshProblems()
             simulator?.open(request)
@@ -262,13 +246,9 @@ class PracticeSession(
             awaitingIdle = Hold.RESETTING in mutableHolds.value
             mutableMatch.value = MatchDisplay.NONE
             mutableUnmapped.value = emptyList()
+            mutableDashboard.value = ""
             mutablePlan.value = null
             refreshProblems()
-            openingNumber++
-            // What held the session that ended does not hold this one, but whoever wants to hold it must do so before
-            // the session shows as open, or there is a moment in which the driver could press Init.
-            mutableHolds.update { it - Hold.SCANNING }
-            openedListeners.forEach { it(info) }
             mutableSession.update {
                 val keep = it.selectedOpMode?.takeIf { name -> info.opModes().any { mode -> mode.name() == name } }
                 SessionState(Connection.OPEN, info, keep ?: info.opModes().firstOrNull()?.name())
@@ -293,6 +273,7 @@ class PracticeSession(
         mutableTelemetry.value = status.telemetry()
         mutableHardware.value = status.hardware()
         mutableUnmapped.value = status.unmapped()
+        mutableDashboard.value = status.dashboardUrl()
         mutableScore.value = status.score()
         synchronized(lock) {
             latestStatus = status

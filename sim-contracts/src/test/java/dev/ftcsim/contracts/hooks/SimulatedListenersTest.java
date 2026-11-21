@@ -14,6 +14,7 @@ import java.net.BindException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.ServerSocket;
+import java.net.Socket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.net.UnknownHostException;
@@ -24,7 +25,9 @@ import java.nio.channels.NotYetBoundException;
 import java.nio.channels.SelectionKey;
 import java.nio.channels.Selector;
 import java.nio.channels.ServerSocketChannel;
+import java.util.Arrays;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.Callable;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
@@ -89,6 +92,18 @@ class SimulatedListenersTest {
             while (thread.getState() != Thread.State.WAITING && thread.getState() != Thread.State.TIMED_WAITING) {
                 if (System.nanoTime() > deadline) {
                     fail("the accept did not start waiting, the thread is " + thread.getState());
+                }
+                Thread.sleep(1);
+            }
+            return this;
+        }
+
+        /** A real listener's accept waits in the operating system, not on a monitor. */
+        Acceptor awaitAccepting() throws InterruptedException {
+            long deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(PATIENCE_MILLIS);
+            while (Arrays.stream(thread.getStackTrace()).noneMatch(frame -> frame.getMethodName().equals("accept") && frame.getClassName().contains("NioSocketImpl"))) {
+                if (System.nanoTime() > deadline) {
+                    fail("the accept did not start, the thread is " + thread.getState());
                 }
                 Thread.sleep(1);
             }
@@ -337,6 +352,171 @@ class SimulatedListenersTest {
             ended.close();
             assertThrows(BindException.class, () -> NetworkHooks.newServerSocket(18430), "the new network's port is still held");
             assertFalse(fresh.isClosed());
+        }
+    }
+
+    /** The hooks of a host that lets some ports listen on the loopback address of the machine. */
+    private record LoopbackHooks(Set<Integer> ports) implements RobotHooks {
+        @Override
+        public boolean listenOnLoopback(int port) {
+            return ports.contains(port);
+        }
+
+        @Override
+        public long nanoTime() {
+            return System.nanoTime();
+        }
+
+        @Override
+        public long currentTimeMillis() {
+            return System.currentTimeMillis();
+        }
+
+        @Override
+        public void sleep(long millis) {}
+
+        @Override
+        public void sleep(long millis, int nanos) {}
+
+        @Override
+        public void sleep(TimeUnit unit, long duration) {}
+
+        @Override
+        public void yieldThread() {}
+
+        @Override
+        public void loadLibrary(String name) {}
+
+        @Override
+        public void load(String absolutePath) {}
+    }
+
+    @Test
+    void aBindToAnAllowedPortIsARealListenerOnTheLoopbackAddressThatAcceptsClients() throws IOException {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        try (ServerSocket server = NetworkHooks.newServerSocket(port)) {
+            assertTrue(server.getInetAddress().isLoopbackAddress(), "the wildcard address is replaced, never bound: " + server.getInetAddress());
+            assertEquals(port, server.getLocalPort());
+            assertEquals(Set.of(port), NetworkHooks.realPorts());
+            try (Socket client = new Socket(LOOPBACK, port);
+                    Socket accepted = server.accept()) {
+                client.getOutputStream().write(42);
+                client.getOutputStream().flush();
+                assertEquals(42, accepted.getInputStream().read());
+            }
+        }
+
+        assertEquals(List.of("LISTEN *:" + port), NetworkHooks.realRequests().keySet().stream().map(r -> r.kind() + " " + r.target()).toList());
+        assertTrue(NetworkHooks.simulatedRequests().isEmpty());
+        assertTrue(NetworkHooks.realListenerFailures().isEmpty());
+        assertTrue(NetworkHooks.realPorts().isEmpty(), "closing the socket closes the real one");
+    }
+
+    @Test
+    void aSocketThatIsBoundLaterGetsTheSameRealListener() throws IOException {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        try (ServerSocket server = NetworkHooks.newServerSocket()) {
+            server.setReuseAddress(true);
+            NetworkHooks.bind(server, new InetSocketAddress(port));
+
+            try (Socket client = new Socket(LOOPBACK, port)) {
+                server.setSoTimeout(5_000);
+                assertEquals(client.getLocalPort(), server.accept().getPort());
+            }
+        }
+    }
+
+    @Test
+    void thePortsOfEveryOtherListenerStaySimulated() throws IOException {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+        InetAddress elsewhere = InetAddress.getByAddress(new byte[] {10, (byte) 255, (byte) 255, 1});
+
+        ServerSocket specific = NetworkHooks.newServerSocket(port, 1, elsewhere);
+        try (ServerSocket other = NetworkHooks.newServerSocket(18451);
+                ServerSocketChannel channel = NetworkHooks.openServerSocketChannel()) {
+            assertTrue(other.isBound());
+            assertTrue(NetworkHooks.realPorts().isEmpty());
+            new ServerSocket(18451, 1, LOOPBACK).close();
+            specific.close();
+            NetworkHooks.bind(channel, new InetSocketAddress(port));
+            assertTrue(NetworkHooks.realPorts().isEmpty(), "a channel stays simulated on an allowed port");
+            new ServerSocket(port, 1, LOOPBACK).close();
+        }
+
+        assertTrue(NetworkHooks.realRequests().isEmpty());
+        assertEquals(3, NetworkHooks.simulatedRequests().size());
+    }
+
+    @Test
+    void aPortThatIsTakenOnTheMachineLeavesASimulatedListenerAndIsRecorded() throws Exception {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        try (ServerSocket taken = new ServerSocket(port, 1, LOOPBACK)) {
+            ServerSocket server = NetworkHooks.newServerSocket(port);
+            assertTrue(taken.isBound());
+            assertTrue(server.isBound());
+            assertEquals(port, server.getLocalPort());
+            assertTrue(NetworkHooks.realPorts().isEmpty());
+            assertEquals(List.of("LISTEN *:" + port), NetworkHooks.realListenerFailures().keySet().stream().map(r -> r.kind() + " " + r.target()).toList());
+            assertEquals(1, NetworkHooks.simulatedRequests().size());
+            assertTrue(NetworkHooks.realRequests().isEmpty());
+
+            Acceptor acceptor = new Acceptor(server::accept).awaitWaiting();
+            server.close();
+            assertInstanceOf(SocketException.class, acceptor.awaitEnd());
+        }
+    }
+
+    @Test
+    void closingTheSocketFreesThePortAndTheEndOfTheWorldClosesAWaitingAccept() throws Exception {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        NetworkHooks.newServerSocket(port).close();
+        new ServerSocket(port, 1, LOOPBACK).close();
+
+        ServerSocket server = NetworkHooks.newServerSocket(port);
+        Acceptor acceptor = new Acceptor(server::accept).awaitAccepting();
+        NetworkHooks.closeSimulatedListeners();
+
+        assertInstanceOf(SocketException.class, acceptor.awaitEnd());
+        assertTrue(server.isClosed());
+        new ServerSocket(port, 1, LOOPBACK).close();
+    }
+
+    @Test
+    void theReuseFlagStaysWithTheSimulatedSocketBecauseOnWindowsItWouldLetAnotherProcessShareThePort() throws IOException {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        try (ServerSocket server = NetworkHooks.newServerSocket()) {
+            server.setReuseAddress(true);
+            NetworkHooks.bind(server, new InetSocketAddress(port));
+
+            assertTrue(server.getReuseAddress(), "the program is told what it set");
+            assertFalse(((SimulatedServerSocket) server).real().getReuseAddress(), "the real socket keeps the exclusive bind");
+        }
+    }
+
+    @Test
+    void anAcceptOnARealListenerTimesOutWithTheTimeoutOfTheSocket() throws IOException {
+        int port = freePortOnTheMachine();
+        Hooks.install(new LoopbackHooks(Set.of(port)));
+
+        try (ServerSocket server = NetworkHooks.newServerSocket()) {
+            server.setSoTimeout(30);
+            NetworkHooks.bind(server, new InetSocketAddress(port));
+
+            assertEquals(30, server.getSoTimeout());
+            assertThrows(SocketTimeoutException.class, server::accept);
+            server.setSoTimeout(20);
+            assertThrows(SocketTimeoutException.class, server::accept);
         }
     }
 

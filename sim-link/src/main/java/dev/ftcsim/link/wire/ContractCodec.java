@@ -18,19 +18,11 @@ import dev.ftcsim.contracts.robot.OpModeKind;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import dev.ftcsim.contracts.session.Catalogue;
-import dev.ftcsim.contracts.session.MotorChoice;
 import dev.ftcsim.contracts.session.FieldChoice;
 import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
 import dev.ftcsim.contracts.session.Readout;
 import dev.ftcsim.contracts.session.RobotInfo;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.ServoMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
-import dev.ftcsim.contracts.session.RobotMapping.TurretEncoder;
-import dev.ftcsim.contracts.session.RobotMapping.TurretParts;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -57,7 +49,6 @@ final class ContractCodec {
     // Requests and sessions -----------------------------------------------------------------------------------
 
     static void writeRequest(WireWriter w, SessionRequest request) {
-        writeMapping(w, request.mapping());
         w.string(request.program());
         w.string(request.field());
         w.unsignedByte(code(request.alliance()));
@@ -69,107 +60,11 @@ final class ContractCodec {
     }
 
     static SessionRequest readRequest(WireReader r) throws WireException {
-        RobotMapping mapping = readMapping(r);
         String program = r.string("the program");
         String field = r.string("the field");
         Alliance alliance = alliance(r.unsignedByte());
         return new SessionRequest(
-                mapping, program, field, alliance, r.longInteger(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
-    }
-
-    private static void writeMapping(WireWriter w, RobotMapping mapping) {
-        w.string(mapping.name());
-        w.count(mapping.motors().size(), "the mapped motors");
-        for (MotorMapping motor : mapping.motors()) {
-            w.string(motor.name());
-            w.unsignedByte(code(motor.slot()));
-            w.string(motor.model());
-            w.bool(motor.mirrored());
-            w.doubleBits(motor.ratio());
-        }
-        w.doubleBits(mapping.massKg());
-        w.doubleBits(mapping.wheelDiameterMm());
-        w.string(mapping.driveMotor());
-        w.doubleBits(mapping.driveRatio());
-        w.doubleBits(mapping.turretRatio());
-        w.string(mapping.hubLogo());
-        w.string(mapping.hubUsb());
-        CameraMount camera = mapping.camera();
-        w.doubleBits(camera.x());
-        w.doubleBits(camera.y());
-        w.doubleBits(camera.z());
-        w.doubleBits(camera.yawDegrees());
-        w.doubleBits(camera.pitchDegrees());
-        w.doubleBits(camera.rollDegrees());
-        TurretParts parts = mapping.turretParts();
-        w.bool(parts.servo() != null);
-        if (parts.servo() != null) {
-            w.string(parts.servo().name());
-            w.string(parts.servo().model());
-            w.bool(parts.servo().mirrored());
-        }
-        w.count(parts.encoders().size(), "the turret encoders");
-        for (TurretEncoder encoder : parts.encoders()) {
-            w.integer(encoder.channel());
-            w.string(encoder.model());
-            w.doubleBits(encoder.turnsPerTurretTurn());
-            w.doubleBits(encoder.zeroOffsetDegrees());
-            w.bool(encoder.mirrored());
-        }
-        w.doubleBits(parts.axisX());
-        w.doubleBits(parts.axisY());
-        w.bool(parts.cameraOnTurret());
-        w.count(parts.mechanisms().size(), "the mechanism servos");
-        for (RobotMapping.MechanismServo mechanism : parts.mechanisms()) {
-            w.integer(mechanism.role().ordinal());
-            w.string(mechanism.servo().name());
-            w.string(mechanism.servo().model());
-            w.bool(mechanism.servo().mirrored());
-        }
-    }
-
-    private static RobotMapping readMapping(WireReader r) throws WireException {
-        String name = r.string("the robot name");
-        int count = r.count(2 * STRING_BYTES + 2 + 8, "the mapped motors");
-        List<MotorMapping> motors = new ArrayList<>(count);
-        for (int i = 0; i < count; i++) {
-            String motorName = r.string("a mapped motor name");
-            Slot slot = slot(r.unsignedByte());
-            motors.add(new MotorMapping(motorName, slot, r.string("a motor model"), r.bool(), r.doubleBits()));
-        }
-        double massKg = r.doubleBits();
-        double wheelDiameterMm = r.doubleBits();
-        String driveMotor = r.string("the drive motor");
-        double driveRatio = r.doubleBits();
-        double turretRatio = r.doubleBits();
-        String hubLogo = r.string("the hub logo direction");
-        String hubUsb = r.string("the hub USB direction");
-        CameraMount camera =
-                new CameraMount(r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
-        ServoMapping servo = r.bool() ? new ServoMapping(r.string("the turret servo name"), r.string("the turret servo model"), r.bool()) : null;
-        int encoderCount = r.count(STRING_BYTES + 4 + 2 * 8 + 1, "the turret encoders");
-        List<TurretEncoder> encoders = new ArrayList<>(encoderCount);
-        for (int i = 0; i < encoderCount; i++) {
-            int channel = r.integer();
-            String model = r.string("a turret encoder model");
-            encoders.add(new TurretEncoder(channel, model, r.doubleBits(), r.doubleBits(), r.bool()));
-        }
-        double axisX = r.doubleBits();
-        double axisY = r.doubleBits();
-        boolean cameraOnTurret = r.bool();
-        int mechanismCount = r.count(4 + 2 * STRING_BYTES + 1, "the mechanism servos");
-        List<RobotMapping.MechanismServo> mechanisms = new ArrayList<>(mechanismCount);
-        RobotMapping.ServoRole[] roles = RobotMapping.ServoRole.values();
-        for (int i = 0; i < mechanismCount; i++) {
-            int role = r.integer();
-            if (role < 0 || role >= roles.length) {
-                throw new WireException("unknown servo role " + role);
-            }
-            mechanisms.add(new RobotMapping.MechanismServo(
-                    roles[role], new ServoMapping(r.string("a mechanism servo name"), r.string("a mechanism servo model"), r.bool())));
-        }
-        TurretParts parts = new TurretParts(servo, encoders, axisX, axisY, cameraOnTurret, mechanisms);
-        return new RobotMapping(name, motors, massKg, wheelDiameterMm, driveMotor, turretRatio, hubLogo, hubUsb, camera, parts, driveRatio);
+                program, field, alliance, r.longInteger(), r.doubleBits(), r.doubleBits(), r.doubleBits(), r.doubleBits());
     }
 
     static void writeInfo(WireWriter w, SessionInfo info) {
@@ -320,11 +215,6 @@ final class ContractCodec {
             writeStartPoses(w, field.startPoses());
             writeHumanActions(w, field.humanActions());
         }
-        w.count(catalogue.motors().size(), "the motors");
-        for (MotorChoice motor : catalogue.motors()) {
-            w.string(motor.id());
-            w.string(motor.displayName());
-        }
     }
 
     static Catalogue readCatalogue(WireReader r) throws WireException {
@@ -336,12 +226,7 @@ final class ContractCodec {
             List<StartPose> starts = readStartPoses(r);
             fields.add(new FieldChoice(id, displayName, starts, readHumanActions(r)));
         }
-        int motorCount = r.count(2 * STRING_BYTES, "the motors");
-        List<MotorChoice> motors = new ArrayList<>(motorCount);
-        for (int i = 0; i < motorCount; i++) {
-            motors.add(new MotorChoice(r.string("a motor id"), r.string("a motor name")));
-        }
-        return new Catalogue(fields, motors);
+        return new Catalogue(fields);
     }
 
     private static void writePart(WireWriter w, FieldPart part) {
@@ -474,10 +359,10 @@ final class ContractCodec {
             w.unsignedByte(code(device.kind()));
             w.string(device.name());
         }
+        w.string(status.dashboardUrl());
     }
 
-    static SessionStatus readStatus(WireReader r) throws WireException {
-        long simTimeNanos = r.longInteger();
+    static SessionStatus readStatus(WireReader r) throws WireException {        long simTimeNanos = r.longInteger();
         RobotPhase phase = phase(r.unsignedByte());
         List<String> lines = readStrings(r, "the telemetry lines");
         TelemetrySnapshot telemetry = new TelemetrySnapshot(lines, r.string("the warnings"), r.string("the error text"));
@@ -501,8 +386,10 @@ final class ContractCodec {
         for (int i = 0; i < unmappedCount; i++) {
             unmapped.add(new UnmappedDevice(unmappedKind(r.unsignedByte()), r.string("an unplaced name")));
         }
+        String dashboardUrl = r.string("the dashboard address");
         return new SessionStatus(
-                simTimeNanos, phase, telemetry, new Score(scoreLines), problems, readouts, speed, achievedSpeed, paused, match, unmapped);
+                simTimeNanos, phase, telemetry, new Score(scoreLines), problems, readouts, speed, achievedSpeed, paused, match, unmapped,
+                dashboardUrl);
     }
 
     // Gamepads ---------------------------------------------------------------------------------------------------
@@ -585,33 +472,6 @@ final class ContractCodec {
             case 0 -> Alliance.RED;
             case 1 -> Alliance.BLUE;
             default -> throw new WireException("unknown alliance code " + code);
-        };
-    }
-
-    private static int code(Slot slot) {
-        return switch (Objects.requireNonNull(slot, "slot")) {
-            case FRONT_LEFT -> 0;
-            case FRONT_RIGHT -> 1;
-            case REAR_LEFT -> 2;
-            case REAR_RIGHT -> 3;
-            case INTAKE -> 4;
-            case CONVEYOR -> 5;
-            case SHOOTER -> 6;
-            case TURRET -> 7;
-        };
-    }
-
-    private static Slot slot(int code) throws WireException {
-        return switch (code) {
-            case 0 -> Slot.FRONT_LEFT;
-            case 1 -> Slot.FRONT_RIGHT;
-            case 2 -> Slot.REAR_LEFT;
-            case 3 -> Slot.REAR_RIGHT;
-            case 4 -> Slot.INTAKE;
-            case 5 -> Slot.CONVEYOR;
-            case 6 -> Slot.SHOOTER;
-            case 7 -> Slot.TURRET;
-            default -> throw new WireException("unknown robot slot code " + code);
         };
     }
 

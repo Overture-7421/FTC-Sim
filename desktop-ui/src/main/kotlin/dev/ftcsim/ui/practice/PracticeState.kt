@@ -122,9 +122,6 @@ data class MatchPlan(val autonomous: String?, val teleOp: String) {
 enum class Hold(val label: String) {
     /** Reset world was sent, and the new session is not Idle yet. */
     RESETTING("Resetting"),
-
-    /** The application is running an OpMode of its own to find the hardware the program asks for. */
-    SCANNING("Scanning"),
 }
 
 /**
@@ -136,7 +133,6 @@ fun waitingFor(connection: Connection, building: Boolean, holds: Set<Hold>): Str
     building -> "Restarting"
     Hold.RESETTING in holds -> Hold.RESETTING.label
     connection == Connection.OPENING -> "Starting"
-    Hold.SCANNING in holds -> Hold.SCANNING.label
     else -> null
 }
 

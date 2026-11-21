@@ -12,10 +12,11 @@ import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.biobuzz.BiobuzzField;
 import dev.ftcsim.importer.pack.PreparedProgram;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotProfiles;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotDesign;
-import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.List;
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
@@ -46,7 +47,7 @@ class HornetBiobuzzTest {
     void everyOpModeIsInitialisedStartedAndStoppedOnTheBiobuzzField() throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = RobotDesign.biobuzz().spec(HornetMapping.mapping());
+        RobotSpec profile = RobotDesign.biobuzz().spec(RobotProfiles.hornet());
         BiobuzzField field = new BiobuzzField();
 
         List<OpModeDescriptor> opModes;

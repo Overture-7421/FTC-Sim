@@ -9,6 +9,7 @@ import dev.ftcsim.contracts.session.SessionStatus;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.simulator.RealtimeRunner;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.SessionConfig;
 import java.io.IOException;
 import java.nio.file.Files;
@@ -26,7 +27,7 @@ class RealtimeRunnerTest {
 
     private static RealtimeRunner open(double speed, List<String> log, Path storage) throws IOException {
         SessionConfig config = new SessionConfig(
-                HornetMapping.spec(), TestSessions.program(), storage,
+                RobotDesign.decode().spec(), TestSessions.program(), storage,
                 Path.of(System.getProperty("ftcsim.nativeDirectory")), null, null, 0, 0, 0, log::add);
         return RealtimeRunner.open(config, speed);
     }

@@ -9,7 +9,6 @@ import dev.ftcsim.contracts.robot.TelemetrySnapshot;
 import dev.ftcsim.contracts.session.Catalogue;
 import dev.ftcsim.contracts.session.FieldChoice;
 import dev.ftcsim.contracts.session.RobotInfo;
-import dev.ftcsim.contracts.session.RobotMapping;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -22,12 +21,8 @@ final class Messages {
 
     private Messages() {}
 
-    static SessionRequest request(String robotName) {
-        return new SessionRequest(RobotMapping.empty(robotName), "C:\\programs\\hornet", "none", Alliance.RED, 7L, 0.5, -0.5, 1.0, 2.0);
-    }
-
-    static SessionRequest requestWithoutMapping() {
-        return new SessionRequest(null, "C:\\programs\\hornet", "none", Alliance.RED, 7L, 0.5, -0.5, 1.0, 2.0);
+    static SessionRequest request(String program) {
+        return new SessionRequest(program, "none", Alliance.RED, 7L, 0.5, -0.5, 1.0, 2.0);
     }
 
     static SessionInfo info(String robotName) {

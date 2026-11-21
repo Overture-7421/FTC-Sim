@@ -6,7 +6,6 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -30,11 +29,11 @@ import androidx.compose.ui.input.key.type
 import dev.ftcsim.ui.common.AppIcons
 import dev.ftcsim.ui.common.Tip
 
-private val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four, Key.Five)
+private val DIGIT_KEYS = listOf(Key.One, Key.Two, Key.Three, Key.Four)
 
 /**
  * The frame around every screen: a Material 3 navigation rail with the destinations and a Back button, and the shown
- * destination beside it. Ctrl+1 to Ctrl+5 go to the destinations in the order of the rail and Alt+Left goes back, from
+ * destination beside it. Ctrl+1 to Ctrl+4 go to the destinations in the order of the rail and Alt+Left goes back, from
  * wherever the keyboard focus is.
  */
 @Composable
@@ -65,7 +64,6 @@ fun AppShell(navigator: Navigator, modifier: Modifier = Modifier, content: @Comp
 
 private fun iconOf(destination: Destination): ImageVector = when (destination) {
     Destination.PROJECTS -> AppIcons.Folder
-    Destination.ROBOT -> Icons.Filled.Edit
     Destination.CONTROLS -> AppIcons.Gamepad
     Destination.PRACTICE -> Icons.Filled.PlayArrow
     Destination.SETTINGS -> Icons.Filled.Settings

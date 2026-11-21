@@ -22,8 +22,8 @@ Javadoc has the register and timing inventory.
 
 ## The one setting: how the hub is mounted
 
-`RobotMapping.hubLogo` and `hubUsb` (the Robot page's two dropdowns) say which way the hub's logo and USB ports face (UP, DOWN,
-FORWARD, BACKWARD, LEFT, RIGHT, as `RevHubOrientationOnRobot` names them). They default to UP and FORWARD, which the SDK assumes.
+The robot profile's `hubLogo` and `hubUsb` (`RobotProfiles`; both robots have UP and FORWARD) say which way the hub's logo and USB ports face (UP, DOWN,
+FORWARD, BACKWARD, LEFT, RIGHT, as `RevHubOrientationOnRobot` names them). They are UP and FORWARD, which the SDK assumes.
 What the code tells the SDK (`IMU.Parameters(new RevHubOrientationOnRobot(...))`) is separate: the SDK applies it in software
 and the chip never sees it, so **a wrong value gives wrong angles, as on a robot**. A hub lying logo up and USB forward that the
 code believes has USB on the right reads the right heading and swaps pitch and roll.

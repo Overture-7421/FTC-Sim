@@ -53,10 +53,10 @@ URLs are under docs.limelightvision.io/docs/docs-limelight/.
 - **Binding.** `Limelight3A` under any name; the first name that asks is the robot's one camera. A second name gets an
   unplugged camera (never connected or valid) and a line in the session's problems. `RobotRig` plugs it in (a `CameraRack`)
   with the field's tags and their host bodies; `CameraRack.problems()` joins `SimulationSession.problems()`.
-- **Mount: the one setting a team has**, `RobotMapping.camera` (the Robot page's Limelight window): X forward, Y left, Z up in
+- **Mount**, the robot profile's `camera` (`RobotProfiles`; nothing a team sets): X forward, Y left, Z up in
   metres from the centre of the chassis's box (about 0.18 m above the floor), yaw (positive left), pitch (positive up) and roll
-  (positive clockwise seen from behind) in degrees. Default 0.16 m ahead, 0.25 m up, yaw 0, pitch 20.
-- **On the turret:** on the BIOBUZZ robot (`turret.cameraOnTurret`) the camera turns with the turret about the turret's axis. The mount is then given with the turret facing forward and the camera's place in the world is the chassis's pose turned by the turret's yaw (`LimelightModel` setting `mount.on` = `chassis` or `turret`, `TurretPlatform`). Frames in flight keep the turret yaw they were taken with, as they keep the chassis pose. A botpose is then the turret's frame, not the chassis's (BIOBUZZ has no fixed tags, so it reports none). Left at the generic default, BIOBUZZ's mount is the one on its CAD's 45 degree panel (0.217 m ahead, 0.256 m up, pitch 45), see [biobuzz-cad](../robots/biobuzz-cad.md).
+  (positive clockwise seen from behind) in degrees. Hornet's is 0.16 m ahead, 0.25 m up, yaw 0, pitch 20.
+- **On the turret:** on the BIOBUZZ robot (its profile's `cameraOnTurret`) the camera turns with the turret about the turret's axis. The mount is then given with the turret facing forward and the camera's place in the world is the chassis's pose turned by the turret's yaw (`LimelightModel` setting `mount.on` = `chassis` or `turret`, `TurretPlatform`). Frames in flight keep the turret yaw they were taken with, as they keep the chassis pose. A botpose is then the turret's frame, not the chassis's (BIOBUZZ has no fixed tags, so it reports none). BIOBUZZ's mount is the one on its CAD's 45 degree panel (0.217 m ahead, 0.256 m up, pitch 45), see [biobuzz-cad](../robots/biobuzz-cad.md).
 - **Fixed by the design:** pipeline 0, AprilTags, the running field's fixed tags (`field`), 1280x960.
 - **Estimated:** Hornet's camera mount and 1280x960 pipeline (its repository does not say).
 

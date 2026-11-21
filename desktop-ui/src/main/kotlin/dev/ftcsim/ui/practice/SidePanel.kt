@@ -48,7 +48,7 @@ private val PANEL_PADDING = PaddingValues(horizontal = 12.dp, vertical = 8.dp)
  * The tabs of the details panel, which floats over the viewport: what the code shows (the Driver Station lines and the hardware it uses), the score, the
  * problems, and the setup of a run ([setup], which the application provides, so that this screen knows nothing of projects).
  *
- * @param extraProblems what the build and the robot file say, listed with the problems of the run
+ * @param extraProblems what the build says, listed with the problems of the run
  */
 @Composable
 fun SidePanel(
@@ -56,7 +56,6 @@ fun SidePanel(
     ui: PracticeUi,
     extraProblems: StateFlow<List<Problem>>,
     modifier: Modifier = Modifier,
-    editRobot: (() -> Unit)? = null,
     logOpener: LogOpener? = null,
     setup: @Composable () -> Unit = {},
 ) {
@@ -77,7 +76,7 @@ fun SidePanel(
             when (ui.panel) {
                 Panel.CODE -> CodePanel(session)
                 Panel.SCORE -> ScorePanel(session.score)
-                Panel.PROBLEMS -> ProblemsPanel(problems, editRobot, logOpener)
+                Panel.PROBLEMS -> ProblemsPanel(problems, logOpener)
                 Panel.SETUP -> setup()
             }
         }
@@ -169,13 +168,12 @@ private fun ScorePanel(source: StateFlow<Score>) {
 }
 
 @Composable
-private fun ProblemsPanel(problems: List<Problem>, editRobot: (() -> Unit)?, logOpener: LogOpener?) {
+private fun ProblemsPanel(problems: List<Problem>, logOpener: LogOpener?) {
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PANEL_PADDING, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (problems.isEmpty()) {
             item { EmptyHint("None") }
         }
         items(problems.sortedBy { it.severity }) { problem -> ProblemRow(problem, logOpener) }
-        if (editRobot != null) item { TextButton(onClick = editRobot) { Text("Set up robot") } }
     }
 }
 

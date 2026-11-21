@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.update
 /** The places the navigation rail leads to, in the order it lists them. */
 enum class Destination(val label: String) {
     PROJECTS("Projects"),
-    ROBOT("Robot"),
     CONTROLS("Controls"),
     PRACTICE("Simulator"),
     SETTINGS("Settings"),

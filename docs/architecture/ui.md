@@ -19,7 +19,6 @@ How the `desktop-ui` window is built and what its screens do; read it before cha
 |---|---|---|
 | `openLink()` | the `SimulatorLink`; may start a worker | Can take seconds and fail with an `IOException` whose message is for people. `AppServices` calls it off the UI thread (`link-opener`). Until it arrives a requested session waits ("Connecting"); on failure Simulator and Projects show the message with **Try again**. A link that arrives after the window closed is closed at once. |
 | `preparer()` | the `ProgramPreparer` (`inspect`, `prepare`) | Runs the project's own Gradle build. |
-| `mappings()` | the `ProjectMappings` (`find`, `save`, `saveRunDefaults`) | Touches the disk, so called off the UI thread. |
 | `isFake()` | whether nothing real runs | The title and a banner on every screen say FAKE HOST. |
 
 The fake host (`FakeApp`, `FakeAppHost`, `FakeSimulatorLink`) lives in the module's **test fixtures** (`src\testFixtures`); no other module uses them and nothing shipped contains them. In the fake preparer a folder name containing `broken` fails its build and `no-sdk` finds no Android SDK, to show the failure screens. VS Code task: `ftc-sim: run UI (fake host)`.
@@ -28,7 +27,7 @@ The fake host (`FakeApp`, `FakeAppHost`, `FakeSimulatorLink`) lives in the modul
 
 The window is **project-first**: a person opens the folder of their robot code and everything follows; a built program is the application's private detail.
 
-- A navigation rail lists **Projects, Robot, Controls, Simulator, Settings** (Simulator is `Destination.PRACTICE` in code), with Back above it. Ctrl+1 to Ctrl+5 go to the destinations in rail order, Alt+Left goes back.
+- A navigation rail lists **Projects, Controls, Simulator, Settings** (Simulator is `Destination.PRACTICE` in code), with Back above it. Ctrl+1 to Ctrl+4 go to the destinations in rail order, Alt+Left goes back.
 - `Navigator` keeps each visited place once, so Back always leads somewhere new.
 - Only the shown destination is composed, so screen state lives in `AppUi` and session, viewport and settings in `AppServices`. Leaving Simulator does not stop the run and leaving Projects does not stop a build.
 
@@ -38,7 +37,7 @@ Few words, on purpose: a sentence appears only for an error, an empty state or a
 
 - Labels and buttons first. No "so that..." sentences, no pointers to other screens, no repeats of what the screen shows, no full stop at the end of a line.
 - An error says what is wrong and, if the person can act, what to do, in one line; detail goes behind **Show details**.
-- One word per thing: **Project** (the team's folder), **Build**, **Robot** (the `ftcsim.json`), **Motors** (names the code asks the hub for), **Setup** (field, alliance, start position), **Simulator**, **Code** (telemetry, hardware, console), **OpMode**.
+- One word per thing: **Project** (the team's folder), **Build**, **Setup** (field, alliance, start position), **Simulator**, **Code** (telemetry, hardware, console), **OpMode**.
 - Session, worker, preparer, import and Gradle never appear in student-facing text, except in the build log and console.
 - Every control is a standard M3 component (Tab and Enter work); icon-only buttons have a tooltip (`Tip`) and a description.
 
@@ -46,7 +45,7 @@ Few words, on purpose: a sentence appears only for an error, an empty state or a
 
 - **Projects**: **Open project** (a folder chooser, the one with `settings.gradle`) and the ten newest recent projects. Choosing the folder is the consent to build it: there is no trust dialog (`Request.trusted` stays in the contract, always true from here). The build view, the game question and failures live here too.
 - `AppUi.openFolder` gives a project to `ProjectRunner`, refuses a built program with what to open instead, refuses anything else with the reason, and refuses a second project while a build runs.
-- **At start** the application opens the last project as Open project does, then shows the Simulator; `--no-last-project` skips it. If the folder is gone, or the project has no usable `ftcsim.json` and the Robot page was not skipped, the window stays on Projects with a message.
+- **At start** the application opens the last project as Open project does, then shows the Simulator; `--no-last-project` skips it. If the folder is gone, the window stays on Projects with a message.
 - **Settings**: render resolution (50, 75, 100 %), frame cap (60, 90, 144; never above the display), the performance overlay (off) and the settings file's location.
 
 ### The flow of a project
@@ -54,37 +53,25 @@ Few words, on purpose: a sentence appears only for an error, an empty state or a
 `ProjectRunner` is the only place that takes a person from a folder to a moving robot (`ProjectActivity`: `Idle`, `Building`, `NeedsGame`, `Failed`). Its `messages` flow is for what the person should read (snackbar); `problems` is for what stays wrong (Problems tab).
 
 1. **Build.** `PrepareModel` holds the build, so the UI never waits on the preparer and the build outlives the screen. The window keeps the newest 2000 log lines (`OutputLog`); the build log file has everything.
-2. **Game.** A project with no remembered run here and no `run.field` in `ftcsim.json` is asked once (BIOBUZZ or DECODE, newest preselected). Any other starts with its last run, else the `run` block.
-3. **Start.** The session opens with the project's `RobotMapping`, then the Simulator is shown. Without a usable `ftcsim.json` it runs with `RobotMapping.empty(projectName)`: no motor is mapped, wheels included, and a problem says so. A file that is not schema 2 (older, or unparsable) is never read as a mapping or silently overwritten; saving first copies it to `ftcsim.old.json`. The Robot screen follows the first session; `skipRobot()` remembers a skip (`RecentProject.robotSkipped`).
-4. **Robot file.** `saveRobot(mapping)` writes the whole mapping, shows the Simulator and restarts the code, which rereads the file. `saveDefaults` writes the Setup tab's field, alliance and start position into the `run` block. A build and a running session never touch each other.
+2. **Game.** A project with no remembered run here is asked once (BIOBUZZ or DECODE, newest preselected). Any other starts with its last run. The settings form is filled while the build runs, so what the person changes meanwhile is what starts.
+3. **Start.** The session opens with the request the form describes (no robot in it: the simulator builds the robot of the field, [fixed-robots.md](../robots/fixed-robots.md)), then the Simulator is shown. Nothing about the robot is asked or read from the project. A build and a running session never touch each other.
 
 File choosers and the build-log opener sit behind `FileChooser` and `LogOpener`; tests use fakes, so the two real ones are untested. The folder chooser is Swing's (the native one cannot pick a folder).
-
-### Robot
-
-`MappingScreen` / `MappingModel` (`dev.ftcsim.ui.robot`) map a project's motors, whether it has an `ftcsim.json` or not. The robot is fixed by the game ([fixed-robots.md](../robots/fixed-robots.md), which also holds the schema); this page only says which of the team's motors is which part. Each motor row has its base motor (a dropdown of the catalogue: base motors only, each once), a Ratio field (motor turns to one turn of what it drives; a number or a fraction such as `43/30`, empty is 1) and Mirrored; the four wheels share their motor and ratio. A ratio that is not a number, or is outside 0.05 to 1000, is said under the field and blocks the save.
-
-- The person picks an OpMode; the app runs it to Init to read the names it asks the hub for (`HardwareScan`); each motor is dragged (or clicked) onto a part.
-- Only motors are mapped on the page, and the BIOBUZZ turret's servo: a name, **Servo mirrored**, and **Limelight turns with the turret**. The turret's OctoQuad encoders and axis are in `ftcsim.json` only; saving the page keeps them. The simulator provides the other servos, the sensors and the pins. Hub and port are not asked: the design gives each motor the next free port, and the turret servo Control Hub servo port 0.
-- Field errors appear under the field in the contract's words (`RobotMapping.problems`); `blockedReason` says why the button is off.
-- The button is **Create** (with **Skip**) without a usable file, **Save** with one.
-- Names the program asked for and the mapping does not place come from `SessionStatus.unmapped` ([link.md](link.md)); the window uses only the motors among them.
 
 ### Restart code
 
 Nothing watches the source. After editing, **Restart code** (Simulator top bar; off during a build) calls `ProjectRunner.restart()`:
 
-- It builds what is on disk with the same preparer as Open project, then starts the session again with the new program and current `ftcsim.json`, keeping field, alliance, start pose, seed and speed. It does not ask and does not leave the Simulator.
+- It builds what is on disk with the same preparer as Open project, then starts the session again with the new program, keeping field, alliance, start pose, seed and speed. It does not ask and does not leave the Simulator.
 - A failure is a snackbar "Build failed" plus a Problems entry with the build log's path; the running session stays as it was.
-- **The run controls wait, in one place** (`waitingFor`, with `Controls.of` taking its answer): while the code builds for a restart, while a hold is on the session, and while a session opens, the main button is a disabled **Restarting**, **Resetting**, **Starting** or **Scanning** with a spinner, and Init, Start, Stop, Reset world, the OpMode menu and the match controls are off. Nothing the driver could start is ever shown on a session that is about to be replaced or that the application is using. A hold (`PracticeSession.holds`) is taken by whoever puts the session in a phase the driver did not choose: Reset world (`RESETTING`, until the new session reports Idle, because the simulator answers with `opened` before the robot program has finished stopping) and the hardware scan (`SCANNING`). A session that opens clears the holds of the one before, and whoever wants to hold the new one does it in `whenOpened`, which runs before the session shows as open, so there is no moment in between.
+- **The run controls wait, in one place** (`waitingFor`, with `Controls.of` taking its answer): while the code builds for a restart, while a hold is on the session, and while a session opens, the main button is a disabled **Restarting**, **Resetting** or **Starting** with a spinner, and Init, Start, Stop, Reset world, the OpMode menu and the match controls are off. Nothing the driver could start is ever shown on a session that is about to be replaced or that the application is using. The one hold (`PracticeSession.holds`) is Reset world (`RESETTING`, until the new session reports Idle, because the simulator answers with `opened` before the robot program has finished stopping).
 - Unchanged source is not rebuilt; source that changes during a build is built once more.
 - The runner keeps the last two programs of a project ([app.md](app.md)).
 
 ## The Simulator screen
 
-- **Top bar**: an OpMode menu (the last choice, or the autonomous of the last match armed, is kept as `project.N.opMode`: `OpModeMemory`); one main button, **Init**, **Start** or **Stop**, enabled as the Driver Station enables them (`Controls.of` is the only place that says so); a **start position** menu (the field's poses, then the team's named ones, kept as `startPositions` in `ftcsim.json` so teammates share them; choosing one restarts the session from it); **Reset world** (stops the code and puts robot and field back in the same session, at once, without a question: `PracticeSession.reset`) with an arrow for **Restart code**; a **more** menu with Match, pause and speed (0.25x to 4x).
+- **Top bar**: an OpMode menu (the last choice, or the autonomous of the last match armed, is kept as `project.N.opMode`: `OpModeMemory`); one main button, **Init**, **Start** or **Stop**, enabled as the Driver Station enables them (`Controls.of` is the only place that says so); a **start position** menu (the field's poses; choosing one restarts the session from it); **Open dashboard**, shown only while `SessionStatus.dashboardUrl` is not empty (a program with Panels), which opens it in the browser through the `UrlOpener` seam (`AwtUrlOpener` uses `Desktop.browse`; tests use `FakeUrlOpener`, like `LogOpener`; a refusal is a snackbar); **Reset world** (stops the code and puts robot and field back in the same session, at once, without a question: `PracticeSession.reset`) with an arrow for **Restart code**; a **more** menu with Match, pause and speed (0.25x to 4x).
 - **Match.** The window has no clock: countdown and period come only from `SessionStatus.match`, so pause and speed move them. A scoreboard over the viewport shows state, seconds left and the final score.
-- **Hardware scan** (`HardwareScan`) sends Init through `PracticeSession.init(name)`, waits for Init, sends Stop, then counts `SessionStatus.unmapped`. It runs by itself after every session that opens (the first, Restart code, Reset world) with the OpMode remembered for the project, so it holds the run controls (`Hold.SCANNING`) from the moment the session opens until it ends; a scan the person asks for on the Robot page does the same. It follows `PracticeSession.openings`, a counter, because two sessions with equal descriptions are equal `SessionState`s and a flow would not tell them apart.
 - **Viewport**: field, robot (a box in its alliance colour with a yellow marker on its front edge; the BIOBUZZ robot is its CAD ([biobuzz-cad](../robots/biobuzz-cad.md)): about 28 thousand triangles of fitted simple shapes in static GPU buffers, lexan drawn translucent, posed from the turret body and the joint bodies of the snapshot, with a box and solids as the fallback when the model is not in the build), pieces and AprilTags, with camera presets floating over it. Dragging leaves any preset for Free: left drag orbits, right or middle drag pans, the wheel zooms.
 
   | Preset | Stands |
@@ -159,7 +146,7 @@ The render thread draws into an offscreen framebuffer, reads it back and Compose
 | `display.*` | render scale, frame cap, overlay |
 | `gamepad.N.*` | assignment kind, controller GUID and name, dead zones |
 | `keyboard.<CONTROL>` | AWT key code (0 is unbound) |
-| `project.N.*` | a recent project: folder, name, and if run, the field, alliance and start pose, the OpMode that finds its hardware, `robotSkipped` |
+| `project.N.*` | a recent project: folder, name, and if run, the field, alliance and start pose, and the OpMode the project opens with |
 
 Obsolete keys (`recent.N.*`, `trusted.N`, `run.seed`, `run.randomSeed`, `lengthInches`) are ignored.
 

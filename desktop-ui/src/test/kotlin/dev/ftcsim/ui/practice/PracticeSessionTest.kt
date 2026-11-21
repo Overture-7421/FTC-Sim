@@ -151,7 +151,7 @@ class PracticeSessionTest {
         assertNull(session.catalogue.value)
 
         link.listener!!.catalogue(Fixtures.catalogue())
-        assertEquals(listOf("goBILDA-bare-6000", "rev-hd-hex-6000"), session.catalogue.value!!.motors().map { it.id() })
+        assertEquals(listOf("none", "decode"), session.catalogue.value!!.fields().map { it.id() })
 
         session.detach()
         session.attach(StubLink())
@@ -262,25 +262,6 @@ class PracticeSessionTest {
         session.reset()
         link.listener!!.failed("the worker died")
         assertEquals(emptySet<Hold>(), session.holds.value)
-    }
-
-    @Test
-    fun aHoldClaimedWhenTheSessionOpensIsThereBeforeTheSessionShowsAsOpenAndOnlyItsOwnerEndsIt() {
-        session.whenOpened { session.hold(Hold.SCANNING) }
-        session.open(Fixtures.request())
-
-        link.listener!!.opened(Fixtures.info())
-        assertEquals(Connection.OPEN to setOf(Hold.SCANNING), session.session.value.connection to session.holds.value)
-        val opening = session.openings.value
-
-        session.release(Hold.SCANNING, opening - 1)
-        assertEquals(setOf(Hold.SCANNING), session.holds.value, "the owner of an earlier session cannot end it")
-        session.release(Hold.SCANNING, session.hold(Hold.SCANNING))
-        assertEquals(emptySet<Hold>(), session.holds.value)
-
-        session.hold(Hold.SCANNING)
-        session.open(Fixtures.request(seed = 7L))
-        assertEquals(emptySet<Hold>(), session.holds.value, "asking for another session drops what held the old one")
     }
 
     @Test

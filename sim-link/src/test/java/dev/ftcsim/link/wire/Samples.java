@@ -22,10 +22,6 @@ import dev.ftcsim.contracts.session.MatchState;
 import dev.ftcsim.contracts.session.MatchStatus;
 import dev.ftcsim.contracts.session.Readout;
 import dev.ftcsim.contracts.session.RobotInfo;
-import dev.ftcsim.contracts.session.RobotMapping;
-import dev.ftcsim.contracts.session.RobotMapping.CameraMount;
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping;
-import dev.ftcsim.contracts.session.RobotMapping.Slot;
 import dev.ftcsim.contracts.session.SessionInfo;
 import dev.ftcsim.contracts.session.SessionRequest;
 import dev.ftcsim.contracts.session.SessionStatus;
@@ -46,40 +42,7 @@ final class Samples {
 
     static SessionRequest request() {
         return new SessionRequest(
-                mapping(), "C:\\Users\\Team 1234\\programs\\hornet", "decode", Alliance.BLUE, -42L, 1.25, -3.5, Math.PI / 3, 0.1);
-    }
-
-    /** A mapping that uses every slot, a model, a mirrored motor, text that is not ASCII and a payload NaN. */
-    static RobotMapping mapping() {
-        return new RobotMapping(
-                "Hörnet ✓",
-                List.of(
-                        new MotorMapping("fl", Slot.FRONT_LEFT, "", true),
-                        new MotorMapping("fr", Slot.FRONT_RIGHT, "", false),
-                        new MotorMapping("rl", Slot.REAR_LEFT, "", true),
-                        new MotorMapping("rr", Slot.REAR_RIGHT, "", false),
-                        new MotorMapping("roller", Slot.INTAKE, "swyft-spike-6000", false, 2.0),
-                        new MotorMapping("belt", Slot.CONVEYOR, "ünï", true),
-                        new MotorMapping("shooterA", Slot.SHOOTER, "", false, 43.0 / 30.0),
-                        new MotorMapping("turret", Slot.TURRET, "goBILDA-bare-6000", true)),
-                11.3,
-                96,
-                "goBILDA-bare-6000",
-                Double.longBitsToDouble(0x7FF8000000001234L),
-                "UP",
-                "BACKWARD",
-                new CameraMount(0.16, -0.0, 0.25, 10, 20, -30),
-                new RobotMapping.TurretParts(
-                        new RobotMapping.ServoMapping("turrët ✓", "axon-mini-plus", true),
-                        List.of(
-                                new RobotMapping.TurretEncoder(0, "rev-tbe-v2", 5.5, -12.5, false),
-                                new RobotMapping.TurretEncoder(1, "", 44.0 / 7.0, 0.0, true)),
-                        0.05, -0.02, true,
-                        List.of(
-                                new RobotMapping.MechanismServo(RobotMapping.ServoRole.HOOD, new RobotMapping.ServoMapping("hood", "", false)),
-                                new RobotMapping.MechanismServo(
-                                        RobotMapping.ServoRole.COLIBRI_RIGHT, new RobotMapping.ServoMapping("arm ✓", "gobilda-2000-torque", true)))),
-                12.7);
+                "C:\\Users\\Team 1234\\programs\\hornet", "decode", Alliance.BLUE, -42L, 1.25, -3.5, Math.PI / 3, 0.1);
     }
 
     static GamepadState gamepad() {
@@ -144,7 +107,8 @@ final class Samples {
                 1.75,
                 true,
                 match,
-                List.of(new UnmappedDevice(UnmappedDevice.Kind.MOTOR, "shooterLeft"), new UnmappedDevice(UnmappedDevice.Kind.I2C, "upSensor")));
+                List.of(new UnmappedDevice(UnmappedDevice.Kind.MOTOR, "shooterLeft"), new UnmappedDevice(UnmappedDevice.Kind.I2C, "upSensor")),
+                "http://127.0.0.1:8001/");
     }
 
     static Catalogue catalogue() {
@@ -155,9 +119,7 @@ final class Samples {
                                 "decode",
                                 "DECODE ✓ 2025–26",
                                 List.of(new StartPose("red far", 1.2, -1.5, Math.PI), new StartPose("blue near", -0.3, 0.4, 0)),
-                                List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")))),
-                List.of(new dev.ftcsim.contracts.session.MotorChoice("goBILDA-bare-6000", "Yellow Jacket"),
-                        new dev.ftcsim.contracts.session.MotorChoice("ünï", "Ünïcode motor")));
+                                List.of(new HumanAction("feed", "Load a piece"), new HumanAction("clear", "Clear the ramp")))));
     }
 
     static byte[] utf8(String text) {

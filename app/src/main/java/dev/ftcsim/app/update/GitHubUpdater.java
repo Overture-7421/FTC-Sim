@@ -185,7 +185,9 @@ public final class GitHubUpdater implements UpdateService {
     }
 
     private static void runInstaller(Path installer) throws IOException {
+        System.out.println("FTC-Sim is starting its installer " + installer);
         new ProcessBuilder(installerCommand(installer))
+                .directory(installer.toAbsolutePath().getParent().toFile())
                 .redirectOutput(ProcessBuilder.Redirect.DISCARD)
                 .redirectError(ProcessBuilder.Redirect.DISCARD)
                 .start();
@@ -255,6 +257,7 @@ public final class GitHubUpdater implements UpdateService {
             throw new IOException("the download does not match the checksum the release publishes, so it was thrown away");
         }
         Files.move(part, installer, StandardCopyOption.REPLACE_EXISTING);
+        System.out.println("FTC-Sim fetched " + release.installerName() + " and its checksum matches");
         return installer;
     }
 

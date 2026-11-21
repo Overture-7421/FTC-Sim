@@ -1,10 +1,6 @@
 package dev.ftcsim.ui.project
 
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.RobotMapping
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping
-import dev.ftcsim.contracts.session.RobotMapping.Slot
-import dev.ftcsim.ui.host.RunDefaults
 import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.practice.Connection
 import dev.ftcsim.ui.practice.Fixtures
@@ -24,7 +20,7 @@ import org.junit.jupiter.api.Test
 
 /**
  * The runner from the project folder to the session and back again for a restart, on a preparer that the test finishes
- * by hand, a link it speaks for and robot mappings that live in memory.
+ * by hand, and a link it speaks for.
  */
 class ProjectRunnerTest {
     private val rig = ProjectRig()
@@ -32,18 +28,8 @@ class ProjectRunnerTest {
     @AfterEach
     fun close() = rig.close()
 
-    private fun mapped(name: String = "Team robot") = RobotMapping.empty(name).withMotors(
-        listOf(
-            MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
-            MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-            MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
-            MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-            MotorMapping("shooter", Slot.SHOOTER, "", false),
-        ),
-    )
-
-    /** Opens a project whose file names its game, so that it is not asked, and brings its session to the open state. */
-    private fun openedProject(name: String = "TeamProject", run: RunDefaults = RunDefaults("decode", null, null), program: String = "program"): Path {
+    /** Opens a project that ran before, so that its game is not asked, so that it is not asked, and brings its session to the open state. */
+    private fun openedProject(name: String = "TeamProject", run: SetupInput = SetupInput(field = "decode"), program: String = "program"): Path {
         val project = rig.project(name, run)
         assertTrue(rig.runner.open(project))
         rig.built(program)
@@ -53,8 +39,8 @@ class ProjectRunnerTest {
     }
 
     @Test
-    fun openingAProjectBuildsItStartsTheSessionOnItsProgramAndMappingAndRemembersTheProject() {
-        val project = rig.project("TeamProject", RunDefaults("decode", Alliance.BLUE, null), mapped())
+    fun openingAProjectBuildsItStartsTheSessionOnItsProgramAndRemembersTheProject() {
+        val project = rig.project("TeamProject", SetupInput(field = "decode", alliance = Alliance.BLUE))
 
         assertTrue(rig.runner.open(project))
         assertEquals(ProjectActivity.Building(project, restarting = false), rig.runner.activity.value)
@@ -68,8 +54,7 @@ class ProjectRunnerTest {
 
         val request = rig.link.requests.single()
         assertEquals(rig.work.resolve("program-one").toString(), request.program())
-        assertEquals(mapped(), request.mapping(), "the mapping the file holds travels in the request")
-        assertEquals(Alliance.BLUE, request.alliance(), "the file says how a run starts")
+        assertEquals(Alliance.BLUE, request.alliance(), "the project was last run for the blue alliance")
         assertEquals("decode", request.field())
         assertEquals(ProjectRig.SEED, request.seed())
         assertEquals(Destination.PRACTICE, rig.ui.navigator.state.value.current)
@@ -80,7 +65,7 @@ class ProjectRunnerTest {
 
     @Test
     fun aProjectThatNeverRanHereWaitsForItsGameAndStartsOnlyAfterTheChoice() {
-        val project = rig.project("TeamProject", RunDefaults.NONE)
+        val project = rig.project("TeamProject", run = null)
         rig.runner.open(project)
         rig.built()
 
@@ -97,20 +82,8 @@ class ProjectRunnerTest {
     }
 
     @Test
-    fun aProjectThatRanBeforeIsNotAskedForItsGameAgain() {
-        val project = rig.project("TeamProject", RunDefaults.NONE)
-        rig.settings.update { it.withProject(RecentProject(project.folder.toString(), project.name, SetupInput(field = "decode", alliance = Alliance.RED))) }
-
-        rig.runner.open(project)
-        rig.built()
-
-        assertEquals(ProjectActivity.Idle, rig.settle())
-        assertEquals(1, rig.link.requests.size)
-    }
-
-    @Test
-    fun whatTheProjectWasLastRunWithWinsOverWhatItsFileSaysExceptTheSeedWhichIsAlwaysDrawn() {
-        val project = rig.project("TeamProject", RunDefaults("decode", Alliance.BLUE, null))
+    fun whatTheProjectWasLastRunWithIsUsedExceptTheSeedWhichIsAlwaysDrawn() {
+        val project = rig.project("TeamProject", run = null)
         val remembered = SetupInput(field = "decode", alliance = Alliance.RED, randomSeed = false, seedText = "77", startPose = "Centre")
         rig.settings.update { it.withProject(RecentProject(project.folder.toString(), project.name, remembered)) }
 
@@ -140,118 +113,6 @@ class ProjectRunnerTest {
     }
 
     @Test
-    fun aProjectWithoutARobotFileRunsARobotWithNoMotorsMappedShowsTheRobotScreenAndListsItAsAProblem() {
-        val project = rig.project("TeamProject", run = null)
-        rig.runner.open(project)
-        rig.built()
-
-        rig.chooseGame()
-
-        assertEquals(RobotMapping.empty("TeamProject"), rig.link.requests.single().mapping())
-        assertEquals(RobotState.Undescribed(project), rig.runner.robot.value)
-        assertEquals(Destination.ROBOT, rig.ui.navigator.state.value.current, "the robot is described next")
-        val problem = rig.runner.problems.value.single()
-        assertEquals(Severity.WARNING, problem.severity)
-        assertEquals("Robot", problem.source)
-    }
-
-    @Test
-    fun aRobotThatWasSkippedIsNotAskedForAgainWhenTheProjectIsOpenedAnotherTime() {
-        val project = rig.project("TeamProject", run = null)
-        rig.runner.open(project)
-        rig.built()
-        rig.chooseGame()
-        rig.link.listener!!.opened(Fixtures.info())
-
-        rig.runner.skipRobot()
-
-        assertEquals(Destination.PRACTICE, rig.ui.navigator.state.value.current)
-        assertTrue(rig.settings.state.value.project(project.folder)!!.robotSkipped)
-        rig.ui.navigator.go(Destination.PROJECTS)
-        assertTrue(rig.runner.open(project))
-        rig.built()
-        rig.settle()
-        assertEquals(Destination.PRACTICE, rig.ui.navigator.state.value.current, "the Robot screen is not shown again")
-    }
-
-    @Test
-    fun theRobotThatWasMappedIsWrittenWholeAndTheCodeIsRestartedWithIt() {
-        val project = rig.project("TeamProject", run = null)
-        rig.runner.open(project)
-        rig.built()
-        rig.chooseGame()
-        rig.link.listener!!.opened(Fixtures.info())
-
-        rig.runner.saveRobot(mapped())
-        rig.await(rig.runner.activity) { it is ProjectActivity.Building }
-
-        assertEquals(listOf(mapped()), rig.mappings.saved(), "the whole mapping was written")
-        assertEquals(listOf("Saved ftcsim.json"), rig.messages.map { it.text })
-        assertEquals(Destination.PRACTICE, rig.ui.navigator.state.value.current)
-        assertEquals(2, rig.preparer.requests.size, "the code is built again so that the session uses the file")
-        rig.built("program-two")
-        rig.settle()
-        rig.awaitLinks(2)
-        assertEquals(mapped(), rig.link.requests.single().mapping(), "the new session runs with what was saved")
-        assertEquals(RobotState.FromFile(project, rig.mappings.find(project.folder).get().file(), false), rig.runner.robot.value)
-        assertTrue(rig.runner.problems.value.isEmpty(), "the robot is mapped now")
-    }
-
-    @Test
-    fun savingAMappingOverAnExistingOneRestartsTheCodeWithTheChangedMapping() {
-        val project = rig.project("TeamProject", mapping = mapped())
-        rig.runner.open(project)
-        rig.built()
-        rig.settle()
-        val changed = mapped().withMotors(mapped().motors().dropLast(1))
-
-        rig.runner.saveRobot(changed)
-        rig.await(rig.runner.activity) { it is ProjectActivity.Building }
-
-        assertEquals(listOf(changed), rig.mappings.saved())
-        assertEquals(2, rig.preparer.requests.size)
-        rig.built("program-two")
-        rig.settle()
-        rig.awaitLinks(2)
-        assertEquals(changed, rig.link.requests.single().mapping())
-        assertEquals(RunDefaults("decode", null, null), rig.mappings.find(project.folder).get().run(), "the run defaults stay")
-    }
-
-    @Test
-    fun aFileThatIsNotReadIsAProblemAndTheProjectRunsWithNoMotorsMappedUntilTheRobotIsSaved() {
-        val project = rig.project("TeamProject", run = null)
-        rig.mappings.withUnreadableFile(project.folder, "ftcsim.json is from an older version")
-        rig.runner.open(project)
-        rig.built()
-
-        rig.chooseGame()
-
-        assertEquals(RobotMapping.empty("TeamProject"), rig.link.requests.single().mapping())
-        assertEquals(RobotState.Undescribed(project, "ftcsim.json is from an older version"), rig.runner.robot.value)
-        assertTrue(rig.runner.open.value!!.generic)
-        val problem = rig.runner.problems.value.single()
-        assertEquals("Robot", problem.source)
-        assertEquals("ftcsim.json is from an older version", problem.text)
-        assertEquals(Destination.ROBOT, rig.ui.navigator.state.value.current, "the robot is mapped next")
-    }
-
-    @Test
-    fun aMappingThatCannotBeSavedSaysWhyAndTheCodeIsNotRestarted() {
-        val project = rig.project("TeamProject", mapping = mapped())
-        rig.runner.open(project)
-        rig.built()
-        rig.settle()
-        rig.mappings.failingWith(IOException("read-only"))
-
-        rig.runner.saveRobot(mapped("Other"))
-        rig.awaitMessages(1)
-
-        val message = rig.messages.single().text
-        assertTrue(message.startsWith("Could not save") && message.contains("read-only"), message)
-        assertEquals(1, rig.preparer.requests.size, "the code is not restarted")
-    }
-
-    @Test
     fun aBuildThatFailsWhileOpeningIsSaidAndNoSessionStarts() {
         val project = rig.project()
         rig.runner.open(project)
@@ -268,7 +129,7 @@ class ProjectRunnerTest {
 
     @Test
     fun theWarningsOfABuildAreListedAsProblems() {
-        val project = rig.project("TeamProject", RunDefaults("decode", null, null))
+        val project = rig.project("TeamProject")
         rig.runner.open(project)
 
         rig.preparer.finish(rig.work.resolve("program"), warnings = listOf("Drive.run() uses reflection"))
@@ -293,7 +154,7 @@ class ProjectRunnerTest {
 
     @Test
     fun restartingBuildsTheProjectAgainAndStartsTheSameRunOnTheNewProgramAtTheSpeedItHasNow() {
-        val folder = openedProject(program = "program-one", run = RunDefaults("decode", Alliance.BLUE, "BLUE goal side"))
+        val folder = openedProject(program = "program-one", run = SetupInput(field = "decode", alliance = Alliance.BLUE, startPose = "BLUE goal side"))
         rig.link.listener!!.status(Fixtures.status(speed = 2.0))
         val before = rig.link.requests.single()
 
@@ -396,19 +257,6 @@ class ProjectRunnerTest {
     }
 
     @Test
-    fun aRobotFileThatCannotBeReadFailsTheOpenWithWhatTheDiskSaid() {
-        val project = rig.project()
-        rig.mappings.failingWith(IOException("the disk is gone"))
-
-        rig.runner.open(project)
-        rig.built()
-        val failed = assertInstanceOf(ProjectActivity.Failed::class.java, rig.settle())
-
-        assertTrue(failed.message.contains("the disk is gone"), failed.message)
-        assertTrue(rig.link.requests.isEmpty())
-    }
-
-    @Test
     fun applyingTheSetupStartsTheSessionAgainOnTheSameProgramWithoutBuildingAndRemembersTheRun() {
         openedProject(program = "program-one")
         rig.ui.setup.edit { it.copy(alliance = Alliance.BLUE) }
@@ -432,30 +280,6 @@ class ProjectRunnerTest {
         assertFalse(rig.runner.apply())
 
         assertEquals(1, rig.link.requests.size)
-    }
-
-    @Test
-    fun savingTheRunAsTheProjectsDefaultWritesTheFieldAllianceAndPoseIntoItsFileAndSaysSo() {
-        openedProject()
-        rig.ui.setup.chooseAlliance(SetupRules.of(Fixtures.catalogue()), Alliance.BLUE)
-
-        rig.runner.saveDefaults()
-        rig.awaitMessages(1)
-
-        assertEquals(listOf(RunDefaults("decode", Alliance.BLUE, "BLUE goal side")), rig.mappings.savedRunDefaults())
-        assertEquals(listOf("Saved to ftcsim.json"), rig.messages.map { it.text })
-    }
-
-    @Test
-    fun aSaveThatFailsSaysWhy() {
-        openedProject()
-        rig.mappings.failingWith(IOException("read-only"))
-
-        rig.runner.saveDefaults()
-        rig.awaitMessages(1)
-
-        val message = rig.messages.single().text
-        assertTrue(message.startsWith("Could not save") && message.contains("read-only"), message)
     }
 
     @Test

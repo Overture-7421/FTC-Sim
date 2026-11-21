@@ -66,14 +66,12 @@ class ControlsTest {
     }
 
     @Test
-    fun theRunControlsWaitForTheCodeBeingBuiltAHoldOrTheSessionOpeningInThatOrder() {
+    fun theRunControlsWaitForTheCodeBeingBuiltTheResetOrTheSessionOpeningInThatOrder() {
         assertNull(waitingFor(Connection.OPEN, building = false, holds = emptySet()))
         assertNull(waitingFor(Connection.NONE, building = false, holds = emptySet()))
-        assertEquals("Restarting", waitingFor(Connection.OPENING, building = true, holds = setOf(Hold.RESETTING, Hold.SCANNING)))
-        assertEquals("Resetting", waitingFor(Connection.OPENING, building = false, holds = setOf(Hold.RESETTING, Hold.SCANNING)))
-        assertEquals("Starting", waitingFor(Connection.OPENING, building = false, holds = setOf(Hold.SCANNING)))
-        assertEquals("Scanning", waitingFor(Connection.OPEN, building = false, holds = setOf(Hold.SCANNING)))
-    }
+        assertEquals("Restarting", waitingFor(Connection.OPENING, building = true, holds = setOf(Hold.RESETTING)))
+        assertEquals("Resetting", waitingFor(Connection.OPENING, building = false, holds = setOf(Hold.RESETTING)))
+        assertEquals("Starting", waitingFor(Connection.OPENING, building = false, holds = emptySet()))    }
 
     @Test
     fun fromIdleOnlyInitIsPossibleAndOnlyWithAnOpModePicked() {

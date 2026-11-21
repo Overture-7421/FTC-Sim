@@ -7,6 +7,7 @@ import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.RobotPhase;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
 import java.io.IOException;
 import java.util.List;
@@ -27,7 +28,7 @@ class SessionDriveTest {
 
     @BeforeAll
     static void loadProfile() throws IOException {
-        hornet = HornetMapping.spec();
+        hornet = RobotDesign.decode().spec();
     }
 
     /** Where the robot ends up after holding the sticks for a while, as the true pose in the field frame. */

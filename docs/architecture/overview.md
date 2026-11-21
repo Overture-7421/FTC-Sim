@@ -42,7 +42,7 @@ Rates: physics 240 Hz (step *n* at `floor(n * 1e9 / 240)` ns); hubs and the plan
 | | What | Where |
 |---|---|---|
 | **Real** | The FTC SDK (`OpModeManagerImpl`, `LynxModule`, motor controllers, I2C drivers, `HardwareMap`), the team's code and libraries | robot world |
-| **Replaced** | The Android framework (a clean-room subset that fails loudly), the SDK's USB device, the network, clocks, sleeps, waits, native library loading, `System.exit` | `android-shim`, `sdk-common`, `robot-runtime` rewrites, `contracts.hooks` |
+| **Replaced** | The Android framework (a clean-room subset that fails loudly), the SDK's USB device, the network (except Panels' ports 8001 and 8002, real on the loopback address only: [decisions](decisions.md) section 10), clocks, sleeps, waits, native library loading, `System.exit` | `android-shim`, `sdk-common`, `robot-runtime` rewrites, `contracts.hooks` |
 | **Emulated** | REV hub firmware speaking the real RHSP protocol; the fixed ideal sensors (Pinpoint, colour sensor, the Control Hub's BNO055, Limelight 3A); idle digital and analog pins | `sim-hardware` |
 | **Simulated** | Rigid bodies with mecanum wheel traction; mechanisms (plants, intakes, storages, launchers); the two fields and their rules | `sim-physics`, `simulator` (`mechanisms`), `games` |
 
@@ -71,7 +71,7 @@ The dependency rules are code: the `moduleRules` block of the root `build.gradle
 | `sim-hardware` | contracts | Hub firmware (`LynxBus`, `LynxHub`), I2C peripherals, sensor models (`DeviceModels`), camera (`CameraModels`), `WiringTable` |
 | `sim-physics` | contracts | Jolt via jolt-jni: `PhysicsWorld`, `MecanumChassis`, pieces, pivots (`PivotSpec`), native DLL (`NativeLibrary`) |
 | `games` | contracts, physics | Field framework (`dev.ftcsim.field`: `Field`, `FieldRun`, `EntityIds`; nothing game-specific) and the two fields in separate packages that do not refer to each other (`GamePackagesTest`): `DecodeField`, `BiobuzzField` |
-| `simulator` | contracts, core, physics, hardware, games, robot-runtime, platform | A session: `SimulationSession`, `RobotRig`, `RobotWorldLauncher`, the fixed robot (`RobotDesign`, `RobotSpec`), `RealtimeRunner`, the mechanisms (`dev.ftcsim.mechanisms`) |
+| `simulator` | contracts, core, physics, hardware, games, robot-runtime, platform | A session: `SimulationSession`, `RobotRig`, `RobotWorldLauncher`, the built-in robots (`RobotProfiles`, `RobotMapping`, `RobotDesign`, `RobotSpec`), `RealtimeRunner`, the mechanisms (`dev.ftcsim.mechanisms`) |
 | `sim-link` | contracts | The UI's side of the process boundary and the wire format: `RemoteSimulatorLink`, `WorkerLauncher`, package `link.wire` |
 | `worker` | contracts, link, simulator, games, project-import | The process that runs a session and serves the link: `WorkerMain`, `WorkerServer`, `SessionFactory` |
 | `project-import` | contracts | Turns an unmodified team project into a prepared program: `ProjectImporter` |
@@ -89,7 +89,7 @@ The dependency rules are code: the `moduleRules` block of the root `build.gradle
 - **Field frame:** origin mid-field on the tile top, Z up, +X toward the audience, +Y toward the blue wall (red wall on the audience's left); heading counter-clockwise from +X (`docs/fields/`).
 - **Robot frame:** X forward, Y left, Z up, origin at the chassis centre ([../robots/fixed-robots.md](../robots/fixed-robots.md)).
 - **Entity ids:** chassis is 1; a field's bodies start at 1000 (`EntityIds`); a field's own body kinds are 100 or more (`BodyKinds`). A snapshot orders bodies by id.
-- **Motors:** positive hub voltage makes the plant's encoder count rise; the SDK is told to invert nothing. Mounting differences (mirrored motors) live in the robot mapping, never in device code.
+- **Motors:** positive hub voltage makes the plant's encoder count rise; the SDK is told to invert nothing. Mounting differences (mirrored motors) live in the robot profiles, never in device code.
 
 ## Where to look when ...
 
@@ -98,7 +98,7 @@ The dependency rules are code: the `moduleRules` block of the root `build.gradle
 | Robot code throws on an Android call, or a library cannot load a class | `android-shim`; the worker's log; [decisions.md](decisions.md) section 10 (the APK index) |
 | A device reads wrongly, or its SDK driver fails | the `sim-hardware` model of that device; the SDK driver is the specification |
 | Two runs differ | not promised to repeat ([decisions.md](decisions.md) section 9); library threads run in real time (section 10); `KernelDiagnostics.problems()` |
-| The robot drives or shoots wrongly | the design and mapping ([../robots/fixed-robots.md](../robots/fixed-robots.md)), `MecanumChassis`, the mechanisms |
+| The robot drives or shoots wrongly | the robot profiles and design ([../robots/fixed-robots.md](../robots/fixed-robots.md)), `MecanumChassis`, the mechanisms |
 | A score is wrong | `games`, `docs/fields/` |
 | The window misbehaves | `desktop-ui`, [ui.md](ui.md) |
 | Importing a team project fails | `project-import`, [prepared-program.md](prepared-program.md), the Projects screen's build view and log |
@@ -107,8 +107,8 @@ The dependency rules are code: the `moduleRules` block of the root `build.gradle
 
 ## Glossary
 
-- **Catalogue:** what a `SessionRequest` may name (fields, start poses, human actions, motors a mapping may name).
-- **Mapping / design:** the mapping (`RobotMapping`) is what a student says about their robot; the design (`RobotDesign`) is a game's fixed robot ([../robots/fixed-robots.md](../robots/fixed-robots.md)).
+- **Catalogue:** what a `SessionRequest` may name (fields, start poses, human actions).
+- **Profile / design:** a profile (`RobotMapping`, held by `RobotProfiles`) is the data of one of the two built-in robots, Hornet's and BIOBUZZ's; the design (`RobotDesign`) turns it into the `RobotSpec` the simulator builds from ([../robots/fixed-robots.md](../robots/fixed-robots.md)).
 - **Piece:** a game element (ARTIFACT, POLLEN, NECTAR) with exactly one owner: free body, carried by a storage, or in a reserve.
 - **Problem:** a condition the session reports (a robot thread that would not end, a declined network request, a runaway thread).
 - **RHSP:** the REV Hub Serial Protocol the SDK speaks to its hubs.

@@ -3,6 +3,7 @@ package dev.ftcsim.contracts.hooks;
 import java.io.IOException;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
+import java.net.ServerSocket;
 import java.net.SocketException;
 import java.net.SocketTimeoutException;
 import java.util.concurrent.locks.LockSupport;
@@ -22,9 +23,24 @@ final class SimulatedListener {
     private int port = -1;
     private boolean closed;
     private boolean worldEnded;
+    private ServerSocket real;
 
     SimulatedListener(SimulatedNetwork network) {
         this.network = network;
+    }
+
+    /** Makes the listener a real one: the socket is closed with the listener. */
+    void attachReal(ServerSocket socket) {
+        synchronized (monitor) {
+            real = socket;
+        }
+    }
+
+    /** The real loopback listener behind this one, or null while it is simulated. */
+    ServerSocket real() {
+        synchronized (monitor) {
+            return real;
+        }
     }
 
     void bind(InetSocketAddress requested) throws IOException {
@@ -105,6 +121,13 @@ final class SimulatedListener {
             return;
         }
         closed = true;
+        if (real != null) {
+            try {
+                real.close();
+            } catch (IOException ignored) {
+                // the port is released either way
+            }
+        }
         if (port >= 0) {
             network.release(port, this);
         }

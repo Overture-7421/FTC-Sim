@@ -20,5 +20,7 @@ object FakeApp {
                 ui.navigator.go(Destination.PRACTICE)
             }
         }
+        // The window's entry point no longer ends the process itself.
+        kotlin.system.exitProcess(0)
     }
 }

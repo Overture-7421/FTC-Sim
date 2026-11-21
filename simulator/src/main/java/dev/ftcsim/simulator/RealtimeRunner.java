@@ -243,7 +243,7 @@ public final class RealtimeRunner implements AutoCloseable {
         problems.addAll(session.problems());
         return new SessionStatus(
                 session.now(), session.phase(), session.telemetry(), session.score(), problems, session.hardware(), speed,
-                achieved, paused, session.match(), session.unmapped());
+                achieved, paused, session.match(), session.unmapped(), session.dashboardUrl());
     }
 
     /** Stops the run, closes the session on its own thread and waits for it to finish. */

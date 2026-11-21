@@ -158,7 +158,6 @@ public final class RemoteSimulatorLink implements SimulatorLink {
     @Override
     public void open(SessionRequest request) {
         Objects.requireNonNull(request, "request");
-        Objects.requireNonNull(request.mapping(), "request.mapping");
         Objects.requireNonNull(request.program(), "request.program");
         Objects.requireNonNull(request.field(), "request.field");
         Objects.requireNonNull(request.alliance(), "request.alliance");

@@ -5,14 +5,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
 
 /**
  * The settings form between visits to the screen. What the person typed stays when they look at another screen. The rules
  * are the simulator's catalogue, which can arrive after the form is shown, so every question takes them as an argument
- * and the model keeps none. The form holds what a run needs besides the project's program and robot mapping, which
- * belong to the open project.
+ * and the model keeps none. The form holds what a run needs besides the project's program, which
+ * belongs to the open project.
  */
 @Stable
 class SetupModel(
@@ -32,7 +31,7 @@ class SetupModel(
         input = change(input)
     }
 
-    /** Fills the form with [filled], which is what a project was last run with or what its robot file says. */
+    /** Fills the form with [filled], which is what a project was last run with. */
     fun load(filled: SetupInput, rules: SetupRules?) {
         input = if (rules == null) filled else withPose(rules, withDefaults(rules, filled))
     }
@@ -71,24 +70,13 @@ class SetupModel(
         }
     }
 
-    /** Starts from numbers of the person's own: the field's poses are left, and the form holds these. */
-    fun useNumbers(x: Double, y: Double, headingDegrees: Double) {
-        input = input.copy(
-            startPose = null,
-            startX = SetupInput.formatNumber(x),
-            startY = SetupInput.formatNumber(y),
-            headingDegrees = SetupInput.formatNumber(headingDegrees),
-            startTouched = true,
-        )
-    }
-
     /**
-     * The run the form describes for the open project's [program] and [mapping], or null while the form is not [ready].
+     * The run the form describes for the open project's [program], or null while the form is not [ready].
      * A random seed is [keepSeed] when that is given (a restart of the run on screen keeps its seed, so that only what
      * the person changed differs) and a new one otherwise.
      */
-    fun request(rules: SetupRules?, program: String, mapping: RobotMapping, keepSeed: Long? = null): SessionRequest? =
-        if (rules != null && ready(rules)) SetupValidation.request(input, rules, { keepSeed ?: newSeed() }, program, mapping) else null
+    fun request(rules: SetupRules?, program: String, keepSeed: Long? = null): SessionRequest? =
+        if (rules != null && ready(rules)) SetupValidation.request(input, rules, { keepSeed ?: newSeed() }, program) else null
 
     private fun withDefaults(rules: SetupRules, form: SetupInput): SetupInput =
         if (form.field.isBlank()) form.copy(field = rules.defaultField()?.id().orEmpty()) else form

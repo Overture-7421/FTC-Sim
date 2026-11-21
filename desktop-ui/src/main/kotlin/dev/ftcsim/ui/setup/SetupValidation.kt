@@ -4,7 +4,6 @@ import dev.ftcsim.contracts.field.Alliance
 import dev.ftcsim.contracts.field.StartPose
 import dev.ftcsim.contracts.session.Catalogue
 import dev.ftcsim.contracts.session.FieldChoice
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
 import java.util.Locale
 
@@ -107,12 +106,11 @@ object SetupValidation {
         input.startPose?.let { name -> rules.field(input.field)?.startPoses()?.firstOrNull { it.name() == name } }
 
     /**
-     * The run the form describes for the program and robot mapping of the open project, or null when it cannot be read.
+     * The run the form describes for the program of the open project, or null when it cannot be read.
      *
      * @param program the folder of the program that was built from the project
-     * @param mapping the project's robot mapping
      */
-    fun request(input: SetupInput, rules: SetupRules, newSeed: () -> Long, program: String, mapping: RobotMapping): SessionRequest? {
+    fun request(input: SetupInput, rules: SetupRules, newSeed: () -> Long, program: String): SessionRequest? {
         val seed = if (input.randomSeed) newSeed() else input.seedText.trim().toLongOrNull()
         val pose = poseOf(input, rules)
         if (input.startPose != null && pose == null) return null
@@ -120,7 +118,7 @@ object SetupValidation {
         val y = pose?.y() ?: number(input.startY)
         val heading = pose?.headingRadians() ?: number(input.headingDegrees)?.let(Math::toRadians)
         if (seed == null || x == null || y == null || heading == null) return null
-        return SessionRequest(mapping, program, input.field, input.alliance, seed, x, y, heading, 1.0)
+        return SessionRequest(program, input.field, input.alliance, seed, x, y, heading, 1.0)
     }
 
     /** A number as people write it, with a point or a comma; null when it is none or not finite. */

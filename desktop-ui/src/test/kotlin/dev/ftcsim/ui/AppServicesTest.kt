@@ -213,20 +213,17 @@ class AppServicesTest {
     }
 
     @Test
-    fun theHostDecidesWhichPreparerAndWhichMappingsAreUsedAndWhetherItIsAFake() {
+    fun theHostDecidesWhichPreparerIsUsedAndWhetherItIsAFake() {
         val fake = testHost()
         val real = object : AppHost {
             override fun openLink(): SimulatorLink = StubLink()
 
             override fun preparer(): ProgramPreparer = fake.preparer()
-
-            override fun mappings() = fake.mappings()
         }
 
         val services = services(real)
 
         assertEquals(fake.preparer(), services.preparer)
-        assertEquals(fake.mappings(), services.mappings)
         assertFalse(services.isFake, "a host is real unless it says otherwise")
         assertTrue(services().isFake, "the stand-in host says so")
     }

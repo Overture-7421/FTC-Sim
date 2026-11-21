@@ -39,12 +39,10 @@ import dev.ftcsim.ui.practice.LinkState
 import dev.ftcsim.ui.practice.PracticeSession
 import dev.ftcsim.ui.project.ProjectActivity
 import dev.ftcsim.ui.project.ProjectRunner
-import dev.ftcsim.ui.project.RobotState
 
 /**
  * The Setup tab of the Simulator screen: the field, the alliance and where the robot starts. **Apply** starts the
  * session again with them, with the same program, without building, on a fresh worker, which takes a few seconds.
- * **Save as default** writes them into the project's `ftcsim.json`, so that teammates start the same way.
  *
  * @param modifier the place the tab takes in the side panel
  */
@@ -54,7 +52,6 @@ fun StartPanel(model: SetupModel, session: PracticeSession, runner: ProjectRunne
     val link by session.link.collectAsState()
     val activity by runner.activity.collectAsState()
     val open by runner.open.collectAsState()
-    val robot by runner.robot.collectAsState()
     val rules = remember(catalogue) { catalogue?.let(SetupRules::of) }
     val input = model.input
     val problems = model.problems(rules)
@@ -87,15 +84,10 @@ fun StartPanel(model: SetupModel, session: PracticeSession, runner: ProjectRunne
             "Alliance",
         )
         StartPoseControls(model, rules, input, problems)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            Button(enabled = ready && !building && open != null, onClick = { runner.apply() }) {
-                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
-                Spacer(Modifier.size(ButtonDefaults.IconSpacing))
-                Text("Apply")
-            }
-            OutlinedButton(enabled = model.ready(rules) && robot is RobotState.FromFile && open != null, onClick = { runner.saveDefaults() }) {
-                Text("Save as default")
-            }
+        Button(enabled = ready && !building && open != null, onClick = { runner.apply() }) {
+            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(ButtonDefaults.IconSize))
+            Spacer(Modifier.size(ButtonDefaults.IconSpacing))
+            Text("Apply")
         }
     }
 }

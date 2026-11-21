@@ -5,23 +5,12 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.ftcsim.physics.DcMotor;
-import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class MotorCatalogTest {
 
     @Test
-    void theBaseMotorsHaveTheirPublishedNumbersAndAReductionPutsThemBehindAGearbox() {
-        DcMotor hdHex = MotorCatalog.motor(MotorCatalog.REV_HD_HEX);
-        assertEquals(0.105, hdHex.stallTorqueNm(), 1e-9);
-        assertEquals(6000.0 * 2.0 * Math.PI / 60.0, hdHex.freeSpeedRadPerSec(), 1e-9);
-        assertEquals(8.5, hdHex.stallCurrentA(), 1e-9);
-
-        DcMotor coreHex = MotorCatalog.motor(MotorCatalog.REV_CORE_HEX);
-        assertEquals(125.0 * 2.0 * Math.PI / 60.0, coreHex.freeSpeedRadPerSec(), 1e-9, "the output of its built-in 72:1");
-        assertEquals(288.0, coreHex.encoderTicksPerRevolution(), 1e-9);
-        assertEquals(72.0, coreHex.gearRatio(), 1e-9);
-
+    void aReductionPutsAMotorBehindAGearbox() {
         DcMotor spike = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE);
         DcMotor behind = MotorCatalog.motor(MotorCatalog.SWYFT_SPIKE, 3.0);
         assertEquals(spike.stallTorqueNm() * 3.0, behind.stallTorqueNm(), 1e-12, "torque goes up with the reduction");
@@ -39,17 +28,6 @@ class MotorCatalogTest {
         assertEquals(9.2, spike.stallCurrentA(), 1e-9);
         assertEquals(12.7, spike.gearRatio(), 1e-9);
         assertEquals(28.0 * 12.7, spike.encoderTicksPerRevolution(), 1e-9, "28 counts per rotor turn");
-    }
-
-    @Test
-    void theWindowOffersEachBaseMotorOnceAndEveryOneIsInTheCatalogue() {
-        List<dev.ftcsim.contracts.session.MotorChoice> choices = MotorCatalog.choices();
-
-        assertEquals(6, choices.size());
-        assertEquals(choices.size(), choices.stream().map(dev.ftcsim.contracts.session.MotorChoice::id).distinct().count());
-        for (dev.ftcsim.contracts.session.MotorChoice choice : choices) {
-            assertTrue(MotorCatalog.motor(choice.id()) != null && !choice.displayName().isBlank(), choice.toString());
-        }
     }
 
     @Test

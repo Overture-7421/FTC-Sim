@@ -2,7 +2,6 @@ package dev.ftcsim.ui.setup
 
 import dev.ftcsim.contracts.field.Alliance
 import dev.ftcsim.contracts.field.StartPose
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.ui.practice.Fixtures
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -40,8 +39,8 @@ class SetupModelTest {
     @Test
     fun aRunLoadedFromWhatTheProjectRememberedSelectsTheStartPoseItsNumbersStandFor() {
         val model = model()
-        val atPose = SessionRequest(RobotMapping.empty("Robot"), "", "decode", Alliance.BLUE, 5L, -1.2, -1.4, Math.PI / 2, 1.0)
-        val elsewhere = SessionRequest(RobotMapping.empty("Robot"), "", "decode", Alliance.BLUE, 5L, 0.25, 0.5, 0.0, 1.0)
+        val atPose = SessionRequest("", "decode", Alliance.BLUE, 5L, -1.2, -1.4, Math.PI / 2, 1.0)
+        val elsewhere = SessionRequest("", "decode", Alliance.BLUE, 5L, 0.25, 0.5, 0.0, 1.0)
 
         model.load(SetupInput.from(atPose), rules)
         assertEquals("BLUE goal side", model.input.startPose)
@@ -129,17 +128,15 @@ class SetupModelTest {
     @Test
     fun aRunCanBeRequestedOnlyForAFormThatHasNothingWrongAndCarriesTheProjectsProgramAndMapping() {
         val model = model(SetupInput(field = "decode"))
-        val robot = RobotMapping.empty("Team robot")
-        assertNull(model.request(null, "C:\\prog", robot), "the simulator has not said what it has")
+        assertNull(model.request(null, "C:\\prog"), "the simulator has not said what it has")
 
-        val request = model.request(rules, "C:\\prog", robot)!!
+        val request = model.request(rules, "C:\\prog")!!
         assertEquals("C:\\prog", request.program())
-        assertEquals(robot, request.mapping())
         assertEquals(7L, request.seed(), "the random seed is drawn when the run starts")
 
         model.edit { it.copy(randomSeed = false, seedText = "x") }
         assertFalse(model.ready(rules))
-        assertNull(model.request(rules, "C:\\prog", robot))
+        assertNull(model.request(rules, "C:\\prog"))
         assertEquals("The seed is a whole number, such as 12345.", model.problems(rules).seed)
         assertTrue(model.problems(null).none, "before the simulator has spoken nothing is wrong yet")
     }

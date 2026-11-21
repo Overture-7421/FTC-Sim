@@ -103,7 +103,7 @@ A release made by the workflow has an installer, and an installed FTC-Sim offers
 ## What is not in it
 
 - **A JDK.** No compiler, `jlink`, debugging or monitoring tools, no `jdk.jfr`. A robot program that compiles code at run time (`javax.tools`) cannot run, and a debugger cannot attach to the worker through `jdk.jdwp.agent` (a small module that can be added to `runtimeModules`).
-- **The Hornet package and any team's code.** A project is imported on the PC ([prepared-program.md](prepared-program.md)), built with the team's own Gradle on a JDK 17 to 21 (`JdkDiscovery`) and prepared into `%LOCALAPPDATA%\FTC-Sim\programs`. No robot description is bundled: the fixed robots are code (`RobotDesign`), a project's mapping is its own `ftcsim.json`.
+- **The Hornet package and any team's code.** A project is imported on the PC ([prepared-program.md](prepared-program.md)), built with the team's own Gradle on a JDK 17 to 21 (`JdkDiscovery`) and prepared into `%LOCALAPPDATA%\FTC-Sim\programs`. No robot description is bundled or read: the two robots are code (`RobotProfiles`, `RobotDesign`).
 - **The Android SDK and the FTC SDK jars.** Importing needs an Android SDK on the PC (`AndroidSdkDiscovery`); the FTC SDK comes with the team's project.
 - **A signature.** The installer and the zip are unsigned. A file from the internet carries the Mark of the Web, so Windows may ask once before running the installer or `FTC-Sim.cmd` (Properties, Unblock, before unpacking, avoids it for the zip).
 

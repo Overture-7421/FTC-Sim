@@ -4,6 +4,7 @@ import com.qualcomm.hardware.digitalchickenlabs.OctoQuad;
 import com.qualcomm.hardware.gobilda.GoBildaPinpointDriver;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.hardware.CRServo;
+import com.qualcomm.robotcore.hardware.ColorRangeSensor;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
@@ -39,15 +40,16 @@ public final class BiobuzzHardware {
     public static final double STAGING_POWER = 0.6;
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
     /**
-     * Servo positions: the stopper shut and open, the colibri arms down and up. The stopper's servo (270 degrees a second) is the
-     * slowest thing between the button and the shot, so it travels as little as it can: it lets a ball by from 60 degrees of servo, so
-     * shut is 45 degrees (0.15) and open is 75 (0.25), which is 0.11 s of travel; these are the simulated stopper's, and a real
-     * stopper's two positions are wherever it holds and releases the balls.
+     * Servo positions: the stopper shut and open, the colibri arms down and up. The stopper's servo (five turns, 1800 degrees, about
+     * 250 degrees a second) is the slowest thing between the button and the shot, so it travels as little as it can: it lets a ball by
+     * from 60 degrees of servo (position 0.0333), so shut is 45 degrees (0.025) and open is 75 (0.0417), which is 0.12 s of travel;
+     * these are the simulated stopper's, and a real stopper's two positions are wherever it holds and releases the balls. The
+     * colibri arms' servos have five turns too: 0.0667 is 120 degrees of servo, 90 of arm.
      */
-    public static final double STOPPER_SHUT = 0.15;
-    public static final double STOPPER_OPEN = 0.25;
+    public static final double STOPPER_SHUT = 0.025;
+    public static final double STOPPER_OPEN = 0.0417;
     public static final double COLIBRI_DOWN = 0.0;
-    public static final double COLIBRI_UP = 0.4;
+    public static final double COLIBRI_UP = 0.0667;
 
     public final DcMotor frontLeft;
     public final DcMotor backLeft;
@@ -65,6 +67,9 @@ public final class BiobuzzHardware {
     public final Limelight3A limelight;
     public final CRServo turretServo;
     public final OctoQuad octoquad;
+    /** The two colour sensors: one where a ball waits against the stopper, one near the intake that sees the fourth ball of the queue. */
+    public final ColorRangeSensor upSensor;
+    public final ColorRangeSensor intakeSensor;
 
     /** Looks everything up and sets it up: the Pinpoint at the origin, the Limelight running, the stopper shut and the hood at 0. */
     public BiobuzzHardware(HardwareMap hardwareMap) {
@@ -97,6 +102,9 @@ public final class BiobuzzHardware {
         octoquad.setChannelBankConfig(OctoQuad.ChannelBankConfig.ALL_PULSE_WIDTH);
         octoquad.setSingleChannelPulseWidthParams(0, PULSE_MIN_US, PULSE_MAX_US);
         octoquad.setSingleChannelPulseWidthParams(1, PULSE_MIN_US, PULSE_MAX_US);
+
+        upSensor = hardwareMap.get(ColorRangeSensor.class, "upSensor");
+        intakeSensor = hardwareMap.get(ColorRangeSensor.class, "intakeSensor");
 
         intake = hardwareMap.get(DcMotor.class, "intake");
         indexer = hardwareMap.get(DcMotor.class, "up");

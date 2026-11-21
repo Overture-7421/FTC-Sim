@@ -10,9 +10,10 @@ import dev.ftcsim.field.EntityIds;
 import dev.ftcsim.field.FieldSetup;
 import dev.ftcsim.game.decode.DecodeField;
 import dev.ftcsim.importer.pack.PreparedProgram;
+import dev.ftcsim.simulator.robot.RobotDesign;
+import dev.ftcsim.simulator.robot.RobotSpec;
 import dev.ftcsim.simulator.RobotProgram;
 import dev.ftcsim.simulator.SimulationSession;
-import dev.ftcsim.simulator.robot.RobotSpec;
 import java.util.List;
 import java.util.Locale;
 import java.util.stream.Collectors;
@@ -87,7 +88,7 @@ class HornetAutoRunTest {
     private static int playTheAuto(String autoName, Alliance alliance, int seconds) throws Exception {
         PreparedProgram prepared = HornetFixture.prepared();
         RobotProgram program = HornetFixture.program(prepared);
-        RobotSpec profile = HornetMapping.spec();
+        RobotSpec profile = RobotDesign.decode().spec();
         DecodeField field = new DecodeField();
         double[] start = hornetStart(autoName, alliance);
         try (TestSessions.Handle handle = TestSessions.open(

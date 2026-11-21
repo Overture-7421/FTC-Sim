@@ -7,6 +7,8 @@ import dev.ftcsim.contracts.field.Score;
 import dev.ftcsim.contracts.hardware.HardwareDirectory;
 import dev.ftcsim.contracts.hardware.MotorPlant;
 import dev.ftcsim.contracts.hooks.Hooks;
+import dev.ftcsim.contracts.hooks.NetworkHooks;
+import dev.ftcsim.contracts.hooks.NetworkRequest;
 import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.robot.OpModeDescriptor;
@@ -38,6 +40,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
 /**
@@ -64,6 +67,12 @@ public final class SimulationSession implements AutoCloseable {
 
     private static final long HUB_TICKS_PER_SECOND = 1_000L;
     private static final double FLOOR_HALF_SIZE = 6.0;
+
+    /** Panels, the dashboard library of FTC teams, serves its page on the first port and its websocket on the second. */
+    private static final int DASHBOARD_PORT = 8001;
+
+    private static final Set<Integer> DASHBOARD_PORTS = Set.of(DASHBOARD_PORT, 8002);
+    private static final String DASHBOARD_URL = "http://127.0.0.1:" + DASHBOARD_PORT + "/";
     private static final double STEP_SECONDS = 1.0 / PhysicsWorld.STEPS_PER_SECOND;
 
     private final SessionConfig config;
@@ -93,6 +102,7 @@ public final class SimulationSession implements AutoCloseable {
     private GamepadState second = GamepadState.NEUTRAL;
     private final AtomicReference<WorldSnapshot> latest;
     private boolean closed;
+    private boolean dashboardLogged;
 
     private SimulationSession(
             SessionConfig config,
@@ -123,7 +133,9 @@ public final class SimulationSession implements AutoCloseable {
     public static SimulationSession open(SessionConfig config) throws IOException {
         FixedRateWorld clockwork = new FixedRateWorld();
         SimulationKernel kernel = new SimulationKernel(
-                clockwork, KernelConfig.defaults(SimulationSession::isOpModeThread).withBackEdgeCostNanos(LOOP_NANOS));
+                clockwork, KernelConfig.defaults(SimulationSession::isOpModeThread)
+                        .withBackEdgeCostNanos(LOOP_NANOS)
+                        .withLoopbackPorts(DASHBOARD_PORTS));
         LiveWorld live = buildWorld(config, 0);
         try {
             RayView rays = (origin, direction, maxMeters) -> live.rays.cast(origin, direction, maxMeters);
@@ -225,6 +237,10 @@ public final class SimulationSession implements AutoCloseable {
 
     /** One pass of the SDK's event loop. A late pass runs once and the next follows a full period later. */
     private void eventLoopPass() {
+        if (!dashboardLogged && !dashboardUrl().isEmpty()) {
+            dashboardLogged = true;
+            config.log().accept("Panels dashboard: " + DASHBOARD_URL);
+        }
         host.eventLoop(first, second);
         kernel.settleRobot(DriverStation.SETTLE_MILLIS);
         kernel.schedule(kernel.clock().now() + EVENT_LOOP_PERIOD_NANOS, this::eventLoopPass);
@@ -394,6 +410,11 @@ public final class SimulationSession implements AutoCloseable {
         return rig.wiring().unmapped();
     }
 
+    /** Where a browser on this machine finds the dashboard of the robot program, or empty while nothing listens for it. */
+    public String dashboardUrl() {
+        return NetworkHooks.realPorts().contains(DASHBOARD_PORT) ? DASHBOARD_URL : "";
+    }
+
     public RobotRig rig() {
         return rig;
     }
@@ -473,6 +494,10 @@ public final class SimulationSession implements AutoCloseable {
         if (shutdownHooks > 0) {
             problems.add("the robot program registered " + shutdownHooks + " shutdown hook" + (shutdownHooks == 1 ? "" : "s")
                     + ", which never run: the process is the simulator's and ends when the simulator does");
+        }
+        for (NetworkRequest request : NetworkHooks.realListenerFailures().keySet()) {
+            problems.add("the robot program's dashboard cannot be opened: another program on this machine already uses port "
+                    + request.target().substring(request.target().lastIndexOf(':') + 1) + ", so its listener there is simulated");
         }
         problems.addAll(match.problems());
         problems.addAll(robotWorld.shutdownProblems());

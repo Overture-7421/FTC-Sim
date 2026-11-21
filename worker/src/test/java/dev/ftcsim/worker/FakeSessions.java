@@ -57,7 +57,7 @@ final class FakeSessions implements SessionOpener {
 
     @Override
     public RunningSession open(SessionRequest request) throws IOException {
-        calls.add("open " + request.mapping().name() + " speed " + request.speed());
+        calls.add("open " + request.program() + " speed " + request.speed());
         if (failToOpen != null) {
             throw failToOpen;
         }

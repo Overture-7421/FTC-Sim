@@ -27,8 +27,8 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 | Group (joint) | Source of the value | Ratio and range |
 |---|---|---|
 | Four wheels | the chassis's wheel angles | direct; positive rolls the robot forward |
-| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, `turret.axis` of the mapping (the CAD's is x 0.089, y 0) |
-| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 5.0694 (365:72 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a 5-turn one (1800 degrees), 223 degrees of it (position 0.124) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
+| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, the turret's axis in BIOBUZZ's profile (the CAD's is x 0.089, y 0) |
+| Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 5.0694 (365:72 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a Super Speed (300 degrees), 223 degrees of it (position 0.7435) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2 |
@@ -42,7 +42,7 @@ The signs of the rollers are the direction that moves pieces the way the robot t
 
 - **Odometry pods.** The forward-measuring pod's wheel rolls along the CAD's Y at x -0.0704, y 0.1997, so it sits 70.4 mm to the right of the centre of the wheels; the strafe pod's wheel rolls along X at x -0.1136, y -0.0204, 58.9 mm ahead of it. The Pinpoint takes `setOffsets(-2.772, 2.319, INCH)`, which the stub uses. The Pinpoint model is ideal and ignores offsets, so they only matter on the real robot.
 - **Turret axis.** (0, -0.0505) in the CAD, which is x 0.089 ahead of the wheels' centre.
-- **Gear ratios.** The 0.99:1 turret, the encoders' 5.5 and 44/7, and the ratios in the table above, all as the CAD and the team's table say.
+- **Gear ratios.** The 1.0185:1 turret, the encoders' 5.5 and 44/7, and the ratios in the table above, all as the CAD and the team's table say.
 - **Hood limits.** 1 to 25 degrees, from the revolute mate; the simulator allows 1 to 45 degrees (see the table above), an estimate that is not the CAD's.
 
 ## The path of the pieces
@@ -62,8 +62,9 @@ The **stopper** (`StorageSpec.Gate`, the stopper servo) holds the pieces at poin
 
 ## What the CAD does not have
 
-- **The Limelight.** It is not in the CAD (the BOM and the parts have no camera); the picture draws a box where the owner mounts it, and the simulation puts the camera there: on the 45 degree panel beside the shooter wheels (the plane through the two black standoffs ahead of the flywheel), 20.5 mm off the panel. With the turret facing forward that is 0.217 m ahead of the wheels' centre, 0.0035 m left, 0.256 m above the body's centre height, facing forward and 45 degrees up (`RobotDesign.BIOBUZZ_CAMERA`). It rides on the turret. A `camera` in `ftcsim.json` that differs from the generic default overrides it. The panel's orientation is inferred from the two standoffs and the box size (64 by 54 by 36 mm) is a guess: to be measured on the robot.
-- **The colibri arms' travel and the stopper's open position.** The mates have no limits. The simulation opens the stopper at 60 degrees of servo (position 0.2) and the arms are drawn for the whole servo range.
+- **The Limelight.** It is not in the CAD (the BOM and the parts have no camera); the picture draws a box where the owner mounts it, and the simulation puts the camera there: on the 45 degree panel beside the shooter wheels (the plane through the two black standoffs ahead of the flywheel), 20.5 mm off the panel. With the turret facing forward that is 0.217 m ahead of the wheels' centre, 0.0035 m left, 0.256 m above the body's centre height, facing forward and 45 degrees up (`RobotDesign.BIOBUZZ_CAMERA`). It rides on the turret. The panel's orientation is inferred from the two standoffs and the box size (64 by 54 by 36 mm) is a guess: to be measured on the robot.
+- **The colour sensors.** The CAD has none. The profile's `upSensor` (0.089, 0.065, 0.060) and `intakeSensor` (0.187, 0.065, -0.112), on the left wall looking right, are placed where the first and fourth ball of the queue wait (the stopper is path point 4; the others queue 0.0711 m apart along the path), so `upSensor` reads a ball only when one has reached the stopper and `intakeSensor` only when four are queued. Estimates: to be replaced by measured mounts ([fixed-robots](fixed-robots.md)).
+- **The colibri arms' travel and the stopper's open position.** The mates have no limits. The simulation opens the stopper at 60 degrees of servo (position 0.0333 of the 5-turn servo) and the arms are drawn for the whole servo range.
 - **The pivot of the stopper.** Approximated by the switch's own centre.
 - **The magazine holds four POLLEN** (the robot's four preloads); queued behind the stopper they stand 0.0712 m apart along the path, the last one near the intake's mouth. The intake roller's inertia is estimated at 4e-5 kg m^2 (a light roller on the compliant wheels), so a braked intake motor stops in about 0.1 s; DECODE's estimate stays 2e-4.
 - **The hood's launch geometry.** The hood sets the launch elevation as 44 degrees plus its angle (45 degrees at the bottom of its range, 54.9 at the top): an estimate, the team's real shot table replaces it.

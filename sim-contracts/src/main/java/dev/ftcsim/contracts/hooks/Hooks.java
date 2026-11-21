@@ -145,6 +145,11 @@ public final class Hooks {
         return delegate.simulateListeners();
     }
 
+    /** Asks the installed hooks on behalf of {@link NetworkHooks} whether a listener on the port is a real loopback one. */
+    static boolean listenOnLoopback(int port) {
+        return delegate.listenOnLoopback(port);
+    }
+
     /**
      * Whether the calling thread is one the host orders in simulated time, for the adapters that reach from the
      * robot world into the host; see {@link RobotHooks#isScheduledThread}.

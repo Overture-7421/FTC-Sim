@@ -1,13 +1,9 @@
 package dev.ftcsim.ui.project
 
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.session.RobotMapping
 import dev.ftcsim.contracts.session.SessionRequest
 import dev.ftcsim.ui.AppServices
 import dev.ftcsim.ui.host.ProgramPreparer.Prepared
-import dev.ftcsim.ui.host.ProjectMappings
-import dev.ftcsim.ui.host.RunDefaults
-import dev.ftcsim.ui.host.StartPosition
 import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.nav.Navigator
 import dev.ftcsim.ui.practice.CodeRestart
@@ -22,7 +18,6 @@ import dev.ftcsim.ui.settings.copy
 import dev.ftcsim.ui.setup.SetupInput
 import dev.ftcsim.ui.setup.SetupModel
 import dev.ftcsim.ui.setup.SetupRules
-import java.io.IOException
 import java.nio.file.Path
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.Executor
@@ -40,11 +35,8 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.withTimeoutOrNull
 
-/** The project the simulator is running: where it is, the program built from it and the robot file it runs with, if it has one. */
-data class OpenProject(val project: Project, val program: Path, val robotFile: Path?, val keptByApp: Boolean) {
-    /** Whether the project has no usable `ftcsim.json`, so that no motor is mapped on its robot. */
-    val generic: Boolean get() = robotFile == null
-}
+/** The project the simulator is running: where it is and the program built from it. */
+data class OpenProject(val project: Project, val program: Path)
 
 /** What the runner is doing besides running the project that is open. */
 sealed interface ProjectActivity {
@@ -55,7 +47,7 @@ sealed interface ProjectActivity {
     data class Building(val project: Project, val restarting: Boolean) : ProjectActivity
 
     /** The project is built and waits for the person to choose its game, which is asked once for each project. */
-    data class NeedsGame(val project: Project, val program: Prepared, val stored: ProjectMappings.Found?) : ProjectActivity
+    data class NeedsGame(val project: Project, val program: Prepared) : ProjectActivity
 
     /** Opening the project did not work; [message] says why in words. */
     data class Failed(val project: Project, val message: String) : ProjectActivity
@@ -70,20 +62,6 @@ val ProjectActivity.project: Project?
         is ProjectActivity.Failed -> project
     }
 
-/** What the application knows of the robot description of the project it runs. */
-sealed interface RobotState {
-    val project: Project
-
-    /** The project has an `ftcsim.json`; [keptByApp] when it is FTC-Sim's own copy because the project's folder cannot be written to. */
-    data class FromFile(override val project: Project, val file: Path, val keptByApp: Boolean) : RobotState
-
-    /**
-     * The project has no usable `ftcsim.json`: its robot has no motors mapped, and every motor the code asks for is unmapped.
-     * [problem] says why a file that is there cannot be used, which the next save keeps as `ftcsim.old.json`.
-     */
-    data class Undescribed(override val project: Project, val problem: String? = null) : RobotState
-}
-
 /** Something short for the person to see once, as a snackbar; [showProblems] adds a way to the Problems tab. */
 data class RunnerMessage(val text: String, val showProblems: Boolean = false)
 
@@ -91,8 +69,7 @@ data class RunnerMessage(val text: String, val showProblems: Boolean = false)
  * Opens projects and restarts their code: the one place that knows the way from a project folder to a session. Opening
  * builds the project (or reuses the program of the same source). When the build is done a project that has never run
  * here waits for the person to choose its game; otherwise the session starts by itself with what the settings form
- * holds. A project without `ftcsim.json` runs a robot with no motors mapped, and the Robot screen is shown so that it can be mapped.
- * Restarting does the same from the session that is on screen, keeping what it was started with, and never asks the
+ * holds, and the Simulator is shown. The robot is the simulator's own, chosen by the game. Restarting does the same from the session that is on screen, keeping what it was started with, and never asks the
  * person anything: the old session goes on until the new one is ready, and a build that fails leaves it as it was.
  *
  * Nothing here watches anything. A build happens when the person asks for it, and the preparer's own check of the
@@ -122,17 +99,11 @@ class ProjectRunner(
     private val lock = Any()
     private val mutableOpen = MutableStateFlow<OpenProject?>(null)
     private val mutableActivity = MutableStateFlow<ProjectActivity>(ProjectActivity.Idle)
-    private val mutableRobot = MutableStateFlow<RobotState?>(null)
-    private val mutablePositions = MutableStateFlow<List<StartPosition>>(emptyList())
     private val mutableProblems = MutableStateFlow<List<Problem>>(emptyList())
     private val mutableMessages = MutableSharedFlow<RunnerMessage>(extraBufferCapacity = 16)
-    private var buildProblems = emptyList<Problem>()
-    private var robotProblem: Problem? = null
     private var token = 0L
     private var resuming = false
 
-    /** The project being opened is the one from the last run of the application, not one the person chose now. */
-    @Volatile private var atStart = false
     /** Ends when the form has been filled for the project that is being opened; the end of its build waits for it. */
     @Volatile private var formReady: CompletableFuture<Void> = CompletableFuture.completedFuture(null)
 
@@ -143,30 +114,8 @@ class ProjectRunner(
 
     override val buildState: StateFlow<PrepareState> get() = prepare.state
 
-    /** What the build and the robot file say that the person should know, next to what the robot program reports. */
+    /** What the build says that the person should know, next to what the robot program reports. */
     override val problems: StateFlow<List<Problem>> = mutableProblems.asStateFlow()
-
-    /** The robot description of the project, null before one is opened. */
-    val robot: StateFlow<RobotState?> = mutableRobot.asStateFlow()
-
-    /** The start positions the team named in the open project's `ftcsim.json`, for every field; empty when it has none or no file. */
-    val startPositions: StateFlow<List<StartPosition>> = mutablePositions.asStateFlow()
-
-    /**
-     * Writes [positions] into the open project's `ftcsim.json`, where teammates get them too, and shows them at once. Says why
-     * when that cannot be done; the positions stay as they were.
-     */
-    fun saveStartPositions(positions: List<StartPosition>) {
-        val current = mutableOpen.value ?: return
-        io.execute {
-            try {
-                services.mappings.saveStartPositions(current.project.folder, positions)
-                mutablePositions.value = positions.toList()
-            } catch (failure: IOException) {
-                announce("Could not save: ${failure.message}")
-            }
-        }
-    }
 
     /** Short things for the person to see once. */
     val messages: SharedFlow<RunnerMessage> = mutableMessages.asSharedFlow()
@@ -180,22 +129,7 @@ class ProjectRunner(
      * Opens [project]: shows the build, builds the project and starts the session when it is built and its settings are
      * ready. Refused, with false, while a project is being built.
      */
-    fun open(project: Project): Boolean {
-        atStart = false
-        return start(project, restarting = false, retried = false)
-    }
-
-    /**
-     * Opens [project], the one that was open when the application last closed. Like [open], except that a project that is
-     * no longer set up for the simulator (no usable `ftcsim.json`, and not skipped) is left on the Projects screen, which
-     * says so, instead of leading to the Robot page: the person did not ask for it this time.
-     */
-    fun openAtStart(project: Project): Boolean {
-        atStart = true
-        val accepted = start(project, restarting = false, retried = false)
-        if (!accepted) atStart = false
-        return accepted
-    }
+    fun open(project: Project): Boolean = start(project, restarting = false, retried = false)
 
     /**
      * Builds what is on disk now and starts the session again with it, with the field, alliance, seed, start pose and
@@ -232,66 +166,13 @@ class ProjectRunner(
         if (mutableActivity.value is ProjectActivity.Building) return false
         val input = setup.input
         io.execute {
-            var mapping = RobotMapping.empty(current.project.name)
-            var file = current.robotFile
-            var kept = current.keptByApp
-            try {
-                val found = services.mappings.find(current.project.folder).orElse(null)
-                mapping = found?.mapping() ?: mapping
-                file = found?.takeIf { it.usable() }?.file()
-                kept = found?.takeIf { it.usable() }?.keptByApp() ?: false
-            } catch (failure: IOException) {
-                // The mapping as it was is still the one that runs; the Problems tab says what the file does not.
-            }
             val sameSeed = services.session.requested?.takeIf { it.field() == input.field }?.seed()
-            val request = setup.request(rules, current.program.toString(), mapping, sameSeed) ?: return@execute
+            val request = setup.request(rules, current.program.toString(), sameSeed) ?: return@execute
             services.openSession(request)
-            mutableOpen.value = current.copy(robotFile = file, keptByApp = kept)
             remember(current.project, input)
             navigator.go(Destination.PRACTICE)
         }
         return true
-    }
-
-    /** Writes how the settings form starts a run into the project's `ftcsim.json`, so that teammates start the same way. */
-    fun saveDefaults() {
-        val current = mutableOpen.value ?: return
-        val rules = rules() ?: return
-        val input = setup.input
-        io.execute {
-            try {
-                val pose = input.startPose?.takeIf { rules.startPoses(input.field, input.alliance).any { pose -> pose.name() == it } }
-                services.mappings.saveRunDefaults(current.project.folder, RunDefaults(input.field, input.alliance, pose))
-                announce("Saved to ftcsim.json")
-            } catch (failure: IOException) {
-                announce("Could not save: ${failure.message}")
-            }
-        }
-    }
-
-    /**
-     * The person finished the Robot page: writes [mapping] as the project's `ftcsim.json` (a file this version cannot read
-     * is kept as `ftcsim.old.json`), and restarts the code with it, which shows the Simulator.
-     */
-    fun saveRobot(mapping: RobotMapping) {
-        val current = mutableOpen.value ?: return
-        io.execute {
-            try {
-                services.mappings.save(current.project.folder, mapping)
-                announce("Saved ftcsim.json")
-                navigator.go(Destination.PRACTICE)
-                restart()
-            } catch (failure: IOException) {
-                announce("Could not save: ${failure.message}")
-            }
-        }
-    }
-
-    /** The person leaves the robot page without describing the robot: the robot stays undescribed, and the project is not asked again. */
-    fun skipRobot() {
-        val current = mutableOpen.value ?: return
-        services.settings.update { it.withRobotSkipped(current.project.folder, true) }
-        navigator.go(Destination.PRACTICE)
     }
 
     override fun dismissFailure() {
@@ -304,11 +185,7 @@ class ProjectRunner(
             if (mutableActivity.value is ProjectActivity.Building) return false
             mine = ++token
             mutableActivity.value = ProjectActivity.Building(project, restarting)
-            if (!restarting && !retried) {
-                formReady = CompletableFuture()
-                mutableRobot.value = null
-                mutablePositions.value = emptyList()
-            }
+            if (!restarting && !retried) formReady = CompletableFuture()
         }
         // A restart is done where the person is.
         if (!restarting) navigator.go(Destination.PROJECTS)
@@ -320,7 +197,7 @@ class ProjectRunner(
         } else if (!restarting && !retried) {
             io.execute {
                 try {
-                    prepareForm(project, mine)
+                    fillForm(project, mine)
                 } finally {
                     ready.complete(null)
                 }
@@ -330,41 +207,13 @@ class ProjectRunner(
     }
 
     /**
-     * Shows what can be settled before the build is done: whether the project has an `ftcsim.json`, and the settings
-     * form, filled with what the project was last run with, else what its robot file says, else the defaults.
+     * Fills the settings form before the build is done, with what the project was last run with, else the defaults, so that
+     * nothing the person does to it meanwhile can be overwritten by it later. Waits for the simulator's catalogue.
      */
-    private fun prepareForm(project: Project, mine: Long) {
-        val stored = try {
-            services.mappings.find(project.folder).orElse(null)
-        } catch (unreadable: IOException) {
-            null // the end of the build says that the file cannot be read
-        }
-        val known = rules()
-        if (known != null) {
-            // The catalogue is already here: fill the form before the page shows the project, so that nothing the person
-            // does next can be overwritten by it.
-            synchronized(lock) { if (token != mine) return }
-            openInput(project, stored?.run(), known)
-        }
-        synchronized(lock) {
-            if (token != mine) return
-            showRobot(project, stored)
-        }
-        if (known != null) return
+    private fun fillForm(project: Project, mine: Long) {
         val rules = awaitRules() ?: return
         synchronized(lock) { if (token != mine) return }
-        openInput(project, stored?.run(), rules)
-    }
-
-    private fun showRobot(project: Project, stored: ProjectMappings.Found?) {
-        mutableRobot.value = robotState(project, stored)
-        mutablePositions.value = if (stored?.usable() == true) stored.startPositions() else emptyList()
-    }
-
-    private fun robotState(project: Project, stored: ProjectMappings.Found?): RobotState = when {
-        stored == null -> RobotState.Undescribed(project)
-        stored.usable() -> RobotState.FromFile(project, stored.file(), stored.keptByApp())
-        else -> RobotState.Undescribed(project, stored.problem())
+        openInput(project, rules)
     }
 
     private fun built(project: Project, end: PrepareState?, restarting: Boolean, retried: Boolean, mine: Long) {
@@ -403,29 +252,23 @@ class ProjectRunner(
             }
         }
         synchronized(lock) { if (token != mine) return }
-        val stored = try {
-            services.mappings.find(project.folder).orElse(null)
-        } catch (failure: IOException) {
-            fail(project, "Could not read ftcsim.json: ${failure.message}", restarting, mine)
-            return
-        }
-        if (!restarting && asksGame(project, stored)) {
+        if (!restarting) {
             val rules = awaitRules()
             if (rules == null) {
                 fail(project, UNAVAILABLE, restarting, mine)
                 return
             }
-            newestGame(rules)?.let { setup.chooseField(rules, it) }
-            synchronized(lock) { if (token == mine) mutableActivity.value = ProjectActivity.NeedsGame(project, program, stored) }
-            atStart = false
-            return
+            if (asksGame(project)) {
+                newestGame(rules)?.let { setup.chooseField(rules, it) }
+                synchronized(lock) { if (token == mine) mutableActivity.value = ProjectActivity.NeedsGame(project, program) }
+                return
+            }
         }
-        proceed(project, program, stored, restarting, mine)
+        proceed(project, program, restarting, mine)
     }
 
-    /** A project that never ran here, and whose robot file does not name a game, is asked which game to play. */
-    private fun asksGame(project: Project, stored: ProjectMappings.Found?): Boolean =
-        services.settings.state.value.project(project.folder)?.run == null && stored?.run()?.field().isNullOrBlank()
+    /** A project that never ran here is asked which game to play. */
+    private fun asksGame(project: Project): Boolean = services.settings.state.value.project(project.folder)?.run == null
 
     /** The most recent game on offer, which is the one a person is most likely to practise. */
     private fun newestGame(rules: SetupRules): String? = rules.fields.lastOrNull { it.startPoses().isNotEmpty() }?.id()
@@ -440,24 +283,22 @@ class ProjectRunner(
             resuming = true
         }
         try {
-            proceed(waiting.project, waiting.program, waiting.stored, restarting = false, mine = mine)
+            proceed(waiting.project, waiting.program, restarting = false, mine = mine)
         } finally {
             synchronized(lock) { resuming = false }
         }
     }
 
-    /** Starts the session for a built project whose stored robot is [stored], or the robot with no motors mapped when it is null or unusable. */
-    private fun proceed(project: Project, program: Prepared, stored: ProjectMappings.Found?, restarting: Boolean, mine: Long) {
+    /** Starts the session for a built project, with the robot of its game. */
+    private fun proceed(project: Project, program: Prepared, restarting: Boolean, mine: Long) {
         val rules = awaitRules()
         if (rules == null) {
             fail(project, UNAVAILABLE, restarting, mine)
             return
         }
-        val mapping = stored?.mapping() ?: RobotMapping.empty(project.name)
-        val usable = stored?.takeIf { it.usable() }
         val folder = program.folder().toString()
-        val sameRun = if (restarting) restartRequest(folder, mapping) else null
-        val chosen = sameRun ?: setup.request(rules, folder, mapping)
+        val sameRun = if (restarting) restartRequest(folder) else null
+        val chosen = sameRun ?: setup.request(rules, folder)
         if (chosen == null) {
             fail(project, "The setup is not valid", restarting, mine)
             return
@@ -465,52 +306,25 @@ class ProjectRunner(
         val input = if (sameRun == null) setup.input else null
         synchronized(lock) { if (token != mine) return }
         services.openSession(chosen)
-        mutableOpen.value = OpenProject(project, program.folder(), usable?.file(), usable?.keptByApp() ?: false)
-        mutableRobot.value = robotState(project, stored)
-        mutablePositions.value = if (usable != null) usable.startPositions() else emptyList()
+        mutableOpen.value = OpenProject(project, program.folder())
         remember(project, input)
-        synchronized(lock) {
-            robotProblem = when {
-                usable != null -> null
-                stored != null -> Problem(Severity.WARNING, "Robot", stored.problem())
-                else -> Problem(Severity.WARNING, "Robot", "No ftcsim.json: no motors are mapped")
-            }
-            publishProblems()
-        }
         mutableActivity.value = ProjectActivity.Idle
-        val skipped = services.settings.state.value.project(project.folder)?.robotSkipped == true
-        val atStartNow = atStart
-        atStart = false
-        if (!restarting && navigator.state.value.current == Destination.PROJECTS) {
-            val needsRobot = usable == null && !skipped
-            if (needsRobot && atStartNow) {
-                announce("${project.name} is not set up for the simulator")
-            } else {
-                navigator.go(if (needsRobot) Destination.ROBOT else Destination.PRACTICE)
-            }
-        }
+        if (!restarting && navigator.state.value.current == Destination.PROJECTS) navigator.go(Destination.PRACTICE)
     }
 
-    /** What is on screen with the new program and robot, at the speed it runs at now. */
-    private fun restartRequest(program: String, mapping: RobotMapping): SessionRequest? =
-        services.session.requested?.copy(program = program, mapping = mapping, speed = services.session.run.value.speed)
+    /** What is on screen with the new program, at the speed it runs at now. */
+    private fun restartRequest(program: String): SessionRequest? =
+        services.session.requested?.copy(program = program, speed = services.session.run.value.speed)
 
     /**
-     * Fills the form for a project that is opened: what it was last run with, else what its robot file says, else the
-     * defaults; and returns what was loaded. The form is what [SetupModel.request] turns into the request.
+     * Fills the form for a project that is opened: what it was last run with, else the defaults. The form is what
+     * [SetupModel.request] turns into the request.
      */
-    private fun openInput(project: Project, defaults: RunDefaults?, rules: SetupRules): SetupInput {
-        val remembered = services.settings.state.value.project(project.folder)?.run
-        val fromProfile = SetupInput(
-            field = defaults?.field.orEmpty(),
-            alliance = defaults?.alliance ?: Alliance.RED,
-            startPose = defaults?.startPose,
-        )
-        setup.load(remembered ?: fromProfile, rules)
+    private fun openInput(project: Project, rules: SetupRules) {
+        setup.load(services.settings.state.value.project(project.folder)?.run ?: SetupInput(), rules)
         if (!setup.ready(rules)) setup.load(SetupInput(), rules)
         // There is no control for the seed: a run always draws one, and a restart on the same field keeps it.
         setup.edit { it.copy(randomSeed = true) }
-        return setup.input
     }
 
     private fun remember(project: Project, input: SetupInput?) {
@@ -524,22 +338,14 @@ class ProjectRunner(
     }
 
     private fun setBuildProblems(problems: List<Problem>) {
-        synchronized(lock) {
-            buildProblems = problems
-            publishProblems()
-        }
-    }
-
-    private fun publishProblems() {
-        mutableProblems.value = buildProblems + listOfNotNull(robotProblem)
+        mutableProblems.value = problems
     }
 
     private fun fail(project: Project, message: String, restarting: Boolean, mine: Long) {
         synchronized(lock) {
             if (token != mine) return
             if (restarting) {
-                buildProblems = listOf(Problem(Severity.ERROR, "Build", message))
-                publishProblems()
+                mutableProblems.value = listOf(Problem(Severity.ERROR, "Build", message))
                 mutableActivity.value = ProjectActivity.Idle
                 announce("Build failed", showProblems = true)
             } else {

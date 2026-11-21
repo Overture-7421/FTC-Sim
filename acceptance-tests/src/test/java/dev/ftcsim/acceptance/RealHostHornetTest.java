@@ -82,8 +82,7 @@ class RealHostHornetTest {
             FieldChoice field = ui.catalogues.get(0).fields().stream().filter(choice -> choice.id().equals("decode")).findFirst().orElseThrow();
             StartPose start = field.startPoses().get(0);
 
-            link.open(new SessionRequest(
-                    HornetMapping.mapping(), prepared.directory().toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
+            link.open(new SessionRequest(prepared.directory().toString(), field.id(), Alliance.BLUE, 1L, start.x(), start.y(), start.headingRadians(), 1.0));
             ui.waitFor(() -> !ui.opened.isEmpty(), "the session to open");
             assertTrue(ui.opened.get(0).opModes().stream().anyMatch(opMode -> opMode.name().equals(OP_MODE)), ui.opened.get(0).opModes().toString());
 

@@ -24,15 +24,18 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.unit.dp
 import dev.ftcsim.ui.common.LogOpener
+import dev.ftcsim.ui.common.UrlOpener
 import dev.ftcsim.ui.viewport.ViewportEngine
 import dev.ftcsim.ui.viewport.ViewportSurface
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.launch
 
 private val DETAILS_WIDTH = 420.dp
 private val DETAILS_MARGIN = 72.dp
@@ -49,8 +52,8 @@ private val DETAILS_MAX_HEIGHT = 640.dp
  *
  * @param onSetup called when the person asks to open a project, from the empty state or after a failure
  * @param restart the restart of the robot code: its button's state, the strip under the top bar and the problems it adds
- * @param onEditRobot goes to the Robot screen, from the Problems tab of the side panel; no button when null
  * @param logOpener opens the build log of a build problem; no button when null
+ * @param urlOpener opens the robot program's dashboard in the browser; no button when null
  * @param start what the Setup tab of the side panel shows: the field, the alliance and where the robot starts
  * @param startPosition the control in the top bar that picks where the robot starts; nothing by default
  * @param onRetry asks for the session that failed again
@@ -70,8 +73,8 @@ fun PracticeScreen(
     modifier: Modifier = Modifier,
     onSetup: () -> Unit = {},
     restart: CodeRestart = CodeRestart.None,
-    onEditRobot: (() -> Unit)? = null,
     logOpener: LogOpener? = null,
+    urlOpener: UrlOpener? = null,
     corner: @Composable (Modifier) -> Unit = {},
     start: @Composable () -> Unit = {},
     startPosition: @Composable () -> Unit = {},
@@ -80,6 +83,12 @@ fun PracticeScreen(
     },
 ) {
     val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+    val openDashboard: ((String) -> Unit)? = urlOpener?.let { opener ->
+        { url ->
+            scope.launch { opener.open(url)?.let { snackbar.showSnackbar(it, withDismissAction = true) } }
+        }
+    }
     val viewportFocus = remember { FocusRequester() }
     val focusViewport = { runCatching { viewportFocus.requestFocus() }; Unit }
 
@@ -101,7 +110,7 @@ fun PracticeScreen(
         modifier,
         topBar = {
             Column {
-                PracticeTopBar(session, ui, restart, focusViewport, startPosition)
+                PracticeTopBar(session, ui, restart, focusViewport, startPosition, openDashboard)
                 RestartStrip(restart)
             }
         },
@@ -110,7 +119,7 @@ fun PracticeScreen(
     ) { padding ->
         ViewportRegion(
             session, engine, ui, viewportFocus, viewport, corner, onSetup, onRetry, onReconnect,
-            details = { box -> SidePanel(session, ui, restart.problems, box, onEditRobot, logOpener, start) },
+            details = { box -> SidePanel(session, ui, restart.problems, box, logOpener, start) },
             modifier = Modifier.padding(padding).fillMaxSize(),
         )
     }

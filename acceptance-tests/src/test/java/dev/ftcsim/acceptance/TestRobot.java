@@ -159,9 +159,10 @@ final class TestRobot {
             return this;
         }
 
-        /** The colour sensor on the bus the robot's colour sensor has, with the given settings (its place), under any name. */
-        Builder colorSensor(Map<String, ?> settings) {
-            devices.add(new DeviceSpec(Sensor.COLOR_SENSOR.bus(), DeviceModels.COLOR_SENSOR, settings));
+        /** A colour sensor that robot code finds under {@code name}, on a bus of the Control Hub, with the given settings (its place). */
+        Builder colorSensor(String name, int bus, Map<String, ?> settings) {
+            wiring.colorSensor(name, HubConfig.EMBEDDED_ADDRESS, bus);
+            devices.add(new DeviceSpec(bus, DeviceModels.COLOR_SENSOR, settings));
             return this;
         }
 

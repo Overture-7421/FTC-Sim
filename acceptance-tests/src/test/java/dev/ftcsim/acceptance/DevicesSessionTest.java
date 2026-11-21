@@ -7,8 +7,9 @@ import dev.ftcsim.contracts.hardware.UnmappedDevice;
 import dev.ftcsim.contracts.robot.GamepadState;
 import dev.ftcsim.contracts.world.BodyPose;
 import dev.ftcsim.field.EntityIds;
-import dev.ftcsim.simulator.SimulationSession;
+import dev.ftcsim.simulator.robot.RobotDesign;
 import dev.ftcsim.simulator.robot.RobotSpec;
+import dev.ftcsim.simulator.SimulationSession;
 import java.io.IOException;
 import java.util.List;
 import org.junit.jupiter.api.BeforeAll;
@@ -29,7 +30,7 @@ class DevicesSessionTest {
 
     @BeforeAll
     static void loadProfile() {
-        hornet = HornetMapping.spec();
+        hornet = RobotDesign.decode().spec();
     }
 
     /** The number a telemetry line shows as "caption : value". */
@@ -107,7 +108,7 @@ class DevicesSessionTest {
     }
 
     @Test
-    void aSensorIsFoundByTheClassTheCodeAsksForUnderAnyNameAndWhatTheSimulatorCannotProvideIsAProblem() throws IOException {
+    void aSensorIsFoundByItsClassOrDeclaredNameAndWhatTheSimulatorCannotProvideIsAProblem() throws IOException {
         try (TestSessions.Handle handle = TestSessions.open(hornet, 0, 0, 0)) {
             SimulationSession session = handle.session;
             session.init("Sensors By Class");
@@ -120,6 +121,7 @@ class DevicesSessionTest {
                 assertEquals("found RevColorSensorV3", text(session, caption), caption);
             }
             assertTrue(text(session, "second colour").contains("\"other colour\""), text(session, "second colour"));
+            assertTrue(text(session, "second colour").contains("colour sensors are [\"upSensor\"]"), text(session, "second colour"));
             assertTrue(text(session, "octoquad").contains("\"octo\""), text(session, "octoquad"));
             assertTrue(text(session, "external imu").contains("no other I2C device"), text(session, "external imu"));
             assertTrue(text(session, "webcam").contains("Webcam 1"), text(session, "webcam"));
@@ -131,7 +133,7 @@ class DevicesSessionTest {
                         unsupported + " is a problem of the session: " + problems);
             }
             assertTrue(
-                    problems.stream().noneMatch(problem -> problem.contains("'my odometry computer'") || problem.contains("'colour'")),
+                    problems.stream().noneMatch(problem -> problem.contains("'my odometry computer'") || problem.contains("'upSensor'")),
                     "the sensors that are found are no problem: " + problems);
             assertEquals(
                     List.of(),

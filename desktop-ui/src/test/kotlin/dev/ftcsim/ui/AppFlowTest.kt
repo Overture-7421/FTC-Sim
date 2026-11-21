@@ -9,19 +9,14 @@ import androidx.compose.ui.test.onNodeWithContentDescription
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import dev.ftcsim.contracts.field.Alliance
-import dev.ftcsim.contracts.hardware.UnmappedDevice
 import dev.ftcsim.contracts.robot.RobotPhase
-import dev.ftcsim.contracts.session.RobotMapping
-import dev.ftcsim.contracts.session.RobotMapping.MotorMapping
-import dev.ftcsim.contracts.session.RobotMapping.Slot
 import dev.ftcsim.ui.common.FakeFileChooser
 import dev.ftcsim.ui.common.FakeLogOpener
+import dev.ftcsim.ui.common.FakeUrlOpener
 import dev.ftcsim.ui.common.FtcSimTheme
 import dev.ftcsim.ui.common.runTallComposeUiTest as runComposeUiTest
 import dev.ftcsim.ui.host.FakeAppHost
-import dev.ftcsim.ui.host.FakeProjectMappings
 import dev.ftcsim.ui.host.ManualScheduler
-import dev.ftcsim.ui.host.RunDefaults
 import dev.ftcsim.ui.host.newWorkFolder
 import dev.ftcsim.ui.host.testHost
 import dev.ftcsim.ui.input.PadControl
@@ -31,8 +26,6 @@ import dev.ftcsim.ui.practice.Connection
 import dev.ftcsim.ui.practice.LinkState
 import dev.ftcsim.ui.prepare.PrepareState
 import dev.ftcsim.ui.project.ProjectActivity
-import dev.ftcsim.ui.project.RobotState
-import dev.ftcsim.ui.robot.MappingModel
 import dev.ftcsim.ui.settings.RecentProject
 import dev.ftcsim.ui.setup.SetupInput
 import dev.ftcsim.ui.settings.SettingsStore
@@ -62,20 +55,20 @@ class AppFlowTest {
     private class Rig(links: FakeAppHost.LinkOpener = FakeAppHost.LinkOpener { FakeSimulatorLink() }) : AutoCloseable {
         val scheduler = ManualScheduler()
         val work = newWorkFolder()
-        val mappings = FakeProjectMappings(work)
         val settings = SettingsStore(null, Executor { it.run() })
-        val services = AppServices(testHost(scheduler, work, links, mappings), settings)
+        val services = AppServices(testHost(scheduler, work, links), settings)
         val ui = AppUi(services)
         val files = FakeFileChooser()
         val logs = FakeLogOpener()
+        val urls = FakeUrlOpener()
 
         fun folder(name: String, marker: String): Path =
             Files.createDirectories(work.resolve(name)).also { Files.writeString(it.resolve(marker), "x") }
 
-        /** A project folder; [run] is what its `ftcsim.json` says, which is nothing about a game unless a field is named, and [mapping] is what it maps. */
-        fun project(name: String = "TeamProject", run: RunDefaults? = RunDefaults("decode", null, null), mapping: RobotMapping = RobotMapping.empty(name)): Path {
+        /** A project folder; [run] is what it was last run with, which names its game so that it is not asked for. */
+        fun project(name: String = "TeamProject", run: SetupInput? = SetupInput(field = "decode")): Path {
             val folder = folder(name, "settings.gradle")
-            if (run != null) mappings.withMapping(folder, mapping, run)
+            if (run != null) settings.update { it.withProject(RecentProject(folder.toString(), name, run)) }
             return folder
         }
 
@@ -87,7 +80,7 @@ class AppFlowTest {
     }
 
     private fun ComposeUiTest.show(rig: Rig) = setContent {
-        FtcSimTheme(darkTheme = true) { AppContent(rig.services, rig.ui, rig.files, rig.logs, null) }
+        FtcSimTheme(darkTheme = true) { AppContent(rig.services, rig.ui, rig.files, rig.logs, rig.urls, null) }
     }
 
     private fun ComposeUiTest.waitForSession(rig: Rig) =
@@ -136,50 +129,11 @@ class AppFlowTest {
         }
     }
 
-    private fun mapped() = RobotMapping.empty("Team robot").withMotors(
-        listOf(
-            MotorMapping("frontLeft", Slot.FRONT_LEFT, "", true),
-            MotorMapping("frontRight", Slot.FRONT_RIGHT, "", false),
-            MotorMapping("backLeft", Slot.REAR_LEFT, "", true),
-            MotorMapping("backRight", Slot.REAR_RIGHT, "", false),
-            MotorMapping("shooterLeft", Slot.SHOOTER, "", false),
-            MotorMapping("shooterRight", Slot.SHOOTER, "", false),
-        ),
-    )
-
-    @Test
-    fun theRobotScreenOfAProjectWithAFileHasItsMotorsInPlaceNothingToSaveUntilOneChangesAndSavingWritesTheWholeMapping() = runComposeUiTest {
-        Rig().use { rig ->
-            show(rig)
-            val folder = rig.project(mapping = mapped())
-            openAndBuild(rig, folder)
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.PRACTICE }
-            waitForSession(rig)
-
-            onNodeWithText("Robot").performClick()
-            waitUntil(timeoutMillis = 10_000) { runCatching { onNodeWithContentDescription("frontLeft, motor").assertExists() }.isSuccess }
-
-            onNodeWithText("Mass (kg)").assertExists()
-            onNodeWithContentDescription("shooterLeft, motor").assertExists()
-            onNodeWithText("Skip").assertDoesNotExist()
-            onNodeWithText("Save").assertIsNotEnabled()
-
-            onNodeWithContentDescription("Remove shooterRight").performClick()
-            waitForIdle()
-            onNodeWithText("Save").assertIsEnabled()
-            onNodeWithText("Save").performClick()
-            waitUntil(timeoutMillis = 10_000) { rig.mappings.saved().isNotEmpty() }
-
-            assertEquals(mapped().withMotors(mapped().motors().dropLast(1)), rig.mappings.saved().single())
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.PRACTICE }
-        }
-    }
-
     @Test
     fun aProjectThatNeverRanIsAskedForItsGameAfterTheBuildAndStartsWhenContinueIsPressed() = runComposeUiTest {
         Rig().use { rig ->
             show(rig)
-            openAndBuild(rig, rig.project(run = RunDefaults.NONE))
+            openAndBuild(rig, rig.project(run = null))
             waitUntil(timeoutMillis = 10_000) { rig.ui.runner.activity.value is ProjectActivity.NeedsGame }
             waitForIdle()
 
@@ -191,66 +145,6 @@ class AppFlowTest {
             waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.PRACTICE }
             waitForSession(rig)
             assertEquals("biobuzz", rig.services.session.requested?.field(), "the newest game was chosen already")
-        }
-    }
-
-    @Test
-    fun aProjectWithoutARobotFileShowsTheRobotPageAndSkippingLeadsToTheSimulator() = runComposeUiTest {
-        Rig().use { rig ->
-            show(rig)
-            openAndBuild(rig, rig.project(run = null))
-            waitUntil(timeoutMillis = 10_000) { rig.ui.runner.activity.value is ProjectActivity.NeedsGame }
-            waitForIdle()
-            onNodeWithText("Continue").performClick()
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.ROBOT }
-            waitForSession(rig)
-            waitForIdle()
-
-            onNodeWithText("Pick an OpMode to list its motors").assertExists()
-            onNodeWithText("Create").assertIsNotEnabled()
-            onNodeWithText("Map a motor").assertExists()
-            onNodeWithText("Skip").performClick()
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.PRACTICE }
-
-            assertTrue(rig.mappings.saved().isEmpty(), "nothing was written")
-            assertTrue(rig.ui.runner.robot.value is RobotState.Undescribed)
-            onNodeWithText("Details").performClick()
-            onNodeWithText("Problems").performClick()
-            waitForIdle()
-            onNodeWithText("No ftcsim.json: no motors are mapped").assertExists()
-        }
-    }
-
-    @Test
-    fun theMotorsTheCodeAskedForAreMappedByClickAndCreateWritesThemAndShowsTheSimulator() = runComposeUiTest {
-        Rig().use { rig ->
-            show(rig)
-            openAndBuild(rig, rig.project(run = null))
-            waitUntil(timeoutMillis = 10_000) { rig.ui.runner.activity.value is ProjectActivity.NeedsGame }
-            waitForIdle()
-            onNodeWithText("Continue").performClick()
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.ROBOT }
-            waitForSession(rig)
-            waitForIdle()
-            val model = rig.ui.mapping(
-                rig.ui.runner.open.value!!.project, rig.services.session.catalogue.value!!.motors(), MappingModel.hasTurret(rig.ui.setup.input.field))
-            model.addFound(listOf("frontLeft", "frontRight", "backLeft", "backRight", "flywheel").map { UnmappedDevice(UnmappedDevice.Kind.MOTOR, it) })
-            waitForIdle()
-
-            for ((motor, slot) in listOf("frontLeft" to "Front left", "frontRight" to "Front right", "backLeft" to "Rear left", "backRight" to "Rear right", "flywheel" to "Shooter flywheel")) {
-                onNodeWithContentDescription("$motor, motor").performClick()
-                waitForIdle()
-                onNodeWithContentDescription("Place here: $slot").performClick()
-                waitForIdle()
-            }
-            onNodeWithText("Create").assertIsEnabled()
-            onNodeWithText("Create").performClick()
-            waitUntil(timeoutMillis = 10_000) { rig.mappings.saved().isNotEmpty() }
-
-            assertEquals(
-                listOf("frontLeft" to Slot.FRONT_LEFT, "frontRight" to Slot.FRONT_RIGHT, "backLeft" to Slot.REAR_LEFT, "backRight" to Slot.REAR_RIGHT, "flywheel" to Slot.SHOOTER),
-                rig.mappings.saved().single().motors().map { it.name() to it.slot() })
-            waitUntil(timeoutMillis = 10_000) { rig.ui.navigator.state.value.current == Destination.PRACTICE }
         }
     }
 
@@ -283,7 +177,6 @@ class AppFlowTest {
     fun aRecentProjectOnProjectsOpensAgainWithOneClickAndReusesWhatItWasLastRunWith() = runComposeUiTest {
         Rig().use { rig ->
             val project = rig.project()
-            rig.settings.update { it.withProject(RecentProject(project.toString(), "TeamProject")) }
             show(rig)
 
             onNodeWithText("Open").performClick()
@@ -364,7 +257,7 @@ class AppFlowTest {
             onNodeWithText("Cannot open that folder").assertExists()
             onNodeWithText("No settings.gradle here", substring = true).assertExists()
 
-            onNodeWithText("Robot").performClick()
+            onNodeWithText("Controls").performClick()
             waitForIdle()
             onNodeWithText("Projects").performClick()
             waitForIdle()
@@ -409,7 +302,6 @@ class AppFlowTest {
     fun theLastProjectIsOpenedAtStartTheWayOpenProjectDoesAndAMissingOneIsSaidOnProjects() = runComposeUiTest {
         Rig().use { rig ->
             val project = rig.project()
-            rig.settings.update { it.withProject(RecentProject(project.toString(), "TeamProject")) }
             show(rig)
 
             runBlocking { rig.ui.openLast() }
@@ -428,23 +320,6 @@ class AppFlowTest {
 
             assertEquals(Destination.PROJECTS, rig.ui.navigator.state.value.current)
             onNodeWithText("Gone is no longer at", substring = true).assertExists()
-        }
-    }
-
-    @Test
-    fun aLastProjectThatIsNoLongerSetUpIsLeftOnProjectsAndSaidSo() = runComposeUiTest {
-        Rig().use { rig ->
-            val project = rig.project(run = null)
-            rig.settings.update { it.withProject(RecentProject(project.toString(), "TeamProject", SetupInput(field = "decode"))) }
-            show(rig)
-
-            runBlocking { rig.ui.openLast() }
-            rig.scheduler.advance(60_000)
-            waitUntil(timeoutMillis = 10_000) { rig.ui.runner.activity.value == ProjectActivity.Idle && rig.ui.runner.open.value != null }
-            waitForIdle()
-
-            assertEquals(Destination.PROJECTS, rig.ui.navigator.state.value.current)
-            onNodeWithText("TeamProject is not set up for the simulator").assertExists()
         }
     }
 
