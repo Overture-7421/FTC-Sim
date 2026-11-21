@@ -96,6 +96,7 @@ object App {
                 focusable = options.takesFocus,
             ) {
                 LaunchedEffect(window) {
+                    App::class.java.getResourceAsStream("icon.png")?.use { window.iconImage = javax.imageio.ImageIO.read(it) }
                     services.input.windowFocusChanged(window.isFocused)
                     services.startViewport(window.graphicsConfiguration.device.displayMode.refreshRate.toDouble())
                 }

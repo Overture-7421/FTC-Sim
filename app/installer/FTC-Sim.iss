@@ -49,8 +49,9 @@ OutputBaseFilename=FTC-Sim-{#AppVersion}-Setup
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+SetupIconFile=FTC-Sim.ico
 UninstallDisplayName={#AppName}
-UninstallDisplayIcon={app}\runtime\bin\javaw.exe
+UninstallDisplayIcon={app}\FTC-Sim.ico
 ; A running FTC-Sim holds its files: the installer asks the running program to close (Restart Manager) instead of failing.
 CloseApplications=yes
 RestartApplications=no
@@ -63,10 +64,11 @@ Name: "desktopicon"; Description: "Create a &desktop shortcut"; GroupDescription
 
 [Files]
 Source: "{#SourceDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
+Source: "FTC-Sim.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\runtime\bin\javaw.exe"; Parameters: "{#JavaArguments}"; WorkingDir: "{app}"; Comment: "FTC robot code simulator"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\runtime\bin\javaw.exe"; Parameters: "{#JavaArguments}"; WorkingDir: "{app}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\runtime\bin\javaw.exe"; Parameters: "{#JavaArguments}"; WorkingDir: "{app}"; IconFilename: "{app}\FTC-Sim.ico"; Comment: "FTC robot code simulator"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\runtime\bin\javaw.exe"; Parameters: "{#JavaArguments}"; WorkingDir: "{app}"; IconFilename: "{app}\FTC-Sim.ico"; Tasks: desktopicon
 
 [Run]
 ; Offered at the end of an interactive install, and done at the end of a silent one, which is how an update restarts FTC-Sim.
