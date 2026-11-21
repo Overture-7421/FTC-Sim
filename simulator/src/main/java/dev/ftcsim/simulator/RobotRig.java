@@ -508,12 +508,12 @@ public final class RobotRig {
                     + (servo == null ? 0.0 : Math.min(servoJoint.limit(), servo.angleRadians() / servoJoint.ratio()));
         }
         double yaw = turretYawRadians();
-        for (RobotMapping.TurretEncoder encoder : turretSpec.encoders()) {
-            if (encoder.channel() == 0) {
-                values[RobotJoint.ENCODER_A.ordinal()] = -yaw * encoder.turnsPerTurretTurn();
-            } else if (encoder.channel() == 1) {
-                values[RobotJoint.ENCODER_B.ordinal()] = -yaw * encoder.turnsPerTurretTurn();
-            }
+        List<RobotMapping.TurretEncoder> encoders = turretSpec.encoders();
+        if (!encoders.isEmpty()) {
+            values[RobotJoint.ENCODER_A.ordinal()] = -yaw * encoders.getFirst().turnsPerTurretTurn();
+        }
+        if (encoders.size() > 1) {
+            values[RobotJoint.ENCODER_B.ordinal()] = -yaw * encoders.get(1).turnsPerTurretTurn();
         }
         double wrap = 2.0 * Math.PI * 64.0;
         List<BodyState> bodies = new ArrayList<>();

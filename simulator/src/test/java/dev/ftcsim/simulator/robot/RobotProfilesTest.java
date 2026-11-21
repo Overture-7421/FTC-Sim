@@ -55,12 +55,12 @@ class RobotProfilesTest {
         assertEquals("BIOBUZZ", biobuzz.name());
         assertEquals(
                 List.of(
-                        new MotorMapping("frontLeft", Slot.FRONT_LEFT, "swyft-spike-6000", true, 1.0),
-                        new MotorMapping("backLeft", Slot.REAR_LEFT, "swyft-spike-6000", true, 1.0),
-                        new MotorMapping("frontRight", Slot.FRONT_RIGHT, "swyft-spike-6000", false, 1.0),
-                        new MotorMapping("backRight", Slot.REAR_RIGHT, "swyft-spike-6000", false, 1.0),
-                        new MotorMapping("intake", Slot.INTAKE, BARE, false, 2.0),
-                        new MotorMapping("up", Slot.CONVEYOR, BARE, false, 2.0),
+                        new MotorMapping("lf", Slot.FRONT_LEFT, "swyft-spike-6000", true, 1.0),
+                        new MotorMapping("lr", Slot.REAR_LEFT, "swyft-spike-6000", true, 1.0),
+                        new MotorMapping("rf", Slot.FRONT_RIGHT, "swyft-spike-6000", false, 1.0),
+                        new MotorMapping("rr", Slot.REAR_RIGHT, "swyft-spike-6000", false, 1.0),
+                        new MotorMapping("intake", Slot.INTAKE, BARE, false, 2.5),
+                        new MotorMapping("indexer", Slot.CONVEYOR, BARE, false, 2.5),
                         new MotorMapping("shooterLeft", Slot.SHOOTER, BARE, false, 43.0 / 30.0),
                         new MotorMapping("shooterRight", Slot.SHOOTER, BARE, false, 43.0 / 30.0)),
                 biobuzz.motors());
@@ -74,21 +74,21 @@ class RobotProfilesTest {
         assertEquals(new CameraMount(0.217, 0.0035, 0.256, 0.0, 45.0, 0.0), biobuzz.camera());
         assertEquals(
                 new TurretParts(
-                        new ServoMapping("turretServo", "axon-mini-plus", false),
+                        new ServoMapping("turret", "axon-mini-plus", false),
                         List.of(
-                                new TurretEncoder(0, "rev-tbe-v2", 5.5, 0.0, false),
-                                new TurretEncoder(1, "rev-tbe-v2", 44.0 / 7.0, 0.0, false)),
-                        0.089, 0.0, true,
+                                new TurretEncoder(5, "rev-tbe-v1", 5.5, 0.0, false),
+                                new TurretEncoder(4, "rev-tbe-v1", 44.0 / 7.0, 0.0, false)),
+                        0.045, 0.0, true,
                         List.of(
                                 new MechanismServo(ServoRole.HOOD, new ServoMapping("hood", "gobilda-2000-superspeed", false)),
-                                new MechanismServo(ServoRole.STOPPER, new ServoMapping("stopper", "gobilda-2000-torque-5turn", false)),
+                                new MechanismServo(ServoRole.STOPPER, new ServoMapping("brake", "gobilda-2000-torque-5turn", false)),
                                 new MechanismServo(ServoRole.COLIBRI_LEFT, new ServoMapping("colibriLeft", "gobilda-2000-torque-5turn", false)),
                                 new MechanismServo(ServoRole.COLIBRI_RIGHT, new ServoMapping("colibriRight", "gobilda-2000-torque-5turn", false)))),
                 biobuzz.turretParts());
         assertEquals(
                 List.of(
-                        new ColorSensorMapping("upSensor", 0.089, 0.065, 0.060, -90.0),
-                        new ColorSensorMapping("intakeSensor", 0.187, 0.065, -0.112, -90.0)),
+                        new ColorSensorMapping("upperSensor", 0.089, 0.065, 0.060, -90.0),
+                        new ColorSensorMapping("lowerSensor", 0.187, 0.065, -0.112, -90.0)),
                 biobuzz.colorSensors());
         assertEquals(List.of(), biobuzz.problems());
     }

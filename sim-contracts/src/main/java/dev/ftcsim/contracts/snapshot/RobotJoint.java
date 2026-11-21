@@ -24,9 +24,9 @@ public enum RobotJoint {
     HOOD("hood"),
     /** The stopper that holds pieces in the indexer; positive opens it. */
     STOPPER("stopper"),
-    /** The gear of the turret encoder on OctoQuad port 0, turning with the turret's yaw. */
+    /** The gear of the first turret encoder in the profile, turning with the turret's yaw. */
     ENCODER_A("encoder.a"),
-    /** The gear of the turret encoder on OctoQuad port 1. */
+    /** The gear of the second turret encoder in the profile. */
     ENCODER_B("encoder.b");
 
     private final String modelName;

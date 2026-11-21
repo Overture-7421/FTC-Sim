@@ -28,9 +28,9 @@ public final class BiobuzzHardware {
      */
     private static final double FORWARD_POD_LEFT_INCHES = -2.772;
     private static final double STRAFE_POD_FORWARD_INCHES = 2.319;
-    /** The pulse a REV Through Bore Encoder (version 2) sends over a turn, in microseconds. */
-    private static final int PULSE_MIN_US = 4;
-    private static final int PULSE_MAX_US = 998;
+    /** The pulse a REV Through Bore Encoder (version 1) sends over a turn, in microseconds. */
+    private static final int PULSE_MIN_US = 1;
+    private static final int PULSE_MAX_US = 1024;
     /** Turns of each encoder to one of the turret: the 32-tooth gear's, then the 28-tooth gear's. */
     private static final double TURNS_A = 5.5;
     private static final double TURNS_B = 44.0 / 7.0;
@@ -73,10 +73,10 @@ public final class BiobuzzHardware {
 
     /** Looks everything up and sets it up: the Pinpoint at the origin, the Limelight running, the stopper shut and the hood at 0. */
     public BiobuzzHardware(HardwareMap hardwareMap) {
-        frontLeft = hardwareMap.get(DcMotor.class, "frontLeft");
-        backLeft = hardwareMap.get(DcMotor.class, "backLeft");
-        frontRight = hardwareMap.get(DcMotor.class, "frontRight");
-        backRight = hardwareMap.get(DcMotor.class, "backRight");
+        frontLeft = hardwareMap.get(DcMotor.class, "lf");
+        backLeft = hardwareMap.get(DcMotor.class, "lr");
+        frontRight = hardwareMap.get(DcMotor.class, "rf");
+        backRight = hardwareMap.get(DcMotor.class, "rr");
         frontLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         backLeft.setDirection(DcMotorSimple.Direction.REVERSE);
         for (DcMotor motor : new DcMotor[] {frontLeft, backLeft, frontRight, backRight}) {
@@ -97,17 +97,17 @@ public final class BiobuzzHardware {
         limelight.pipelineSwitch(0);
         limelight.start();
 
-        turretServo = hardwareMap.get(CRServo.class, "turretServo");
+        turretServo = hardwareMap.get(CRServo.class, "turret");
         octoquad = hardwareMap.get(OctoQuad.class, "octoquad");
         octoquad.setChannelBankConfig(OctoQuad.ChannelBankConfig.ALL_PULSE_WIDTH);
-        octoquad.setSingleChannelPulseWidthParams(0, PULSE_MIN_US, PULSE_MAX_US);
-        octoquad.setSingleChannelPulseWidthParams(1, PULSE_MIN_US, PULSE_MAX_US);
+        octoquad.setSingleChannelPulseWidthParams(5, PULSE_MIN_US, PULSE_MAX_US);
+        octoquad.setSingleChannelPulseWidthParams(4, PULSE_MIN_US, PULSE_MAX_US);
 
-        upSensor = hardwareMap.get(ColorRangeSensor.class, "upSensor");
-        intakeSensor = hardwareMap.get(ColorRangeSensor.class, "intakeSensor");
+        upSensor = hardwareMap.get(ColorRangeSensor.class, "upperSensor");
+        intakeSensor = hardwareMap.get(ColorRangeSensor.class, "lowerSensor");
 
         intake = hardwareMap.get(DcMotor.class, "intake");
-        indexer = hardwareMap.get(DcMotor.class, "up");
+        indexer = hardwareMap.get(DcMotor.class, "indexer");
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         for (DcMotor motor : new DcMotor[] {intake, indexer, shooterLeft, shooterRight}) {
@@ -117,7 +117,7 @@ public final class BiobuzzHardware {
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         indexer.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         hood = hardwareMap.get(Servo.class, "hood");
-        stopper = hardwareMap.get(Servo.class, "stopper");
+        stopper = hardwareMap.get(Servo.class, "brake");
         colibriLeft = hardwareMap.get(Servo.class, "colibriLeft");
         colibriRight = hardwareMap.get(Servo.class, "colibriRight");
         stopper.setPosition(STOPPER_SHUT);
@@ -142,8 +142,8 @@ public final class BiobuzzHardware {
 
     /** Where the turret points, in degrees left of the robot's front, from the two absolute encoders. */
     public static double turretDegrees(int[] pulses) {
-        double a = (pulses[0] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
-        double b = (pulses[1] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
+        double a = (pulses[5] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
+        double b = (pulses[4] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
         double difference = b - a - Math.floor(b - a);
         // The difference of their turns repeats every 1/(B - A) turret turns, a little more than one: take the window -0.5 to +0.77.
         double period = 1.0 / (TURNS_B - TURNS_A);

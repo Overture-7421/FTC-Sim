@@ -310,8 +310,8 @@ public final class RobotDesign {
     /** DECODE's path: in at the front, up and back to a fixed launcher over the rear. */
     private static final List<Vec3> DECODE_PATH = List.of(new Vec3(0.27, 0.0, -0.10), new Vec3(0.05, 0.0, 0.0), new Vec3(-0.12, 0.0, 0.26));
 
-    /** The turret's axis in the CAD, ahead of the wheels' centre; the column the pieces climb is on it. */
-    public static final double BIOBUZZ_TURRET_AXIS_X = 0.089;
+    /** The centre of the feed column in the CAD, ahead of the wheels' centre. */
+    private static final double BIOBUZZ_COLUMN_X = 0.089;
 
     /** The shooter wheels' axle in the CAD (robot frame, metres), under the hood's pivot. */
     public static final Vec3 BIOBUZZ_WHEEL_AXLE = new Vec3(0.162, 0.0, 0.2146);
@@ -328,12 +328,12 @@ public final class RobotDesign {
     /**
      * BIOBUZZ's path in the CAD, for the centre of a POLLEN (robot frame, metres): in at the intake roller, back and up the
      * curve of compliant wheels between the front wheels, up the column between the three cross shafts (x 0.042 and 0.137, under
-     * the turret's axis) and through the turret, to where the piece waits for the shot ({@link #BIOBUZZ_WAIT}). The last two points
+     * the turret) and through the turret, to where the piece waits for the shot ({@link #BIOBUZZ_WAIT}). The last two points
      * are inside the turret and turn with it. The coordinates come from the CAD's rollers, shafts and wheels.
      */
     private static final List<Vec3> BIOBUZZ_PATH = List.of(
             new Vec3(0.27, 0.0, -0.14), new Vec3(0.15, 0.0, -0.10), new Vec3(0.115, 0.0, -0.05), new Vec3(0.098, 0.0, 0.0),
-            new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.06), new Vec3(BIOBUZZ_TURRET_AXIS_X, 0.0, 0.215), BIOBUZZ_WAIT);
+            new Vec3(BIOBUZZ_COLUMN_X, 0.0, 0.06), new Vec3(BIOBUZZ_COLUMN_X, 0.0, 0.215), BIOBUZZ_WAIT);
     /** BIOBUZZ's robot holds four POLLEN, its preloads (the manual allows four), in a column that is long enough for them to queue; DECODE's three. */
     public static final int BIOBUZZ_CAPACITY = 4;
     private static final int DECODE_CAPACITY = 3;
@@ -370,8 +370,9 @@ public final class RobotDesign {
         for (MotorMapping motor : conveyor) {
             drives.add(new StorageSpec.Drive(motor.name(), 0.02 / motor.ratio(), sign(motor), 0.15, length));
         }
-        StorageSpec.Turned turned = cad ? new StorageSpec.Turned(BIOBUZZ_TURNED_FROM_POINT, BIOBUZZ_TURRET_AXIS_X, 0.0) : null;
-        RobotMapping.ServoMapping stopper = mapping.turretParts().servoFor(RobotMapping.ServoRole.STOPPER);
+        RobotMapping.TurretParts parts = mapping.turretParts();
+        StorageSpec.Turned turned = cad ? new StorageSpec.Turned(BIOBUZZ_TURNED_FROM_POINT, parts.axisX(), parts.axisY()) : null;
+        RobotMapping.ServoMapping stopper = parts.servoFor(RobotMapping.ServoRole.STOPPER);
         // The stopper holds the pieces at the foot of the column, so the preloads wait there until it opens.
         StorageSpec.Gate gate = cad && stopper != null
                 ? new StorageSpec.Gate(BIOBUZZ_GATE_POINT, stopper.name(), STOPPER_OPEN_RADIANS) : null;

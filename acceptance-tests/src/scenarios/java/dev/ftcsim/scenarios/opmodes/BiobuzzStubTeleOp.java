@@ -105,7 +105,7 @@ public final class BiobuzzStubTeleOp extends OpMode {
 
         double flywheelTicks = hw.flywheelTicks();
         hw.turretServo.setPower((gamepad1.left_bumper ? TURRET_POWER : 0.0) - (gamepad1.right_bumper ? TURRET_POWER : 0.0));
-        telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f p0=%d p1=%d", turretDegrees, pulses[0], pulses[1]));
+        telemetry.addData("Turret", String.format(Locale.ROOT, "deg=%.1f p5=%d p4=%d", turretDegrees, pulses[5], pulses[4]));
 
         hoodPosition = Math.max(0.0, Math.min(BiobuzzShotSolver.HOOD_MAX_POSITION,
                 hoodPosition + HOOD_PER_SECOND * seconds * ((gamepad1.dpad_up ? 1 : 0) - (gamepad1.dpad_down ? 1 : 0))));
