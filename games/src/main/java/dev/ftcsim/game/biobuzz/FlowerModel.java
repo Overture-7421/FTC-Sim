@@ -50,11 +50,12 @@ final class FlowerModel {
     /** The four FLOWERS: axis position in inches, and the unit direction from the axis to the wall behind it. */
     record Site(double axisX, double axisY, double wallX, double wallY) {}
 
+    private static final double WALL_AXIS = FieldGeometry.HALF_IN - 2.48;
     static final List<Site> SITES = List.of(
-            new Site(-23.39, 68.04, 0, 1),
-            new Site(-68.04, -23.39, -1, 0),
-            new Site(68.04, 23.39, 1, 0),
-            new Site(23.39, -68.04, 0, -1));
+            new Site(-23.39, WALL_AXIS, 0, 1),
+            new Site(-WALL_AXIS, -23.39, -1, 0),
+            new Site(WALL_AXIS, 23.39, 1, 0),
+            new Site(23.39, -WALL_AXIS, 0, -1));
 
     /** All the solids of the FLOWER on {@code site}; every one of them collides. */
     static List<Solid> solids(int number, Site site) {

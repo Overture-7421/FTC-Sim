@@ -150,6 +150,7 @@ public final class SimulationSession implements AutoCloseable {
             clockwork.every(PhysicsWorld.STEPS_PER_SECOND, (index, nanos) -> {
                 PhysicsWorld world = live.world;
                 Mechanisms mechanisms = live.mechanisms;
+                rig.moveColibriPlate(world);
                 world.step();
                 WorldSnapshot afterStep = world.snapshot();
                 if (live.fieldRun != null) {

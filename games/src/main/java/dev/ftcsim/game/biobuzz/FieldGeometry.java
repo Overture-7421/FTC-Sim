@@ -12,13 +12,18 @@ import java.util.List;
  * the middle of the field on the tiles, +X towards the audience, +Y towards the blue alliance wall, +Z up; so the
  * red alliance wall is at negative Y, as the red ALLIANCE AREA is on the left from the audience.
  *
- * <p>The inside of the perimeter is the CAD's 141.04 in, not the nominal 144 in of the manual: the tiles are
- * trimmed to fit and the tape lines, the FLOWERS and the staged pieces are all dimensioned in the CAD frame.
+ * <p>The playing area spans 144 inches. Wall-mounted elements retain their clearances from the field CAD.
  */
 final class FieldGeometry {
 
+    static final double HALF_IN = 72.0;
+    private static final double TAPE_EDGE = HALF_IN - 0.42;
+    private static final double LOADING_FRONT = TAPE_EDGE - 11.0;
+    private static final double GARDEN_INNER = TAPE_EDGE - 2.0;
+    private static final double GARDEN_END = TAPE_EDGE - 22.69;
+
     /** Distance from the middle of the field to the inside face of each wall. */
-    static final double HALF_M = in(70.52);
+    static final double HALF_M = in(HALF_IN);
     static final double WALL_THICKNESS_M = in(1.13);
     static final double WALL_HEIGHT_M = in(11.83);
 
@@ -43,11 +48,11 @@ final class FieldGeometry {
     }
 
     /** The red LOADING ZONE is against the red wall at negative Y, the blue one against the blue wall. */
-    static final Zone RED_LOADING_ZONE = new Zone(in(-46.60), in(-23.91), -HALF_M, in(-59.10));
-    static final Zone BLUE_LOADING_ZONE = new Zone(in(23.91), in(46.60), in(59.10), HALF_M);
+    static final Zone RED_LOADING_ZONE = new Zone(in(-46.60), in(-23.91), -HALF_M, in(-LOADING_FRONT));
+    static final Zone BLUE_LOADING_ZONE = new Zone(in(23.91), in(46.60), in(LOADING_FRONT), HALF_M);
     /** The red GARDEN lies along the audience wall in the red corner, the blue one along the far wall in the blue corner. */
-    static final Zone RED_GARDEN = new Zone(in(68.10), in(70.10), in(-70.10), in(-47.41));
-    static final Zone BLUE_GARDEN = new Zone(in(-70.10), in(-68.10), in(47.41), in(70.10));
+    static final Zone RED_GARDEN = new Zone(in(GARDEN_INNER), in(TAPE_EDGE), in(-TAPE_EDGE), in(-GARDEN_END));
+    static final Zone BLUE_GARDEN = new Zone(in(-TAPE_EDGE), in(-GARDEN_INNER), in(GARDEN_END), in(TAPE_EDGE));
 
     /** Solids that collide and are made one body in the physics world, with how they grip and bounce a piece. */
     record Group(List<Solid> solids, float friction, float restitution) {}
@@ -88,15 +93,15 @@ final class FieldGeometry {
         marks.add(new Solid("tiles", new Shape.Box(HALF_M, HALF_M, 0.0075), Pose3.at(0, 0, -0.0075), TILE_RGB, true, false));
         loadingZone(marks, "red", -1, RED_RGB);
         loadingZone(marks, "blue", 1, BLUE_RGB);
-        garden(marks, "red", 68.10, -70.10, -47.41, RED_RGB);
-        garden(marks, "blue", -68.10, 47.41, 70.10, BLUE_RGB);
+        garden(marks, "red", GARDEN_INNER, -TAPE_EDGE, -GARDEN_END, RED_RGB);
+        garden(marks, "blue", -GARDEN_INNER, GARDEN_END, TAPE_EDGE, BLUE_RGB);
         return marks;
     }
 
     /** Two 11 in sides and the 20.69 in line that joins them, 1 in tape, outside edges as in the CAD. */
     private static void loadingZone(List<Solid> marks, String colour, int side, int rgb) {
-        double inner = 59.10;
-        double outerEdge = 70.10;
+        double inner = LOADING_FRONT;
+        double outerEdge = TAPE_EDGE;
         double x0 = side > 0 ? 23.91 : -46.60;
         double x1 = x0 + 22.69;
         marks.add(tape("LOADING ZONE " + colour + " side 1", x0 + 0.5, side * (inner + outerEdge) / 2, 1.0, outerEdge - inner, rgb));

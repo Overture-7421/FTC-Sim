@@ -52,6 +52,19 @@ class FieldTest {
     }
 
     @Test
+    void allFourInnerWallFacesAreSeventyTwoInchesFromCenter() {
+        List<Solid> walls = FieldGeometry.colliderGroups().stream().flatMap(group -> group.solids().stream())
+                .filter(solid -> solid.name().startsWith("perimeter wall")).toList();
+        assertEquals(4, walls.size());
+        for (Solid wall : walls) {
+            Shape.Box box = (Shape.Box) wall.shape();
+            boolean alongX = wall.name().endsWith("X");
+            double face = alongX ? Math.abs(wall.pose().x()) - box.halfX() : Math.abs(wall.pose().y()) - box.halfY();
+            assertEquals(in(72), face, 1e-9, wall.name());
+        }
+    }
+
+    @Test
     void theDescriptionNamesEveryBodyAndEveryTagOfTheWorld() {
         FieldDescription description = FIELD.description();
         try (Arena arena = new Arena(1, Alliance.RED)) {

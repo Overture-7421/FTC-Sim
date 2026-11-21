@@ -42,6 +42,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.DoubleConsumer;
 import java.util.function.IntFunction;
 import java.util.function.LongSupplier;
 
@@ -87,6 +88,8 @@ public final class RobotRig {
     private final Map<String, WheelPlant> wheelPlants;
     private final Map<String, ShaftPlant> shafts;
     private final Map<String, ServoPlant> servoPlants;
+    private final List<RobotSpec.ServoJoint> colibriServos;
+    private DoubleConsumer colibriPlate;
     private final Map<String, WheelRef> wheels;
 
     private RobotRig(
@@ -107,6 +110,8 @@ public final class RobotRig {
             Map<String, ServoPlant> servoPlants,
             Map<String, WheelRef> wheels) {
         this.spec = spec;
+        colibriServos = spec.joints().servos().stream()
+                .filter(s -> s.joint() == RobotJoint.COLIBRI_LEFT || s.joint() == RobotJoint.COLIBRI_RIGHT).toList();
         this.bus = bus;
         this.hubs = hubs;
         this.wiring = wiring;
@@ -399,6 +404,7 @@ public final class RobotRig {
         wheelPlants.values().forEach(wheel -> wheel.rebind(fresh));
         bodySource.set(() -> world.bodyPose(chassisEntityId));
         chassis = fresh;
+        colibriPlate = null;
     }
 
     /** The true state of the chassis for the devices that measure it. */
@@ -468,6 +474,34 @@ public final class RobotRig {
                 (float) (chassis.qz() * tw + chassis.qw() * tz), (float) (chassis.qw() * tw - chassis.qz() * tz));
     }
 
+    /** Both servos drive the same rigid linkage. Equally strong servos share the travel if their commands disagree. */
+    private double colibriAngle() {
+        double sum = 0;
+        for (RobotSpec.ServoJoint servo : colibriServos) {
+            sum += servoJointAngle(servo);
+        }
+        return sum / colibriServos.size();
+    }
+
+    void moveColibriPlate(PhysicsWorld world) {
+        if (chassis == null || colibriServos.isEmpty()) {
+            return;
+        }
+        double angle = colibriAngle();
+        if (colibriPlate == null) {
+            // The print spans the two CAD noses. Its depth and thickness are estimates, in metres.
+            colibriPlate = world.addHingedPlate(chassisEntityId, new Vector3(0.015, 0.212, 0.004),
+                    new Vector3(0.0225, 0, -0.1034), new Vector3(0.3311, 0, -0.0700), angle);
+        } else {
+            colibriPlate.accept(angle);
+        }
+    }
+
+    private double servoJointAngle(RobotSpec.ServoJoint joint) {
+        ServoPlant servo = servoPlants.get(joint.servo());
+        return joint.rest() + (servo == null ? 0.0 : Math.min(joint.limit(), servo.angleRadians() / joint.ratio()));
+    }
+
     /** The bodies a window draws the robot's picture with: its turret, and the joints of its mechanisms. */
     public List<BodyState> viewBodies(BodyPose chassisPose) {
         List<BodyState> bodies = new ArrayList<>();
@@ -503,9 +537,12 @@ public final class RobotRig {
         values[RobotJoint.FLYWHEEL.ordinal()] = shaftTurns(joints.flywheel(), joints.flywheelSign(), joints.flywheelRatio());
         values[RobotJoint.HOOD.ordinal()] = RobotDesign.HOOD_REST_RADIANS;
         for (RobotSpec.ServoJoint servoJoint : joints.servos()) {
-            ServoPlant servo = servoPlants.get(servoJoint.servo());
-            values[servoJoint.joint().ordinal()] = servoJoint.rest()
-                    + (servo == null ? 0.0 : Math.min(servoJoint.limit(), servo.angleRadians() / servoJoint.ratio()));
+            values[servoJoint.joint().ordinal()] = servoJointAngle(servoJoint);
+        }
+        if (!colibriServos.isEmpty()) {
+            double angle = colibriAngle();
+            values[RobotJoint.COLIBRI_LEFT.ordinal()] = angle;
+            values[RobotJoint.COLIBRI_RIGHT.ordinal()] = angle;
         }
         double yaw = turretYawRadians();
         List<RobotMapping.TurretEncoder> encoders = turretSpec.encoders();

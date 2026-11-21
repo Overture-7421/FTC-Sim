@@ -15,7 +15,7 @@ import org.junit.jupiter.api.Test;
  */
 class FlowerTest {
 
-    /** The FLOWER on the red wall nearest the audience: axis at X = 23.39 in, Y = -68.04 in, the wall behind it at -Y. */
+    /** The FLOWER on the red wall nearest the audience: axis at X = 23.39 in, Y = -69.52 in, the wall behind it at -Y. */
     private static final FlowerModel.Site SITE = FlowerModel.SITES.get(3);
     private static final int FIRST_STARTING_POLLEN = BiobuzzIds.POLLEN_FIRST + 12;
 
@@ -53,6 +53,30 @@ class FlowerTest {
         int id = arena.spawn(BiobuzzIds.KIND_POLLEN, start, direction.times(speed));
         arena.steps(300);
         return id;
+    }
+
+    @Test
+    void oneLiftUnderTheStackReleasesAllFourPollenEvenWithoutAnIntake() {
+        try (Arena arena = new Arena(1, Alliance.RED)) {
+            arena.steps(120);
+            double axisX = in(SITE.axisX());
+            double axisY = in(SITE.axisY());
+            // Hold the lowered plate under the wall side of the bottom ball, then raise it once.
+            int support = 9000;
+            arena.world.addFixedBox(support, 0, new Vector3(axisX, axisY + 0.340, 0.1794),
+                    new Vector3(0.01, 0.01, 0.01), -Math.PI / 2);
+            var plate = arena.world.addHingedPlate(support, new Vector3(0.015, 0.212, 0.004),
+                    new Vector3(0.0225, 0, -0.1034), new Vector3(0.3311, 0, -0.0700), 0);
+            for (int step = 1; step <= 600; step++) {
+                plate.accept(Math.toRadians(4.0) * Math.min(step / 14.0, 1.0));
+                arena.steps(1);
+            }
+            for (int id = FIRST_STARTING_POLLEN; id < FIRST_STARTING_POLLEN + 4; id++) {
+                double[] position = where(arena, id);
+                assertTrue(position[1] > 2.44 && position[0] < 2,
+                        "POLLEN " + id + " should be on the floor outside the FLOWER: " + arena.body(id));
+            }
+        }
     }
 
     @Test
