@@ -84,7 +84,7 @@ From the team's table of its mechanisms and its CAD (the part is the simulator's
 | `upperSensor` | Control Hub, I2C bus 2 | (0.089, 0.065, 0.060) | a ball waits at the stopper (piece 1 of the queue) |
 | `lowerSensor` | Expansion Hub, I2C bus 0 | (0.187, 0.065, -0.112) | four balls are queued, so the robot is full (piece 4) |
 
-At the start the four preloads wait at the stopper, so both read a ball; after four shots both read nothing. **These mounts are estimates**: the CAD has no sensors. Replace them with measured numbers when the real ones are mounted, in `RobotProfiles.biobuzz()` ([the colour sensor page](../devices/color-sensor.md)). The Control Hub's four I2C buses are taken (IMU 0, Pinpoint 1, first colour sensor 2, OctoQuad 3), which is why the second sensor is on the Expansion Hub.
+At the start the four preloads wait at the stopper, so both read a ball; after four shots both read nothing. **These mounts are estimates**: the simulation uses the estimated queue positions. Replace them with measured numbers when the real ones are mounted, in `RobotProfiles.biobuzz()` ([the colour sensor page](../devices/color-sensor.md)). The Control Hub's four I2C buses are taken (IMU 0, Pinpoint 1, first colour sensor 2, OctoQuad 3), which is why the second sensor is on the Expansion Hub.
 
 ## Motors
 
