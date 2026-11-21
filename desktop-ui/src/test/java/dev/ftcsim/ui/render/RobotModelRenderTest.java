@@ -162,6 +162,7 @@ class RobotModelRenderTest {
         int[] front = shoot("biobuzz-cad-front", 30.0, 25.0, 1.4, 0.0, rest);
         shoot("biobuzz-cad-side", 90.0, 0.0, 1.2, 0.0, rest);
         shoot("biobuzz-cad-top", 0.0, 80.0, 1.4, 0.0, rest);
+        shoot("biobuzz-cad-shooter", 55.0, 35.0, 0.85, 0.0, rest);
         int[] turned = shoot("biobuzz-cad-turret-90", 30.0, 25.0, 1.4, Math.PI / 2, rest);
         double[] moved = rest.clone();
         moved[RobotJoint.COLIBRI_LEFT.ordinal()] = Math.toRadians(60);
