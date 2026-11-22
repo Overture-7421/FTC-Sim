@@ -409,6 +409,11 @@ public final class PhysicsWorld implements AutoCloseable {
         rolling.remove(entityId);
     }
 
+    /** Applies a world-frame impulse in newton seconds at the centre of a free piece. */
+    public void pushPiece(int entityId, Vector3 impulse) {
+        bodies.addImpulse(pieceBody(entityId), vec3(impulse));
+    }
+
     public boolean hasPiece(int entityId) {
         Entity entity = entities.get(entityId);
         return entity != null && entity.role() == Role.PIECE;

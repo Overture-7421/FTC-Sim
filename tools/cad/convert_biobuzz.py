@@ -444,8 +444,6 @@ def main():
             if name.startswith(('Topcase', 'Midcase', 'Botcase', 'REV Through Bore', '0407', '1628-0105-0001-Inner', 'CAGE', 'IR:', '3D - Spacer', '2302-', '1910-', '1805-', '1231-', 'Spline', '2800', '2802', 'Screw')):
                 return 'base'
             if c[2] >= 0.2925 or name.startswith('1628-0105-0001-Outer') or name.startswith('OR:'):
-                if abs(c[0]) < 0.03 and abs(c[1] - 0.045) < 0.03:
-                    return 'base'
                 return 'turret'
             return 'base'
         if 'Intake' in t:

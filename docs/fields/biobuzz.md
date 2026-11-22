@@ -72,7 +72,10 @@ The CAD puts the underside of the middle ring at 3.90 in (a retrieval opening of
   with about 0.46 N m (must).
 - **FLOWER.** Real collision rings and pipes. A POLLEN dropped in from the top falls to the pocket; a NECTAR rests on the
   middle ring seat, whose opening is narrower than a NECTAR. So the stack is ordered by loading order, and a POLLEN in the
-  pocket can be knocked out through the retrieval opening while a NECTAR cannot.
+  pocket can be knocked out through the retrieval opening while a NECTAR cannot. When the bottom POLLEN is removed or rolls
+  clear, the remaining POLLEN in that flower wake and fall. A piece perched off-centre on the middle seat is guided toward its bore.
+  A short outward and upward impulse at the lip approximates the colibri plate guiding each piece through the opening.
+  Intake capture still depends on roller operation and available space.
 - **Pieces** are balls, staged as the setup guide says: four POLLEN stacked in each FLOWER, four along the wall from the corner
   of each GARDEN, three NECTAR of its colour in the CELL facing up of each HIVE (red audience CELL, blue scoring CELL), the
   other five of each colour with that alliance's human player. Every robot starts with four preload POLLEN: the robot's own come

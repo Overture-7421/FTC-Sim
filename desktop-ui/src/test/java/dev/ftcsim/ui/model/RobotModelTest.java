@@ -32,6 +32,25 @@ class RobotModelTest {
     }
 
     @Test
+    void noUpperShooterGeometryIsBakedIntoTheChassis() {
+        RobotModel.Group base = MODEL.groups().get(indexOf("base"));
+        for (RobotModel.Chunk chunk : base.chunks()) {
+            for (int vertex = 0; vertex < chunk.vertices(); vertex++) {
+                double lateral = coordinate(chunk, vertex, 1);
+                double height = coordinate(chunk, vertex, 2);
+                // The fixed encoder brackets reach 0.185 m, and chassis side plates flank the shooter.
+                assertTrue(Math.abs(lateral) > 0.16 || height < 0.19,
+                        "fixed geometry above the ring at lateral " + lateral + ", height " + height);
+            }
+        }
+    }
+
+    private static double coordinate(RobotModel.Chunk chunk, int vertex, int axis) {
+        int quantized = chunk.positions().getShort((3 * vertex + axis) * Short.BYTES) - Short.MIN_VALUE;
+        return chunk.min()[axis] + (chunk.max()[axis] - chunk.min()[axis]) * quantized / 65535.0;
+    }
+
+    @Test
     void thePrintedPlateSpansBothArmsAndTurnsAboutTheirHinge() {
         RobotModel.Group plate = MODEL.groups().get(indexOf("colibri.plate"));
         RobotModel.Group left = MODEL.groups().get(indexOf("colibri.left"));
