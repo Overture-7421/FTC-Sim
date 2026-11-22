@@ -8,6 +8,8 @@ import dev.ftcsim.contracts.field.Alliance;
 import dev.ftcsim.contracts.snapshot.BodyState;
 import dev.ftcsim.physics.Vector3;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 /**
  * The FLOWER operation tests of the Field Acceptance Checklist (2.8 to 2.11): what stays in, what comes out of the
@@ -31,6 +33,25 @@ class FlowerTest {
         double dx = b.x() - in(SITE.axisX());
         double dy = b.y() - in(SITE.axisY());
         return new double[] {b.z() / 0.0254, Math.hypot(dx, dy) / 0.0254};
+    }
+
+    @ParameterizedTest
+    @ValueSource(ints = {0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11})
+    void collectingTheBottomPollenReleasesTheSettledStackThroughTheOpening(int seed) {
+        int flower = seed % FlowerModel.SITES.size();
+        FlowerModel.Site site = FlowerModel.SITES.get(flower);
+        int first = BiobuzzIds.POLLEN_FIRST + 4 * flower;
+        try (Arena arena = new Arena(2 + seed, Alliance.RED)) {
+            arena.steps(360);
+            arena.world.removePiece(first);
+            arena.steps(360);
+            for (int id = first + 1; id < first + 4; id++) {
+                BodyState body = arena.body(id);
+                double outward = -(body.x() - in(site.axisX())) * site.wallX() - (body.y() - in(site.axisY())) * site.wallY();
+                assertTrue(outward > FlowerModel.COLUMN_RADIUS_M, "POLLEN " + id + " at " + body + ", outward " + outward);
+            }
+            assertTrue(arena.body(BiobuzzIds.POLLEN_FIRST + 4 * ((flower + 1) % 4) + 3).z() > in(8), "the neighbouring stack stays put");
+        }
     }
 
     private static int drop(Arena arena, int kind) {

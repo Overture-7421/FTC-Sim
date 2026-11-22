@@ -43,6 +43,7 @@ public final class BiobuzzRun implements FieldRun {
     private static final int RED = 0;
     private static final int BLUE = 1;
 
+    private final List<FlowerOutlet> outlets = FlowerModel.SITES.stream().map(FlowerOutlet::new).toList();
     private final PhysicsWorld world;
     private final Alliance alliance;
     private final boolean red;
@@ -132,6 +133,9 @@ public final class BiobuzzRun implements FieldRun {
         }
         if (phase == MatchPhase.TELEOP && nowNanos - teleopStartNanos >= TELEOP_NANOS) {
             enterPhase(MatchPhase.ENDED, teleopStartNanos + TELEOP_NANOS);
+        }
+        for (FlowerOutlet outlet : outlets) {
+            outlet.afterStep(world, snapshot);
         }
         boolean moved = false;
         for (BodyState body : snapshot.bodies()) {

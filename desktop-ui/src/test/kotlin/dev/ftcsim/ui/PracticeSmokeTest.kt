@@ -10,6 +10,7 @@ import dev.ftcsim.contracts.session.MatchState
 import dev.ftcsim.ui.host.ManualScheduler
 import dev.ftcsim.ui.host.newWorkFolder
 import dev.ftcsim.ui.host.testHost
+import dev.ftcsim.ui.input.PadAssignment
 import dev.ftcsim.ui.nav.Destination
 import dev.ftcsim.ui.practice.Connection
 import dev.ftcsim.ui.practice.LinkState
@@ -134,6 +135,7 @@ class PracticeSmokeTest {
     @Test
     fun theKeyboardDrivesTheRobotOnlyWhileTheViewportHasFocusAndStopsWhenADialogOpens() {
         HeadlessApp().use { app ->
+            app.ui.controls.assign(1, PadAssignment.KEYBOARD)
             app.openPractice()
             app.awaitViewport()
             val session = app.services.session

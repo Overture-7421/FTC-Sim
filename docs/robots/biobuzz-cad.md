@@ -22,7 +22,7 @@ The CAD faces -Y with +X to its left and Z up. The simulator's frame is X forwar
 
 ## What moves
 
-The simulator publishes the value of each joint as a body of the snapshot (`RobotJoint`; `BodyKinds.JOINT_BASE` plus its ordinal, the value in radians as X), and the turret as the body `BodyKinds.TURRET`. No wire message changed for this. Each model group turns about a pivot taken from the CAD's mates or part positions. The converter removes the exported turret yaw using the camera mount's lateral axis, reads the hood rest angle from its side plate and groups the two feeder shafts by their centres.
+The simulator publishes the value of each joint as a body of the snapshot (`RobotJoint`; `BodyKinds.JOINT_BASE` plus its ordinal, the value in radians as X), and the turret as the body `BodyKinds.TURRET`. No wire message changed for this. Each model group turns about a pivot taken from the CAD's mates or part positions. The converter removes the exported turret yaw using the camera mount's lateral axis, reads the hood rest angle from its side plate and groups the two feeder shafts by their centres. The two shooter motors, upper shaft and 24T herringbone gear turn with the turret even where they overlap the fixed drive in a top view.
 
 | Group (joint) | Source of the value | Ratio and range |
 |---|---|---|
