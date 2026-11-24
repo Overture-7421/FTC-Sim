@@ -105,8 +105,16 @@ public final class BiobuzzHoldShooter {
     private boolean confirmed;
     private double flywheelTarget;
 
+    private final BiobuzzShotPlan plan;
+
     public BiobuzzHoldShooter(BiobuzzHive.Alliance alliance) {
+        this(alliance, BiobuzzShotSolver.PLAN);
+    }
+
+    /** A shooter that takes its aim, hood and flywheel speed from {@code plan}. */
+    public BiobuzzHoldShooter(BiobuzzHive.Alliance alliance, BiobuzzShotPlan plan) {
         this.alliance = alliance;
+        this.plan = plan;
     }
 
     public State state() {
@@ -147,7 +155,7 @@ public final class BiobuzzHoldShooter {
         lastUpdate = now;
         this.confirmed = confirmed;
         command.hoodPosition = hood;
-        double bearing = BiobuzzShotSolver.bearingDegrees(pose, alliance, tilt);
+        double bearing = plan.bearingDegrees(pose, alliance, tilt);
         resolve(now, pose, confirmed, tilt);
 
         double target = bearing + (confirmed ? 0.0 : SEARCH_AMPLITUDE_DEGREES * Math.sin(2.0 * Math.PI * now / SEARCH_PERIOD_SECONDS));
@@ -170,7 +178,7 @@ public final class BiobuzzHoldShooter {
             flywheelTarget = solution.flywheelTicksPerSecond;
         } else {
             // No shot from here (or no pose to trust yet): idle at about the speed of one from near here, never at a stop.
-            double nominal = BiobuzzShotSolver.nominalTicks(pose, alliance, tilt);
+            double nominal = plan.nominalTicks(pose, alliance, tilt);
             if (!Double.isNaN(nominal)) {
                 flywheelTarget = nominal;
             } else if (flywheelTarget <= 0.0) {
@@ -262,7 +270,7 @@ public final class BiobuzzHoldShooter {
         if (solution != null && !moved && tilt == solvedTilt && now - solvedAt < RESOLVE_SECONDS) {
             return;
         }
-        solution = BiobuzzShotSolver.solve(pose, alliance, tilt, confirmed && hoodKnown ? hood : Double.NaN);
+        solution = plan.solve(pose, alliance, tilt, confirmed && hoodKnown ? hood : Double.NaN);
         solvedTilt = tilt;
         solvedX = pose.x();
         solvedY = pose.y();

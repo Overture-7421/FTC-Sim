@@ -145,10 +145,11 @@ public final class RobotDesign {
     }
 
     /**
-     * Where BIOBUZZ's Limelight sits, with the turret facing forward: on the 45 degree panel beside the shooter wheels (the owner
-     * placed it; the CAD has no camera). It faces forward and 45 degrees up.
+     * BIOBUZZ's calibrated Limelight pose: 5.361 inches ahead of the turret's 3.207 inch pivot, 16.785 inches above the
+     * floor, pitched 45 degrees up. The profile uses the chassis box centre, 0.1824 m above the floor, as its origin.
      */
-    public static final RobotMapping.CameraMount BIOBUZZ_CAMERA = new RobotMapping.CameraMount(0.217, 0.0035, 0.256, 0.0, 45.0, 0.0);
+    public static final RobotMapping.CameraMount BIOBUZZ_CAMERA = new RobotMapping.CameraMount(
+            (3.207 + 5.361) * 0.0254, 0.0, 16.785 * 0.0254 - 0.1824, 0.0, 45.0, 0.0);
 
     /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
     public static final double COLIBRI_RATIO = 40.0 / 30.0;
@@ -172,8 +173,8 @@ public final class RobotDesign {
      */
     public static final double HOOD_RANGE_RADIANS = Math.toRadians(44.0);
 
-    /** How far the stopper's servo must have turned for pieces to pass, 60 degrees. Estimated. */
-    public static final double STOPPER_OPEN_RADIANS = Math.toRadians(60.0);
+    /** Estimated release point halfway between the calibrated stopper commands: 150 degrees shut, 300 open. */
+    public static final double STOPPER_OPEN_RADIANS = Math.toRadians(225.0);
 
     /** The turret servo has the first servo port of the Control Hub; the mechanisms' servos follow in the order of {@link RobotMapping.ServoRole}. */
     private static Map<String, RobotSpec.Servo> servos(RobotMapping mapping) {
@@ -261,11 +262,14 @@ public final class RobotDesign {
             return null;
         }
         MecanumConfig generic = MecanumConfig.generic18Inch();
+        boolean biobuzz = game == Game.BIOBUZZ;
         return new MecanumConfig(
                 mapping.massKg(), generic.lengthM(), generic.widthM(), generic.heightM(), generic.groundClearanceM(),
                 generic.comHeightM(), mapping.wheelDiameterMm() / 2000.0, generic.wheelbaseM(), generic.trackM(),
-                MotorCatalog.motor(mapping.driveMotor(), mapping.driveRatio()), generic.wheelInertiaKgM2(), 0.0034, generic.tireStiffnessNPerM(),
-                generic.tireDampingNsPerM(), generic.tractionFriction(), generic.slipStiffnessNsPerM(), 0.5, 2.2, 0.12, 0.053);
+                MotorCatalog.motor(mapping.driveMotor(), mapping.driveRatio()), generic.wheelInertiaKgM2(),
+                biobuzz ? 0.0172 : 0.0034, generic.tireStiffnessNPerM(),
+                generic.tireDampingNsPerM(), generic.tractionFriction(), generic.slipStiffnessNsPerM(),
+                0.5, biobuzz ? 1.7 : 2.2, biobuzz ? 0.05 : 0.12, biobuzz ? 0.044 : 0.053);
     }
 
     private static RobotSpec.Motor wheel(MotorMapping motor, int hub, int port) {

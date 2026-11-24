@@ -27,7 +27,7 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 | Group (joint) | Source of the value | Ratio and range |
 |---|---|---|
 | Four wheels | the chassis's wheel angles | direct; positive rolls the robot forward |
-| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, x 0.045 m ahead of centre in the team code (the CAD places it at x 0.089 m) |
+| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, x 0.0814578 m (3.207 in) ahead of centre in the team's calibrated code (the CAD places it at x 0.089 m) |
 | Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 5.0694 (365:72 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a Super Speed (300 degrees), 223 degrees of it (position 0.7435) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2.5 |
@@ -66,7 +66,7 @@ The **stopper** (`StorageSpec.Gate`, the stopper servo) holds the pieces at poin
 
 - **Limelight calibration.** The visualization uses the CAD camera and mount. The simulated sensor uses the estimated optical pose in `RobotDesign.BIOBUZZ_CAMERA`.
 - **The colour sensors.** The profile's `upperSensor` (0.089, 0.065, 0.060) and `lowerSensor` (0.187, 0.065, -0.112), on the left wall looking right, are placed where the first and fourth ball of the queue wait (the stopper is path point 4; the others queue 0.0711 m apart along the path), so `upperSensor` reads a ball only when one has reached the stopper and `lowerSensor` only when four are queued. Estimates: to be replaced by measured mounts ([fixed-robots](fixed-robots.md)).
-- **The colibri arms' travel and the stopper's open position.** The mates have no limits. The simulation opens the stopper at 60 degrees of servo (position 0.0333 of the 5-turn servo) and the arms are drawn for the whole servo range.
+- **The colibri arms' travel and the stopper's open position.** The mates have no limits. The team's calibrated stopper is a Super Speed servo commanded 0.5 shut (150 degrees) and 1.0 open (300 degrees); the simulation releases balls at 225 degrees, halfway between them (an estimate: the code gives positions, not the gate's geometry). The colibri arms are drawn for the whole servo range.
 - **The pivot of the stopper.** Approximated by the switch's own centre.
 - **The magazine holds four POLLEN** (the robot's four preloads); queued behind the stopper they stand 0.0712 m apart along the path, the last one near the intake's mouth. The intake roller's inertia is estimated at 4e-5 kg m^2 (a light roller on the compliant wheels), so a braked intake motor stops in about 0.1 s; DECODE's estimate stays 2e-4.
 - **The hood's launch geometry.** The hood sets the launch elevation as 44 degrees plus its angle (45 degrees at the bottom of its range, 54.9 at the top): an estimate, the team's real shot table replaces it.

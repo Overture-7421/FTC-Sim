@@ -9,6 +9,7 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.DcMotorEx;
 import com.qualcomm.robotcore.hardware.DcMotorSimple;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.PwmControl;
 import com.qualcomm.robotcore.hardware.Servo;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 import org.firstinspires.ftc.robotcore.external.navigation.DistanceUnit;
@@ -40,14 +41,11 @@ public final class BiobuzzHardware {
     public static final double STAGING_POWER = 0.6;
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
     /**
-     * Servo positions: the stopper shut and open, the colibri arms down and up. The stopper's servo (five turns, 1800 degrees, about
-     * 250 degrees a second) is the slowest thing between the button and the shot, so it travels as little as it can: it lets a ball by
-     * from 60 degrees of servo (position 0.0333), so shut is 45 degrees (0.025) and open is 75 (0.0417), which is 0.12 s of travel;
-     * these are the simulated stopper's, and a real stopper's two positions are wherever it holds and releases the balls. The
-     * colibri arms' servos have five turns too: 0.0667 is 120 degrees of servo, 90 of arm.
+     * The team's calibrated stopper positions: 150 degrees shut and 300 open on a Super Speed servo, about 0.13 s of travel.
+     * The colibri arms' servos have five turns: 0.0667 is 120 degrees of servo, 90 of arm.
      */
-    public static final double STOPPER_SHUT = 0.025;
-    public static final double STOPPER_OPEN = 0.0417;
+    public static final double STOPPER_SHUT = 0.5;
+    public static final double STOPPER_OPEN = 1.0;
     public static final double COLIBRI_DOWN = 0.0;
     public static final double COLIBRI_UP = 0.0667;
 
@@ -98,6 +96,8 @@ public final class BiobuzzHardware {
         limelight.start();
 
         turretServo = hardwareMap.get(CRServo.class, "turret");
+        turretServo.setDirection(DcMotorSimple.Direction.REVERSE);
+        ((PwmControl) turretServo).setPwmRange(new PwmControl.PwmRange(500, 2500, 5000));
         octoquad = hardwareMap.get(OctoQuad.class, "octoquad");
         octoquad.setChannelBankConfig(OctoQuad.ChannelBankConfig.ALL_PULSE_WIDTH);
         octoquad.setSingleChannelPulseWidthParams(5, PULSE_MIN_US, PULSE_MAX_US);
@@ -108,6 +108,8 @@ public final class BiobuzzHardware {
 
         intake = hardwareMap.get(DcMotor.class, "intake");
         indexer = hardwareMap.get(DcMotor.class, "indexer");
+        intake.setDirection(DcMotorSimple.Direction.REVERSE);
+        indexer.setDirection(DcMotorSimple.Direction.REVERSE);
         shooterLeft = hardwareMap.get(DcMotorEx.class, "shooterLeft");
         shooterRight = hardwareMap.get(DcMotorEx.class, "shooterRight");
         for (DcMotor motor : new DcMotor[] {intake, indexer, shooterLeft, shooterRight}) {
@@ -142,8 +144,10 @@ public final class BiobuzzHardware {
 
     /** Where the turret points, in degrees left of the robot's front, from the two absolute encoders. */
     public static double turretDegrees(int[] pulses) {
-        double a = (pulses[5] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
-        double b = (pulses[4] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US);
+        double a = -0.01270 - (pulses[5] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
+        double b = 0.49707 - (pulses[4] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
+        a -= Math.floor(a);
+        b -= Math.floor(b);
         double difference = b - a - Math.floor(b - a);
         // The difference of their turns repeats every 1/(B - A) turret turns, a little more than one: take the window -0.5 to +0.77.
         double period = 1.0 / (TURNS_B - TURNS_A);

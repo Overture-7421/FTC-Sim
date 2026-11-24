@@ -17,7 +17,7 @@ import java.util.List;
  * team's own robots, so refitting one means editing the numbers here.
  *
  * <p>Hornet's are the numbers it was fitted on ({@code docs/robots/hornet-fit.md}). BIOBUZZ's come from the team's actuator
- * table and its CAD; the colour sensors' mounts are estimates from the geometry of the ball path, not measured.
+ * table, CAD and calibrated team code; the colour sensors' mounts are estimates from the ball path, not measured.
  */
 public final class RobotProfiles {
 
@@ -52,7 +52,7 @@ public final class RobotProfiles {
     /**
      * BIOBUZZ's robot: SWYFT Spike drive motors at 12.7:1 on 112 mm wheels, Yellow Jackets 2.5:1 to the intake and the indexer and 43:30
      * to the flywheels, an Axon Mini+ turning the turret 1.0185 turns to its one, two through-bore encoders on the turret, a Super
-     * Speed hood, and the stopper and colibri arms on 5-turn Torque servos. The sensors sit where the first and fourth ball of the
+     * Speed hood and stopper, and colibri arms on 5-turn Torque servos. The sensors sit where the first and fourth ball of the
      * queue wait, on the left wall looking right.
      */
     public static RobotMapping biobuzz() {
@@ -63,21 +63,21 @@ public final class RobotProfiles {
                         new MotorMapping("lr", Slot.REAR_LEFT, MotorCatalog.SWYFT_SPIKE, true),
                         new MotorMapping("rf", Slot.FRONT_RIGHT, MotorCatalog.SWYFT_SPIKE, false),
                         new MotorMapping("rr", Slot.REAR_RIGHT, MotorCatalog.SWYFT_SPIKE, false),
-                        new MotorMapping("intake", Slot.INTAKE, YELLOW_JACKET, false, 2.5),
-                        new MotorMapping("indexer", Slot.CONVEYOR, YELLOW_JACKET, false, 2.5),
+                        new MotorMapping("intake", Slot.INTAKE, YELLOW_JACKET, true, 2.5),
+                        new MotorMapping("indexer", Slot.CONVEYOR, YELLOW_JACKET, true, 2.5),
                         new MotorMapping("shooterLeft", Slot.SHOOTER, YELLOW_JACKET, false, 43.0 / 30.0),
                         new MotorMapping("shooterRight", Slot.SHOOTER, YELLOW_JACKET, false, 43.0 / 30.0)),
                 11.3, 112, MotorCatalog.SWYFT_SPIKE, 1.0185, "UP", "FORWARD",
                 RobotDesign.BIOBUZZ_CAMERA,
                 new TurretParts(
-                        new ServoMapping("turret", ServoCatalog.AXON_MINI_PLUS, false),
+                        new ServoMapping("turret", ServoCatalog.AXON_MINI_PLUS, true),
                         List.of(
-                                new TurretEncoder(5, ThroughBoreEncoder.V1, 5.5, 0, false),
-                                new TurretEncoder(4, ThroughBoreEncoder.V1, 44.0 / 7.0, 0, false)),
-                        0.045, 0.0, true,
+                                new TurretEncoder(5, ThroughBoreEncoder.V1, 5.5, -0.01270 * 360.0, true),
+                                new TurretEncoder(4, ThroughBoreEncoder.V1, 44.0 / 7.0, 0.49707 * 360.0, true)),
+                        3.207 * 0.0254, 0.0, true,
                         List.of(
                                 mechanism(ServoRole.HOOD, "hood", ServoCatalog.GOBILDA_SUPER_SPEED),
-                                mechanism(ServoRole.STOPPER, "brake", ServoCatalog.GOBILDA_TORQUE_5_TURN),
+                                mechanism(ServoRole.STOPPER, "brake", ServoCatalog.GOBILDA_SUPER_SPEED),
                                 mechanism(ServoRole.COLIBRI_LEFT, "colibriLeft", ServoCatalog.GOBILDA_TORQUE_5_TURN),
                                 mechanism(ServoRole.COLIBRI_RIGHT, "colibriRight", ServoCatalog.GOBILDA_TORQUE_5_TURN))),
                 12.7,

@@ -208,7 +208,8 @@ class BiobuzzPoseEstimatorTest {
                     null, null, errors, "--release", "8", "-d", out.toString(),
                     folder.resolve("BiobuzzHive.java").toString(), folder.resolve("BiobuzzPoseEstimator.java").toString(),
                     folder.resolve("BiobuzzShotSolver.java").toString(), folder.resolve("BiobuzzHiveTracker.java").toString(),
-                    folder.resolve("BiobuzzHoldShooter.java").toString());
+                    folder.resolve("BiobuzzHoldShooter.java").toString(), folder.resolve("BiobuzzShotPlan.java").toString(),
+                    folder.resolve("BiobuzzTeamTables.java").toString());
             assertEquals(0, status, errors.toString());
         } finally {
             try (var files = Files.walk(out)) {

@@ -57,12 +57,17 @@ public abstract class BiobuzzAllianceTeleOp extends OpMode {
     private double lastHeadingDegrees;
 
     protected BiobuzzAllianceTeleOp(BiobuzzHive.Alliance alliance) {
+        this(alliance, BiobuzzShotSolver.PLAN);
+    }
+
+    /** The same program with another way to decide the shot, such as {@link BiobuzzTeamTables}. */
+    protected BiobuzzAllianceTeleOp(BiobuzzHive.Alliance alliance, BiobuzzShotPlan plan) {
         this.alliance = alliance;
         double side = alliance.sign();
         // The red wall is at negative Y and its robot faces +Y; the blue one is the same turned half a turn.
         estimator = new BiobuzzPoseEstimator(new BiobuzzPoseEstimator.Pose(0.0, side * WALL_START_Y, -side * Math.PI / 2.0), true);
         tracker = new BiobuzzHiveTracker(alliance);
-        shooter = new BiobuzzHoldShooter(alliance);
+        shooter = new BiobuzzHoldShooter(alliance, plan);
     }
 
     @Override
