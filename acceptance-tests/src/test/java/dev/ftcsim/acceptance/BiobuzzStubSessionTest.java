@@ -227,7 +227,7 @@ class BiobuzzStubSessionTest {
             }
 
             assertEquals(1.0, joint(session, RobotJoint.HOOD), 0.2, "the hood stands at the bottom of its range, 1 degree");
-            assertEquals(45.0, joint(session, RobotJoint.STOPPER), 0.5, "the stopper is shut (below the 60 degrees at which it lets a ball by)");
+            assertEquals(150.0, joint(session, RobotJoint.STOPPER), 0.5, "the calibrated stopper is shut at position 0.5");
             assertEquals(0.0, joint(session, RobotJoint.COLIBRI_LEFT), 0.5);
             double wheel = joint(session, RobotJoint.WHEEL_FRONT_LEFT);
 
@@ -256,7 +256,7 @@ class BiobuzzStubSessionTest {
             session.setGamepad(1, pad(0f, 0f, false, false, true, true));
             session.runFor(SECOND);
             note(session, atRest, moved);
-            assertEquals(75.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the stopper's servo to 0.0417, 75 of its 1800 degrees: past the 60 at which it lets a ball by");
+            assertEquals(300.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the Super Speed stopper to its calibrated open position, 1.0");
             assertEquals(0.0667 * 1800.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
             assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
 
@@ -307,7 +307,7 @@ class BiobuzzStubSessionTest {
             for (int i = 0; i < 24; i++) {
                 boolean left = i < 9;
                 session.setGamepad(1, turretPad(left, !left, false));
-                session.runFor(SECOND * 9 / 50);
+                session.runFor(SECOND * 81 / 500);
                 session.setGamepad(1, turretPad(false, false, false));
                 session.runFor(SECOND / 2);
                 double truth = Math.toDegrees(session.rig().turretYawRadians());

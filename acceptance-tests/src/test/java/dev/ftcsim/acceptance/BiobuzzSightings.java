@@ -14,7 +14,7 @@ import java.util.Map;
  */
 final class BiobuzzSightings {
     private static final double BODY_CENTRE_HEIGHT = 0.1824;
-    private static final double CAMERA_Z = 0.256;
+    private static final double CAMERA_Z = 0.243939;
 
     private BiobuzzSightings() {}
 

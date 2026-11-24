@@ -13,7 +13,7 @@ This page lists the fitted drivetrain and shooter numbers of the fixed DECODE ro
 | `forwardZeroPowerAcceleration`, in/s^2 | -32.88 | -32.75 | -0.4 % |
 | `lateralZeroPowerAcceleration`, in/s^2 | -72.06 | -73.03 | +1.3 % |
 
-Measured by Pedro's own tuners on the simulated robot (`HornetBringupTest#pedrosOwnTunersMeasureTheSimulatedDrivetrain`, needs the Hornet package; it only reports and asserts nothing). The unfitted generic robot reached 86.33 and 84.29 in/s and slowed by only about 0.5 in/s^2 forward (it rolled on for 66 s and 13 m) and 1.54 in/s^2 sideways. `HornetDrivetrainCalibrationTest` (no Hornet package) repeats the four measurements on the chassis and keeps all four within 5 %. It reads the exact speed and floats the motors at once, so it differs a little from the tuners (worst case +3.2 % on the forward deceleration); in the tuners the motors float about 25 ms after the speed passes 30 in/s, and they read the Pinpoint's quantised speed.
+Measured by Pedro's own tuners on the simulated robot (`HornetBringupTest#pedrosOwnTunersMeasureTheSimulatedDrivetrain`, needs the Hornet package; it only reports and asserts nothing). The unfitted generic robot reached 86.33 and 84.29 in/s and slowed by only about 0.5 in/s^2 forward (it rolled on for 66 s and 13 m) and 1.54 in/s^2 sideways. `DrivetrainCalibrationTest` (no Hornet package) repeats the four measurements on the chassis and keeps all four within 5 %, for both robots (BIOBUZZ's: [fixed-robots](fixed-robots.md)). It reads the exact speed and floats the motors at once, so it differs a little from the tuners (worst case +3.2 % on the forward deceleration); in the tuners the motors float about 25 ms after the speed passes 30 in/s, and they read the Pinpoint's quantised speed.
 
 ## Chassis numbers
 
@@ -81,7 +81,7 @@ All 99 stances score for both alliances (unfitted robot: 69 of 99, none from 35 
 | Result | Command |
 |---|---|
 | Pedro's tuners | `.\gradlew.bat --console=plain -q :acceptance-tests:test --tests '*HornetBringupTest.pedrosOwnTunersMeasureTheSimulatedDrivetrain' '-Pftcsim.hornetPackage=<imported Hornet package>'` |
-| Drivetrain calibration | `.\gradlew.bat --console=plain -q :acceptance-tests:test --tests '*HornetDrivetrainCalibrationTest'` |
+| Drivetrain calibration | `.\gradlew.bat --console=plain -q :acceptance-tests:test --tests '*DrivetrainCalibrationTest'` |
 | Shot sweep | `.\gradlew.bat --console=plain :simulator:test --tests '*ShotSweepTest' -i` |
 | Hornet autos | `.\gradlew.bat --console=plain -q :acceptance-tests:test --tests '*HornetAutoRunTest' '-Pftcsim.hornetPackage=<imported Hornet package>'` |
 

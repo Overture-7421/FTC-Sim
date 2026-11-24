@@ -124,6 +124,24 @@ public final class BiobuzzShotSolver {
     private static final double WRONG_SIDE_M = 0.35;
     private static final double TOO_CLOSE_M = 0.9;
 
+    /** The plan that works the shot out from the CELL's geometry. */
+    public static final BiobuzzShotPlan PLAN = new BiobuzzShotPlan() {
+        @Override
+        public Solution solve(BiobuzzPoseEstimator.Pose pose, BiobuzzHive.Alliance alliance, BiobuzzHive.Tilt tilt, double previousHood) {
+            return BiobuzzShotSolver.solve(pose, alliance, tilt, previousHood);
+        }
+
+        @Override
+        public double bearingDegrees(BiobuzzPoseEstimator.Pose pose, BiobuzzHive.Alliance alliance, BiobuzzHive.Tilt tilt) {
+            return BiobuzzShotSolver.bearingDegrees(pose, alliance, tilt);
+        }
+
+        @Override
+        public double nominalTicks(BiobuzzPoseEstimator.Pose pose, BiobuzzHive.Alliance alliance, BiobuzzHive.Tilt tilt) {
+            return BiobuzzShotSolver.nominalTicks(pose, alliance, tilt);
+        }
+    };
+
     private BiobuzzShotSolver() {}
 
     /**

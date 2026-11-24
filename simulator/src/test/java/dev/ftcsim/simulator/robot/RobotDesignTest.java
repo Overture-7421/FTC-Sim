@@ -241,7 +241,7 @@ class RobotDesignTest {
         assertEquals(0.048, decode.chassis().wheelRadiusM(), 1e-9);
         assertEquals(0.0381 / (43.0 / 30.0), biobuzz.launches().get(0).wheels().get(0).radiusM(), 1e-9,
                 "a 3 in wheel behind a 43:30 belt, per radian of the motor");
-        assertEquals(new StorageSpec.Gate(4, "brake", Math.toRadians(60.0)), biobuzz.storages().get(0).gate(),
+        assertEquals(new StorageSpec.Gate(4, "brake", Math.toRadians(225.0)), biobuzz.storages().get(0).gate(),
                 "the stopper holds the pieces at the foot of the column");
         assertNull(decode.storages().get(0).gate());
         assertEquals(0.02 / 2.5, biobuzz.storages().get(0).drives().get(1).radiusM(), 1e-12, "the indexer's rollers turn at the motor speed divided by 2.5");
@@ -249,7 +249,7 @@ class RobotDesignTest {
         assertEquals(43.0 / 30.0, biobuzz.joints().flywheelRatio(), 1e-12, "and the picture turns the flywheel by it");
         assertEquals(2.5, biobuzz.joints().conveyorRatio(), 1e-12);
         assertEquals(2.5, biobuzz.joints().intakeRatio(), 1e-12);
-        assertEquals(List.of(Condition.atLeast("indexer", 20.0 * 2.5)), biobuzz.launches().get(0).active(), "the belt feeds when the indexer, not the motor, turns fast enough");
+        assertEquals(List.of(Condition.atMost("indexer", -20.0 * 2.5)), biobuzz.launches().get(0).active(), "the reversed indexer feeds when its rollers turn fast enough");
     }
 
     @Test

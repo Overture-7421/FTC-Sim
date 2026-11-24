@@ -63,19 +63,23 @@ One colour sensor, `upSensor`, on the Control Hub's I2C bus 2, 0.12 m behind the
 
 ### BIOBUZZ's profile
 
-From the team's table of its mechanisms and its CAD (the part is the simulator's model of it, `RobotDesign`, `MotorCatalog`, `ServoCatalog`). Name `BIOBUZZ`, 112 mm wheels, hub `UP`/`FORWARD`, Limelight on the turret at `RobotDesign.BIOBUZZ_CAMERA` (0.217, 0.0035, 0.256 m, pitch 45 degrees).
+From the team's calibrated robot code (`Overture/FRC-23619-2027`, commit `20d6904`), its table of mechanisms and its CAD (the part is the simulator's model of it, `RobotDesign`, `MotorCatalog`, `ServoCatalog`). Name `BIOBUZZ`, 112 mm wheels, hub `UP`/`FORWARD`, Limelight on the turret at `RobotDesign.BIOBUZZ_CAMERA` (0.2176, 0, 0.2439 m from the chassis centre: 5.361 in ahead of the turret pivot, 16.785 in above the floor, pitch 45 degrees).
 
 | Mechanism | Motor or servo | Ratio | In the simulator |
 |---|---|---|---|
-| Chassis (4: `lf`, `lr` mirrored, `rf`, `rr`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm |
-| Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5 |
+| Chassis (4: `lf`, `lr` mirrored, `rf`, `rr`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm. Losses fitted to the team's Pedro measurements (below) |
+| Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm, both inverted in the code | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5, mirrored |
 | Shooter (`shooterLeft`, `shooterRight`) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio 43/30; a ball leaves at 0.49 of the rim speed of a 3 in wheel (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
-| Turret (`turret`) | Axon Mini servo | 1.0185 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 1.0185 |
+| Turret (`turret`) | Axon Mini servo, inverted in the code | 1.0185 servo to turret | `axon-mini-plus`, mirrored (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 1.0185 |
 | Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 5 turns | 40/30 servo to shaft | `gobilda-2000-torque-5turn`, `COLIBRI_RATIO` |
 | Hood (`hood`) | goBILDA Super Speed servo, 300 degrees | 365/72 = 5.0694 servo to hood | `gobilda-2000-superspeed`, `HOOD_RATIO` |
-| Stopper (`brake`) | goBILDA Torque servo, 5 turns | 1:1 | `gobilda-2000-torque-5turn`; it holds the balls at the foot of the column while shut (below) |
-| Turret encoders | REV Through Bore Encoders on the OctoQuad | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1` |
-| Turret axis | | | x 0.045 m, y 0 (team code) |
+| Stopper (`brake`) | goBILDA Super Speed servo, 300 degrees (the owner's word; the code only commands 0.5 shut and 1.0 open) | 1:1 | `gobilda-2000-superspeed`; it holds the balls at the foot of the column while shut (below) |
+| Turret encoders | REV Through Bore Encoders (V1 pulse, 1 to 1024) on the OctoQuad, both inverted | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1`, mirrored, zero offsets -0.01270 turn (channel 5) and 0.49707 turn (channel 4) from the code's calibration |
+| Turret axis | | | x 3.207 in = 0.0814578 m, y 0 (team code) |
+
+**Drivetrain fit.** The Pedro constants in the team's `Constants` (forward and strafe top speeds 75.99 and 60.57 in/s, natural decelerations 29.97 and 62.23 in/s^2) are met within 5 % by `DrivetrainCalibrationTest`: 75.03 (-1.3 %), 59.35 (-2.0 %), -29.39 (-1.9 %) and -63.90 (+2.7 %). Changed from Hornet's fit: wheel damping 0.0172 N m s/rad, roller viscous drag 1.7 N s/m, wheel friction 0.05 N m, roller rolling resistance 0.044, which are fitted values, not measured ones (see [hornet-fit](hornet-fit.md) for the method). The Pinpoint pod offsets in the code are accepted and ignored: the Pinpoint is ideal.
+
+**Not modelled from the code:** the stopper's real gate geometry (released at 225 degrees, halfway between the two commanded positions), the colibri arms (the code disables them: `Arm.enabled = false`), and the shot tables (`LaunchConstants`: the team's own flywheel speed and hood tables are not used; the simulator shoots with the efficiency 0.49 fit).
 
 **Colour sensors** (REV Color Sensor V3, two, found by name): `upperSensor` before the stopper, `lowerSensor` near the intake. The sensor sees one ball position along the path ([biobuzz-cad](biobuzz-cad.md): the stopper is the gate at path point 4, and the queue is 0.0711 m apart, a POLLEN's diameter). Both are on the robot's left wall at y = +0.065 m looking right (azimuth -90 degrees), so a ball in front is 2.9 cm from the sensor's face (Hornet's is about 2.7 cm, where its code reads under 5 cm as "a ball").
 
@@ -123,7 +127,7 @@ BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the ho
 | Part | What it does in the simulation |
 |---|---|
 | Hood | Sets the launch elevation: 45 degrees at the servo's 0 plus the hood's angle, which is the servo's angle over 5.0694 (365:72 gears, the team's table), up to the hood's stop at **44 degrees**: 45 degrees at position 0, 89 from position 0.7435 of the Super Speed servo on (`HOOD_RANGE_RADIANS`). The CAD allows only 1 to 25 degrees; the stop is widened so that a HIVE's CELL, which is open only at the end of its arm, can be reached with a steep lob from near and from far ([biobuzz-stub](biobuzz-stub.md)). A robot with no hood servo launches at its fixed 55 degrees |
-| Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 60 degrees (position 0.0333 of its 1800 degrees), whatever the belt and flywheels do. A robot with no stopper servo has nothing holding it |
+| Stopper | Holds the piece at the end of the indexer: no piece leaves until its servo has turned 225 degrees (halfway between the team's 0.5 shut and 1.0 open on a 300 degree Super Speed servo), whatever the belt and flywheels do. A robot with no stopper servo has nothing holding it |
 | Colibri arms | A 3D-printed plate joins the two Lexan arms across their noses. Both arms and the contact surface use the same angle. When the servos disagree, the model averages their geared shaft angles as an equal-strength approximation. Raising the plate nudges the bottom POLLEN over the lip and lets the stack fall toward the intake. Intake checks for static obstructions at the centre and underside of the ball |
 
 All four are estimates where the CAD has no number ([biobuzz-cad](biobuzz-cad.md)). Verified by `PositionServoPlantTest`, `MechanismsSessionTest` (the `Hood Stopper` fixture: closed stopper holds, open releases, the hood changes the elevation by 9.9 degrees) and `BiobuzzStubSessionTest`.

@@ -32,8 +32,8 @@ class BiobuzzShotSolverTest {
         double heading = pose.heading() + Math.toRadians(solution.bearingDegrees);
         // Where the ball leaves, worked out here from the CAD's wheels and hood rather than taken from the solver.
         double ahead = 0.162 - 0.0737 * Math.sin(theta);
-        double x = pose.x() + 0.045 * Math.cos(pose.heading()) + (ahead - 0.045) * Math.cos(heading);
-        double y = pose.y() + 0.045 * Math.sin(pose.heading()) + (ahead - 0.045) * Math.sin(heading);
+        double x = pose.x() + 0.0814578 * Math.cos(pose.heading()) + (ahead - 0.0814578) * Math.cos(heading);
+        double y = pose.y() + 0.0814578 * Math.sin(pose.heading()) + (ahead - 0.0814578) * Math.sin(heading);
         double z = 0.1824 + 0.2146 + 0.0737 * Math.cos(theta);
         double vx = speed * Math.cos(theta) * Math.cos(heading);
         double vy = speed * Math.cos(theta) * Math.sin(heading);
@@ -139,8 +139,8 @@ class BiobuzzShotSolverTest {
     void theTurretsBearingIsTheDirectionOfTheMouthFromItsAxisWhateverTheRobotsHeading() {
         for (double heading : new double[] {0.0, 1.0, 2.5, -2.0}) {
             Pose pose = new Pose(1.4, -1.0, heading);
-            double axisX = 1.4 + 0.045 * Math.cos(heading);
-            double axisY = -1.0 + 0.045 * Math.sin(heading);
+            double axisX = 1.4 + 0.0814578 * Math.cos(heading);
+            double axisY = -1.0 + 0.0814578 * Math.sin(heading);
             double[] aim = BiobuzzHive.upCell(Alliance.RED, Tilt.AUDIENCE_UP).aimPoint();
             double expected = Math.toDegrees(Math.atan2(aim[1] - axisY, aim[0] - axisX) - heading);
             assertEquals(0.0, Math.IEEEremainder(BiobuzzShotSolver.bearingDegrees(pose, Alliance.RED, Tilt.AUDIENCE_UP) - expected, 360.0), 1e-9);
