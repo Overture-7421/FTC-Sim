@@ -56,7 +56,7 @@ Version 1 (importer revision 1, no `importerRevision`, no `resources.javaResourc
 
 ### Importer revision
 
-`ProjectImporter.IMPORTER_REVISION` (2) is written into every package and read back by `PreparedProgram.importerRevision()`. **Raise it whenever a package would come out different or better**, so a program that keeps packages (the acceptance tests keep Hornet's in `%LOCALAPPDATA%\FTC-Sim\hornet-package`: `HornetFixture`) can tell a stale one and prepare again. Revision 2 added the libraries' Java resources; an older package still opens, with one more finding, `JAVA_RESOURCES_MISSING`, made on reading.
+`ProjectImporter.IMPORTER_REVISION` (3) is written into every package and read back by `PreparedProgram.importerRevision()`. **Raise it whenever a package would come out different or better**, so a program that keeps packages (`ImporterPreparer` in `app`, and `HornetFixture` in the acceptance tests) can tell a stale one and prepare again. Revision 2 added the libraries' Java resources; an older package still opens, with one more finding, `JAVA_RESOURCES_MISSING`, made on reading. Revision 3 added `dimen` values (with `@dimen/` reference resolution) to `ftcsim-resources.tsv`.
 
 ### Using a package
 
@@ -101,7 +101,7 @@ Static and cheap. Each warning gives a class and, where it applies, a method. Th
 
 `ResourceBuilder` (`dev.ftcsim.importer.resources`) reads each AAR's `R.txt` and `res/values` and the project modules' `res` folders, and writes `r.jar` (R classes as ASM bytecode, so no compiler; ids sorted for equal bytes), `ftcsim-resources.tsv` and `assets/`.
 
-- The table has strings, integers, booleans and colours (references resolved; later libraries override earlier, the application last). Other resource types get ids but no row.
+- The table has strings, integers, booleans, colours and dimensions (references resolved; later libraries override earlier, the application last). Other resource types get ids but no row.
 - The shim's `Resources` reads the table and its `AssetManager` reads `assets/`.
 - **Not generated:** the styleable arrays of the team's own `res` folders (libraries' come from their `R.txt`).
 - `acceptance-tests` runs the same code as a `JavaExec` (`GenerateResources`), so tests and importer cannot differ.

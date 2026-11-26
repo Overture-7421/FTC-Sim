@@ -46,6 +46,21 @@ public abstract class ViewGroup extends View {
         }
     }
 
+    @Override
+    public synchronized <T extends View> T findViewById(int id) {
+        T self = super.findViewById(id);
+        if (self != null) {
+            return self;
+        }
+        for (View child : children) {
+            T found = child.findViewById(id);
+            if (found != null) {
+                return found;
+            }
+        }
+        return null;
+    }
+
     /** How a view asks its parent to size it. */
     public static class LayoutParams {
         public static final int MATCH_PARENT = -1;

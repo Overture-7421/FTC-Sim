@@ -313,6 +313,12 @@ final class ImporterPreparer implements ProgramPreparer, AutoCloseable {
                 if (!program.manifest().project().sourceFingerprint().equals(fingerprint)) {
                     return null;
                 }
+                if (program.importerRevision() < ProjectImporter.IMPORTER_REVISION) {
+                    delivery.output("The program prepared earlier in " + folder + " was made by importer revision "
+                            + program.importerRevision() + " (current is " + ProjectImporter.IMPORTER_REVISION
+                            + "), so it is made again.");
+                    return null;
+                }
                 return describe(program.manifest(), folder, logOf(folder));
             } catch (PackageException damaged) {
                 delivery.output("The program prepared earlier in " + folder + " cannot be used (" + ProgramInspector.firstProblem(damaged)

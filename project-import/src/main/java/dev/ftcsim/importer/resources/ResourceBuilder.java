@@ -167,12 +167,15 @@ public final class ResourceBuilder {
     /** One line per resource of a kind the simulator answers: type, id, name and value, tab separated. */
     private int writeTable(Path file, Map<String, Integer> ids) throws IOException {
         Map<String, String> strings = new HashMap<>();
+        Map<String, String> dimensions = new HashMap<>();
         SortedMap<Key, ResourceLibrary.Value> effective = new TreeMap<>();
         for (ResourceLibrary library : libraries) {
             for (ResourceLibrary.Value value : library.values) {
                 effective.put(new Key(value.type(), value.name()), value);
                 if (value.type().equals("string")) {
                     strings.put(value.name(), value.text());
+                } else if (value.type().equals("dimen")) {
+                    dimensions.put(value.name(), value.text());
                 }
             }
         }
@@ -183,9 +186,11 @@ public final class ResourceBuilder {
             if (id == null) {
                 continue;
             }
-            String text = value.type().equals("string")
-                    ? ResourceValues.resolveReference(ResourceValues.resolveString(value.text()), strings)
-                    : value.text().trim();
+            String text = switch (value.type()) {
+                case "string" -> ResourceValues.resolveReference(ResourceValues.resolveString(value.text()), strings);
+                case "dimen" -> ResourceValues.resolveDimenReference(value.text().trim(), dimensions);
+                default -> value.text().trim();
+            };
             table.append(value.type()).append("\t0x").append(Integer.toHexString(id)).append('\t').append(value.name())
                     .append('\t').append(ResourceValues.escape(text)).append('\n');
             rows++;
