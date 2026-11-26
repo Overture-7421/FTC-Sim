@@ -51,7 +51,7 @@ public final class RobotProfiles {
 
     /**
      * BIOBUZZ's robot: SWYFT Spike drive motors at 12.7:1 on 112 mm wheels, Yellow Jackets 2.5:1 to the intake and the indexer and 43:30
-     * to the flywheels, an Axon Mini+ turning the turret 1.0185 turns to its one, two through-bore encoders on the turret, a Super
+     * to the flywheels, an Axon Mini+ turning the turret 2.75 turns to its one, two through-bore encoders on the turret, a Super
      * Speed hood and stopper, and colibri arms on 5-turn Torque servos. The sensors sit where the first and fourth ball of the
      * queue wait, on the left wall looking right.
      */
@@ -67,7 +67,7 @@ public final class RobotProfiles {
                         new MotorMapping("indexer", Slot.CONVEYOR, YELLOW_JACKET, true, 2.5),
                         new MotorMapping("shooterLeft", Slot.SHOOTER, YELLOW_JACKET, false, 43.0 / 30.0),
                         new MotorMapping("shooterRight", Slot.SHOOTER, YELLOW_JACKET, false, 43.0 / 30.0)),
-                11.3, 112, MotorCatalog.SWYFT_SPIKE, 1.0185, "UP", "FORWARD",
+                11.3, 112, MotorCatalog.SWYFT_SPIKE, 2.75, "UP", "FORWARD",
                 RobotDesign.BIOBUZZ_CAMERA,
                 new TurretParts(
                         new ServoMapping("turret", ServoCatalog.AXON_MINI_PLUS, true),
