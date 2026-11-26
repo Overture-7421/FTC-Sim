@@ -70,7 +70,7 @@ From the team's calibrated robot code (`Overture/FRC-23619-2027`, commit `20d690
 | Chassis (4: `lf`, `lr` mirrored, `rf`, `rr`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm. Losses fitted to the team's Pedro measurements (below) |
 | Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm, both inverted in the code | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5, mirrored |
 | Shooter (`shooterLeft`, `shooterRight`) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio 43/30; a ball leaves at 0.49 of the rim speed of a 3 in wheel (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
-| Turret (`turret`) | Axon Mini servo, inverted in the code | 1.0185 servo to turret | `axon-mini-plus`, mirrored (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 1.0185 |
+| Turret (`turret`) | Axon Mini servo, inverted in the code | 2.75 servo to turret | `axon-mini-plus`, mirrored (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 2.75 |
 | Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 5 turns | 40/30 servo to shaft | `gobilda-2000-torque-5turn`, `COLIBRI_RATIO` |
 | Hood (`hood`) | goBILDA Super Speed servo, 300 degrees | 365/72 = 5.0694 servo to hood | `gobilda-2000-superspeed`, `HOOD_RATIO` |
 | Stopper (`brake`) | goBILDA Super Speed servo, 300 degrees (the owner's word; the code only commands 0.5 shut and 1.0 open) | 1:1 | `gobilda-2000-superspeed`; it holds the balls at the foot of the column while shut (below) |
@@ -105,7 +105,7 @@ At the start the four preloads wait at the stopper, so both read a ball; after f
 
 ### A turret turned by a continuous-rotation servo
 
-BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 1.0185 turns of servo to one of the turret. The servo is a `CRServo` in the code, found by the name `turret`. A turret has a motor or a servo, not both.
+BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Control Hub's servo port 0, 2.75 turns of servo to one of the turret. The servo is a `CRServo` in the code, found by the name `turret`. A turret has a motor or a servo, not both.
 
 | Part | Model |
 |---|---|

@@ -68,7 +68,7 @@ class RobotProfilesTest {
         assertEquals(112.0, biobuzz.wheelDiameterMm());
         assertEquals("swyft-spike-6000", biobuzz.driveMotor());
         assertEquals(12.7, biobuzz.driveRatio());
-        assertEquals(1.0185, biobuzz.turretRatio());
+        assertEquals(2.75, biobuzz.turretRatio());
         assertEquals("UP", biobuzz.hubLogo());
         assertEquals("FORWARD", biobuzz.hubUsb());
         CameraMount camera = biobuzz.camera();

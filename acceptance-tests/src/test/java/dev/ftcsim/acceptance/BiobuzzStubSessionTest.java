@@ -307,7 +307,7 @@ class BiobuzzStubSessionTest {
             for (int i = 0; i < 24; i++) {
                 boolean left = i < 9;
                 session.setGamepad(1, turretPad(left, !left, false));
-                session.runFor(SECOND * 81 / 500);
+                session.runFor(SECOND * 219 / 500);
                 session.setGamepad(1, turretPad(false, false, false));
                 session.runFor(SECOND / 2);
                 double truth = Math.toDegrees(session.rig().turretYawRadians());
