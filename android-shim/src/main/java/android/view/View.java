@@ -50,6 +50,12 @@ public class View {
         this.layoutParams = params;
     }
 
+    /** Returns this view when its id matches {@code id}, or null otherwise. */
+    @SuppressWarnings("unchecked")
+    public <T extends View> T findViewById(int id) {
+        return id != NO_ID && this.id == id ? (T) this : null;
+    }
+
     /** Called when a view has been clicked. */
     public interface OnClickListener {
         void onClick(View v);

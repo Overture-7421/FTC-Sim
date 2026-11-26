@@ -1,5 +1,7 @@
 package android.content.pm;
 
+import android.Unsupported;
+
 /** Knowledge about the applications installed on the device; the simulator supplies the concrete subclass. */
 public abstract class PackageManager {
 
@@ -11,4 +13,8 @@ public abstract class PackageManager {
     }
 
     public abstract ApplicationInfo getApplicationInfo(String packageName, int flags) throws NameNotFoundException;
+
+    public PackageInfo getPackageInfo(String packageName, int flags) throws NameNotFoundException {
+        throw Unsupported.member("android.content.pm.PackageManager", "getPackageInfo(" + packageName + ", " + flags + ")");
+    }
 }

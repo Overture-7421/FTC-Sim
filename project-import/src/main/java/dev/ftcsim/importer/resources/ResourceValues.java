@@ -6,7 +6,8 @@ import java.util.regex.Pattern;
 
 /** How Android reads the text of a value resource, and how a value is written to the resource table. */
 final class ResourceValues {
-    private static final Pattern STRING_REFERENCE = Pattern.compile("@string/(\\w+)");
+    private static final Pattern STRING_REFERENCE = Pattern.compile("@string/([A-Za-z0-9_.]+)");
+    private static final Pattern DIMEN_REFERENCE = Pattern.compile("@dimen/([A-Za-z0-9_.]+)");
 
     private ResourceValues() {}
 
@@ -59,8 +60,25 @@ final class ResourceValues {
         if (!reference.matches()) {
             return value;
         }
-        String target = strings.get(reference.group(1));
+        String target = strings.get(ValuesXml.symbolName(reference.group(1)));
         return target == null ? value : resolveString(target);
+    }
+
+    /** A value that is nothing but {@code @dimen/other} stands for that dimension's value. */
+    static String resolveDimenReference(String value, Map<String, String> dimensions) {
+        String current = value;
+        for (int hops = 0; hops < 8; hops++) {
+            Matcher reference = DIMEN_REFERENCE.matcher(current);
+            if (!reference.matches()) {
+                return current;
+            }
+            String target = dimensions.get(ValuesXml.symbolName(reference.group(1)));
+            if (target == null) {
+                return current;
+            }
+            current = target.trim();
+        }
+        return current;
     }
 
     /** The table is one resource per line, so backslash, newline, tab and carriage return are escaped. */

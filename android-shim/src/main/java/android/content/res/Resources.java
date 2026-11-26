@@ -1,18 +1,22 @@
 package android.content.res;
 
+import android.Unsupported;
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.lang.reflect.Proxy;
 import java.net.URL;
 import java.net.URLConnection;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.Enumeration;
 import java.util.HashMap;
 import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import org.xmlpull.v1.XmlPullParser;
 
 /**
  * Access to the application's resources by id. On a device the ids come from the linked resource table of the
@@ -150,6 +154,38 @@ public class Resources {
             return rounded;
         }
         return dimension == 0 ? 0 : dimension > 0 ? 1 : -1;
+    }
+
+    /**
+     * An XML pull parser for a compiled XML resource. The desktop simulator does not ship compiled Android XML
+     * resources (robot configurations are built into the simulator), so every XML resource parses as an empty document
+     * positioned at {@link XmlPullParser#END_DOCUMENT}.
+     */
+    public XmlResourceParser getXml(int id) {
+        return (XmlResourceParser) Proxy.newProxyInstance(
+                XmlResourceParser.class.getClassLoader(),
+                new Class<?>[] {XmlResourceParser.class},
+                (proxy, method, args) -> {
+                    if (method.getDeclaringClass() == Object.class) {
+                        return switch (method.getName()) {
+                            case "toString" -> "empty XmlResourceParser(#0x" + Integer.toHexString(id) + ")";
+                            case "hashCode" -> System.identityHashCode(proxy);
+                            default -> proxy == args[0];
+                        };
+                    }
+                    return switch (method.getName()) {
+                        case "getEventType", "next", "nextToken" -> XmlPullParser.END_DOCUMENT;
+                        case "getDepth" -> 0;
+                        case "getLineNumber", "getColumnNumber" -> -1;
+                        case "close" -> null;
+                        default -> {
+                            String signature = method.getName()
+                                    + Arrays.stream(method.getParameterTypes()).map(Class::getSimpleName).toList();
+                            throw Unsupported.member(
+                                    XmlResourceParser.class.getName(), signature.replace('[', '(').replace(']', ')'));
+                        }
+                    };
+                });
     }
 
     private static String lookup(Map<Integer, String> values, int id, String kind) {

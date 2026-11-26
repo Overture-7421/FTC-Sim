@@ -54,7 +54,7 @@ public record PackageManifest(
     /** The oldest format version that is still read; it is read as a version {@value #VERSION} manifest of importer revision 1 without Java resources. */
     public static final int OLDEST_VERSION = 1;
     /** The revision of the importer in this build: raise it whenever a package would come out different or better. */
-    public static final int IMPORTER_REVISION = 2;
+    public static final int IMPORTER_REVISION = 3;
     /** The first importer revision that puts the Java resources of the libraries into a package; packages of older ones lack them. */
     public static final int JAVA_RESOURCES_REVISION = 2;
 

@@ -77,7 +77,9 @@ final class RewriteRules {
 
     static RewriteRules standard() {
         return new RewriteRules(
-                Stream.of(clockAndMonitorRules(), NetworkRules.all(), TimeRules.all()).flatMap(List::stream).toList(),
+                Stream.of(clockAndMonitorRules(), NetworkRules.all(), TimeRules.all(), ReflectRules.all())
+                        .flatMap(List::stream)
+                        .toList(),
                 // Where the SDK's pool threads begin; the thread that runs OpMode code is one of them.
                 List.of(new EntryHook("com/qualcomm/robotcore/util/ThreadPool$ThreadFactoryImpl$1", "run", "()V", "threadStarted")),
                 TimeRules.seeded());

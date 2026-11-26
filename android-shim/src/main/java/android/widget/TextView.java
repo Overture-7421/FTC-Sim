@@ -8,6 +8,7 @@ import android.view.View;
 public class TextView extends View {
     private CharSequence text = "";
     private int textColor = 0xff000000;
+    private float textSize = 14f;
     private Typeface typeface = Typeface.DEFAULT;
 
     public TextView(Context context) {
@@ -28,6 +29,14 @@ public class TextView extends View {
 
     public void setTextColor(int color) {
         this.textColor = color;
+    }
+
+    public float getTextSize() {
+        return textSize;
+    }
+
+    public void setTextSize(float size) {
+        this.textSize = size;
     }
 
     public Typeface getTypeface() {

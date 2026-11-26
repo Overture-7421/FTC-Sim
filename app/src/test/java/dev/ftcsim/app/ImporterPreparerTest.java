@@ -236,6 +236,23 @@ class ImporterPreparerTest {
     }
 
     @Test
+    void aProgramPreparedByAnOlderImporterRevisionIsBuiltAgain() throws Exception {
+        Prepared first = prepare(true).finished;
+        Path manifest = first.folder().resolve("manifest.json");
+        int current = dev.ftcsim.importer.ProjectImporter.IMPORTER_REVISION;
+        Files.writeString(
+                manifest,
+                Files.readString(manifest)
+                        .replace("\"importerRevision\" : " + current, "\"importerRevision\" : " + (current - 1)));
+
+        Recorder again = prepare(true);
+
+        assertNull(again.failure, String.valueOf(again.failure));
+        assertEquals(2, builds.get(), "an older importer revision triggers a fresh build");
+        assertEquals(current, PreparedProgram.open(again.finished.folder()).importerRevision());
+    }
+
+    @Test
     void changedSourceIsBuiltAgainIntoAnotherFolderAndTheOlderProgramIsLeftAlone() throws Exception {
         Prepared first = prepare(true).finished;
         FakeBuild.write(project.resolve("TeamCode").resolve("src").resolve("main").resolve("java").resolve("Drive.java"), "class Drive { int changed; }");

@@ -60,4 +60,13 @@ class ResourcesTest {
         assertThrows(Resources.NotFoundException.class, () -> resources.getDimension(0x7f0f0001));
         assertThrows(Resources.NotFoundException.class, () -> resources.getDimension(0));
     }
+
+    @Test
+    void xmlResourcesParseAsEmptyDocumentsAndFailLoudlyOnUnsupportedCalls() throws Exception {
+        try (XmlResourceParser parser = resources.getXml(0x7f090001)) {
+            assertEquals(org.xmlpull.v1.XmlPullParser.END_DOCUMENT, parser.getEventType());
+            assertEquals(org.xmlpull.v1.XmlPullParser.END_DOCUMENT, parser.next());
+            assertThrows(UnsupportedOperationException.class, parser::getName);
+        }
+    }
 }

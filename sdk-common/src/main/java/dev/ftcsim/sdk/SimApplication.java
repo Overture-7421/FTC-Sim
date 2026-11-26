@@ -4,6 +4,7 @@ import android.app.Application;
 import android.app.UiModeManager;
 import android.content.Context;
 import android.content.pm.ApplicationInfo;
+import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.hardware.usb.UsbManager;
 import android.net.wifi.WifiManager;
@@ -27,6 +28,16 @@ final class SimApplication extends Application {
             ApplicationInfo info = new ApplicationInfo();
             info.packageName = packageName;
             info.sourceDir = codePath;
+            return info;
+        }
+
+        @Override
+        public PackageInfo getPackageInfo(String packageName, int flags) throws NameNotFoundException {
+            if (!ROBOT_CONTROLLER_PACKAGE.equals(packageName)) {
+                throw new NameNotFoundException(packageName);
+            }
+            PackageInfo info = new PackageInfo();
+            info.packageName = packageName;
             return info;
         }
     };

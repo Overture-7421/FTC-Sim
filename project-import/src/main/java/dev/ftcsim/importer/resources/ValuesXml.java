@@ -15,7 +15,7 @@ import org.xml.sax.SAXException;
 /** Reads the {@code res/values} files of Android resources. The files come from libraries, so no DTD is honoured. */
 final class ValuesXml {
     /** The kinds of value the simulator's Android layer can answer by id. */
-    static final Set<String> READABLE_TYPES = Set.of("string", "integer", "bool", "color");
+    static final Set<String> READABLE_TYPES = Set.of("string", "integer", "bool", "color", "dimen");
 
     private ValuesXml() {}
 

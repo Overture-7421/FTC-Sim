@@ -160,6 +160,8 @@ class ResourceBuilderTest {
         Files.createDirectories(res.resolve("xml"));
         Files.writeString(res.resolve("values/strings.xml"), Fixtures.values(
                 "<string name=\"team.name\">  Team   \\\"7421\\\"  </string>",
+                "<dimen name=\"activity_horizontal_margin\">16dp</dimen>",
+                "<dimen name=\"margin_alias\">@dimen/activity_horizontal_margin</dimen>",
                 "<style name=\"AppTheme.Dark\" parent=\"@android:style/Theme\"/>",
                 "<item type=\"id\" name=\"declared\"/>"));
         Files.writeString(res.resolve("layout-land/main.xml"), "<LinearLayout android:id=\"@+id/button\"><x android:id=\"@+id/label\"/></LinearLayout>");
@@ -189,7 +191,10 @@ class ResourceBuilderTest {
             loader.loadClass("org.team.R$style").getField("AppTheme_Dark");
             assertThrows(NoSuchFieldException.class, () -> loader.loadClass("com.acme.a.R$string").getField("team_name"));
         }
-        assertTrue(Files.readAllLines(out.resolve("ftcsim-resources.tsv")).stream().anyMatch(line -> line.endsWith("\tteam_name\tTeam \"7421\"")));
+        List<String> rows = Files.readAllLines(out.resolve("ftcsim-resources.tsv"));
+        assertTrue(rows.stream().anyMatch(line -> line.endsWith("\tteam_name\tTeam \"7421\"")));
+        assertTrue(rows.stream().anyMatch(line -> line.startsWith("dimen\t") && line.endsWith("\tactivity_horizontal_margin\t16dp")), rows.toString());
+        assertTrue(rows.stream().anyMatch(line -> line.startsWith("dimen\t") && line.endsWith("\tmargin_alias\t16dp")), rows.toString());
         assertEquals("weights", Files.readString(out.resolve("assets/model.txt")));
     }
 
