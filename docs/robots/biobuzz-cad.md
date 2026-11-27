@@ -27,12 +27,12 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 | Group (joint) | Source of the value | Ratio and range |
 |---|---|---|
 | Four wheels | the chassis's wheel angles | direct; positive rolls the robot forward |
-| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, x 0.0814578 m (3.207 in) ahead of centre in the team's calibrated code (the CAD places it at x 0.089 m) |
+| Turret, with everything on it | the turret's yaw (servo or motor) | the turret turns about its axis, x 0.0894588 m (3.522 in) ahead of centre in the team's calibrated code (the CAD places it at x 0.089 m) |
 | Hood (carries the flywheel and feed rollers) | the hood servo | joint = 1 degree + servo angle / 5.0694 (365:72 gears, from the team's actuator table). The CAD allows 1 to 25 degrees, but the simulator's stop is widened to 45 degrees so that a HIVE's CELL can be reached from near and far (`HOOD_RANGE_RADIANS`): the servo is a Super Speed (300 degrees), 223 degrees of it (position 0.7435) take the hood to its stop and the stop holds it there for any position above. The drawn hood swings further than the CAD's |
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2.5 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2.5 |
-| Colibri arms and printed plate | the left and right colibri servos | arm = servo angle / 1.333 (40:30), the CAD pose is 60 degrees above the simulated down position. A command of 0.0667 lifts the plate about 90 degrees |
+| Colibri arms and printed plate | the left and right colibri servos | arm = servo angle / 1.333 (40:30), the CAD pose is 60 degrees above the simulated down position. A command of 0.4 lifts the plate about 90 degrees |
 | Stopper (the goBILDA floodgate switch) | the stopper servo | 1:1 |
 | Encoder gears (32T and 28T) | the turret's yaw | 5.5 and 44/7 turns per turret turn, against the turret |
 

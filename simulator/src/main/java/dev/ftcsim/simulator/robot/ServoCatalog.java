@@ -15,7 +15,9 @@ import java.util.TreeMap;
 public final class ServoCatalog {
 
     public static final String AXON_MINI_PLUS = "axon-mini-plus";
-    /** The goBILDA Torque servo with five turns of travel (1800 degrees): BIOBUZZ's colibri arms. */
+    /** The goBILDA Dual Mode Torque servo (2000-0025-0002), 300 degrees: BIOBUZZ's colibri arms. */
+    public static final String GOBILDA_TORQUE = "gobilda-2000-torque";
+    /** The goBILDA Torque servo with five turns of travel (1800 degrees). */
     public static final String GOBILDA_TORQUE_5_TURN = "gobilda-2000-torque-5turn";
     /** The goBILDA Dual Mode Super Speed servo (2000-0025-0004), 300 degrees: BIOBUZZ's hood and stopper. */
     public static final String GOBILDA_SUPER_SPEED = "gobilda-2000-superspeed";
@@ -32,6 +34,7 @@ public final class ServoCatalog {
         double turn = Math.toRadians(300.0);
         MODELS.put(AXON_MINI_PLUS, new Model(AXON_MINI_PLUS, fromSecondsPer60Degrees(0.110, 0.090), turn));
         MODELS.put(GOBILDA_SUPER_SPEED, new Model(GOBILDA_SUPER_SPEED, fromSecondsPer60Degrees(0.055, 0.043), turn));
+        MODELS.put(GOBILDA_TORQUE, new Model(GOBILDA_TORQUE, fromRpm(40.0, 50.0), turn));
         MODELS.put(GOBILDA_TORQUE_5_TURN, new Model(GOBILDA_TORQUE_5_TURN, fromRpm(40.0, 50.0), Math.toRadians(1800.0)));
     }
 

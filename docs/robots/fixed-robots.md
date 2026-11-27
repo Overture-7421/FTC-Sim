@@ -63,23 +63,23 @@ One colour sensor, `upSensor`, on the Control Hub's I2C bus 2, 0.12 m behind the
 
 ### BIOBUZZ's profile
 
-From the team's calibrated robot code (`Overture/FRC-23619-2027`, commit `20d6904`), its table of mechanisms and its CAD (the part is the simulator's model of it, `RobotDesign`, `MotorCatalog`, `ServoCatalog`). Name `BIOBUZZ`, 112 mm wheels, hub `UP`/`FORWARD`, Limelight on the turret at `RobotDesign.BIOBUZZ_CAMERA` (0.2176, 0, 0.2439 m from the chassis centre: 5.361 in ahead of the turret pivot, 16.785 in above the floor, pitch 45 degrees).
+From the team's calibrated robot code (`Overture/FRC-23619-2027`, commit `ba1a290`), its table of mechanisms and its CAD (the part is the simulator's model of it, `RobotDesign`, `MotorCatalog`, `ServoCatalog`). Name `BIOBUZZ`, 112 mm wheels, hub `UP`/`FORWARD`, Limelight on the turret at `RobotDesign.BIOBUZZ_CAMERA` (0.2275, 0, 0.2486 m from the chassis centre: 5.435 in ahead of the turret pivot, 16.969 in above the floor, pitch 41 degrees).
 
 | Mechanism | Motor or servo | Ratio | In the simulator |
 |---|---|---|---|
 | Chassis (4: `lf`, `lr` mirrored, `rf`, `rr`) | SWYFT Spike 550 motor | 12.7:1 motor to mecanum | `swyft-spike-6000`, `driveRatio` 12.7: 6000 rpm, 1.47 kg cm and 9.2 A at stall; wheels 112 mm. Losses fitted to the team's Pedro measurements (below) |
 | Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm, both inverted in the code | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5, mirrored |
 | Shooter (`shooterLeft`, `shooterRight`) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio 43/30; a ball leaves at 0.49 of the rim speed of a 3 in wheel (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
-| Turret (`turret`) | Axon Mini servo, inverted in the code | 2.75 servo to turret | `axon-mini-plus`, mirrored (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 2.75 |
-| Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 5 turns | 40/30 servo to shaft | `gobilda-2000-torque-5turn`, `COLIBRI_RATIO` |
+| Turret (`turret`) | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 2.75 |
+| Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 300 degrees (`colibriRight` inverted in the code) | 40/30 servo to shaft | `gobilda-2000-torque` (`colibriRight` mirrored), `COLIBRI_RATIO` |
 | Hood (`hood`) | goBILDA Super Speed servo, 300 degrees | 365/72 = 5.0694 servo to hood | `gobilda-2000-superspeed`, `HOOD_RATIO` |
 | Stopper (`brake`) | goBILDA Super Speed servo, 300 degrees (the owner's word; the code only commands 0.5 shut and 1.0 open) | 1:1 | `gobilda-2000-superspeed`; it holds the balls at the foot of the column while shut (below) |
-| Turret encoders | REV Through Bore Encoders (V1 pulse, 1 to 1024) on the OctoQuad, both inverted | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1`, mirrored, zero offsets -0.01270 turn (channel 5) and 0.49707 turn (channel 4) from the code's calibration |
-| Turret axis | | | x 3.207 in = 0.0814578 m, y 0 (team code) |
+| Turret encoders | REV Through Bore Encoders (V1 pulse, 1 to 1024) on the OctoQuad, both inverted | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1`, mirrored, zero offsets 0.47461 turn (channel 5) and 0.20996 turn (channel 4) from the code's calibration |
+| Turret axis | | | x 3.522 in = 0.0894588 m, y 0 (team code) |
 
 **Drivetrain fit.** The Pedro constants in the team's `Constants` (forward and strafe top speeds 75.99 and 60.57 in/s, natural decelerations 29.97 and 62.23 in/s^2) are met within 5 % by `DrivetrainCalibrationTest`: 75.03 (-1.3 %), 59.35 (-2.0 %), -29.39 (-1.9 %) and -63.90 (+2.7 %). Changed from Hornet's fit: wheel damping 0.0172 N m s/rad, roller viscous drag 1.7 N s/m, wheel friction 0.05 N m, roller rolling resistance 0.044, which are fitted values, not measured ones (see [hornet-fit](hornet-fit.md) for the method). The Pinpoint pod offsets in the code are accepted and ignored: the Pinpoint is ideal.
 
-**Not modelled from the code:** the stopper's real gate geometry (released at 225 degrees, halfway between the two commanded positions), the colibri arms (the code disables them: `Arm.enabled = false`), and the shot tables (`LaunchConstants`: the team's own flywheel speed and hood tables are not used; the simulator shoots with the efficiency 0.49 fit).
+**Not modelled from the code:** the stopper's real gate geometry (released at 225 degrees, halfway between the two commanded positions), and the shot tables (`LaunchConstants`: the team's own flywheel speed and hood tables are not used; the simulator shoots with the efficiency 0.49 fit).
 
 **Colour sensors** (REV Color Sensor V3, two, found by name): `upperSensor` before the stopper, `lowerSensor` near the intake. The sensor sees one ball position along the path ([biobuzz-cad](biobuzz-cad.md): the stopper is the gate at path point 4, and the queue is 0.0711 m apart, a POLLEN's diameter). Both are on the robot's left wall at y = +0.065 m looking right (azimuth -90 degrees), so a ball in front is 2.9 cm from the sensor's face (Hornet's is about 2.7 cm, where its code reads under 5 cm as "a ball").
 
@@ -110,7 +110,7 @@ BIOBUZZ's turret is turned by a continuous-rotation servo (Axon Mini+) on the Co
 | Part | Model |
 |---|---|
 | Command | The pulse the hub sends: 1500 microseconds is stopped and 1000 or 2000 is full speed either way, clipped beyond 500 microseconds. The SDK's `setPower(1)` sends 2400 (it spans 600 to 2400 for a continuous-rotation servo), which is 0.9 of full speed here, and the simulator does not know where the real servo saturates. A dead band of 2 microseconds around the middle. |
-| Speed | The servo's no-load speed at the 5 V of a hub's servo port (`ServoCatalog`): `axon-mini-plus` 9.8 rad/s (an estimate between the datasheet's 0.110 s per 60 degrees at 4.8 V and 0.090 s at 6 V), `gobilda-2000-superspeed` 19.8 rad/s (0.055 s and 0.043 s), `gobilda-2000-torque-5turn` 4.4 rad/s. |
+| Speed | The servo's no-load speed at the 5 V of a hub's servo port (`ServoCatalog`): `axon-mini-plus` 9.8 rad/s (an estimate between the datasheet's 0.110 s per 60 degrees at 4.8 V and 0.090 s at 6 V), `gobilda-2000-superspeed` 19.8 rad/s (0.055 s and 0.043 s), `gobilda-2000-torque` and `gobilda-2000-torque-5turn` 4.4 rad/s. |
 | Lag | 30 milliseconds, first order, an estimate. Torque, load and the servo's own position feedback are not modelled: the servo is a speed. |
 | Direction | Positive power turns the turret left (counter-clockwise from above), a mirrored servo the other way. |
 
@@ -122,7 +122,7 @@ BIOBUZZ's turret carries two V1 REV Through Bore Encoders, on OctoQuad ports 5 (
 
 ### Positional servos: the hood, the stopper and the colibri arms
 
-BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the hood is a Super Speed (300 degrees) and the stopper and the colibri arms are Torque servos with 5 turns. They take Control Hub servo ports after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (19.8 rad/s for the Super Speed, 4.4 for the 5-turn model, so a whole 5-turn range takes 7 s), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
+BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the hood and stopper are Super Speed (300 degrees) and the colibri arms are Torque servos (300 degrees, right mirrored). They take Control Hub servo ports after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (19.8 rad/s for the Super Speed, 4.4 for the Torque model), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
 
 | Part | What it does in the simulation |
 |---|---|

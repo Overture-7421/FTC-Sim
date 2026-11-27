@@ -161,10 +161,14 @@ class RobotRigTest {
     void theJoinedColibriArmsShareOneAngleWhenTheirServoCommandsDiffer() {
         RobotRig rig = rigOf(RobotDesign.biobuzz().spec(RobotProfiles.biobuzz().withMotors(List.of())));
         int left = rig.wiring().servo("colibriLeft").port();
+        int right = rig.wiring().servo("colibriRight").port();
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, left, 0x20, 0x4E);
-        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, left, 0xD0, 0x02); // 720 us, 90 degrees at the linkage
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, left, 0x28, 0x05); // 1320 us (pos 0.4), 90 degrees at the linkage
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, left, 1);
-        tickFor(rig, 1.0);
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, right, 0x20, 0x4E);
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, right, 0x60, 0x09); // 2400 us (pos 1.0, mirrored -> 0 degrees)
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, right, 1);
+        tickFor(rig, 1.5);
         for (RobotJoint joint : List.of(RobotJoint.COLIBRI_LEFT, RobotJoint.COLIBRI_RIGHT)) {
             double angle = rig.jointBodies().stream().filter(b -> b.kind() == joint.kind()).findFirst().orElseThrow().x();
             assertEquals(45, Math.toDegrees(angle), 0.5);
