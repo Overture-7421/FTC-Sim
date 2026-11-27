@@ -145,11 +145,11 @@ public final class RobotDesign {
     }
 
     /**
-     * BIOBUZZ's calibrated Limelight pose: 5.361 inches ahead of the turret's 3.207 inch pivot, 16.785 inches above the
-     * floor, pitched 45 degrees up. The profile uses the chassis box centre, 0.1824 m above the floor, as its origin.
+     * BIOBUZZ's calibrated Limelight pose: 5.434666889764 inches ahead of the turret's 3.522 inch pivot, 16.96944346457 inches
+     * above the floor, pitched 41 degrees up. The profile uses the chassis box centre, 0.1824 m above the floor, as its origin.
      */
     public static final RobotMapping.CameraMount BIOBUZZ_CAMERA = new RobotMapping.CameraMount(
-            (3.207 + 5.361) * 0.0254, 0.0, 16.785 * 0.0254 - 0.1824, 0.0, 45.0, 0.0);
+            (3.522 + 5.434666889764) * 0.0254, 0.0, 16.96944346457 * 0.0254 - 0.1824, 0.0, 41.0, 0.0);
 
     /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
     public static final double COLIBRI_RATIO = 40.0 / 30.0;

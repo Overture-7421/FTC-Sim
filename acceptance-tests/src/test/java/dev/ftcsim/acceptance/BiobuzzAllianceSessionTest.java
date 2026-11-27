@@ -211,19 +211,19 @@ class BiobuzzAllianceSessionTest {
                 double theta = Math.toRadians(45.0 + hood * 300.0 / (365.0 / 72.0));
                 // From the turret's axis, along the turret: the ball rides round the wheels' rim to where the hood's end lets it go, which is
                 // back over the axle for a steep launch (x 0.162 - 0.0737 sin, z 0.2146 + 0.0737 cos); not out in front of the wheels.
-                double dx = ball.x() - (chassis.x() + 0.0814578 * Math.cos(chassis.yaw()));
-                double dy = ball.y() - (chassis.y() + 0.0814578 * Math.sin(chassis.yaw()));
+                double dx = ball.x() - (chassis.x() + 0.0894588 * Math.cos(chassis.yaw()));
+                double dy = ball.y() - (chassis.y() + 0.0894588 * Math.sin(chassis.yaw()));
                 double ahead = dx * Math.cos(heading) + dy * Math.sin(heading);
                 double across = -dx * Math.sin(heading) + dy * Math.cos(heading);
-                double expectedAhead = 0.162 - 0.0737 * Math.sin(theta) - 0.0814578;
+                double expectedAhead = 0.162 - 0.0737 * Math.sin(theta) - 0.0894588;
                 double expectedHeight = 0.2146 + 0.0737 * Math.cos(theta);
                 // The ball has had up to a physics step (4 ms, about 2.5 cm of flight) since it was let go.
                 assertEquals(expectedAhead, ahead, 0.04, "ahead of the axis at " + Math.toDegrees(theta) + " degrees");
                 assertEquals(expectedHeight, ball.z() - chassis.z(), 0.04, "above the chassis' centre");
                 assertEquals(0.0, across, 0.03, "on the turret's line");
                 // The calibrated Limelight is ahead of the wheels: the ball is not there.
-                double limelightAhead = 0.2176272 - 0.0814578;
-                double fromLimelight = Math.hypot(ahead - limelightAhead, ball.z() - chassis.z() - 0.243939);
+                double limelightAhead = 0.227499339 - 0.0894588;
+                double fromLimelight = Math.hypot(ahead - limelightAhead, ball.z() - chassis.z() - 0.248623864);
                 assertTrue(fromLimelight > 0.08, "the ball starts " + fromLimelight + " m from the Limelight");
             }
         }
@@ -444,8 +444,8 @@ class BiobuzzAllianceSessionTest {
             assertTrue(value(text(session, "Mechanisms"), "flywheels") > 800 && text(session, "Mechanisms").contains("stopper=shut"),
                     "the flywheels already run, with no button held: " + summary(session));
             BodyPose truth = session.world().bodyPose(EntityIds.CHASSIS);
-            double axisX = truth.x() + 0.0814578 * Math.cos(truth.yaw());
-            double axisY = truth.y() + 0.0814578 * Math.sin(truth.yaw());
+            double axisX = truth.x() + 0.0894588 * Math.cos(truth.yaw());
+            double axisY = truth.y() + 0.0894588 * Math.sin(truth.yaw());
             double expected = Math.toDegrees(Math.atan2(-0.3236 - axisY, 0.4 - axisX) - truth.yaw());
             assertEquals(0.0, Math.IEEEremainder(Math.toDegrees(session.rig().turretYawRadians()) - expected, 360.0), 6.0,
                     "the turret faces the HIVE's CELL: " + summary(session));

@@ -42,12 +42,12 @@ public final class BiobuzzHardware {
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
     /**
      * The team's calibrated stopper positions: 150 degrees shut and 300 open on a Super Speed servo, about 0.13 s of travel.
-     * The colibri arms' servos have five turns: 0.0667 is 120 degrees of servo, 90 of arm.
+     * The colibri arms' servos are 300 degree Torque servos: 0.4 is 120 degrees of servo, 90 of arm.
      */
     public static final double STOPPER_SHUT = 0.5;
     public static final double STOPPER_OPEN = 1.0;
     public static final double COLIBRI_DOWN = 0.0;
-    public static final double COLIBRI_UP = 0.0667;
+    public static final double COLIBRI_UP = 0.4;
 
     public final DcMotor frontLeft;
     public final DcMotor backLeft;
@@ -96,7 +96,6 @@ public final class BiobuzzHardware {
         limelight.start();
 
         turretServo = hardwareMap.get(CRServo.class, "turret");
-        turretServo.setDirection(DcMotorSimple.Direction.REVERSE);
         ((PwmControl) turretServo).setPwmRange(new PwmControl.PwmRange(500, 2500, 5000));
         octoquad = hardwareMap.get(OctoQuad.class, "octoquad");
         octoquad.setChannelBankConfig(OctoQuad.ChannelBankConfig.ALL_PULSE_WIDTH);
@@ -122,6 +121,7 @@ public final class BiobuzzHardware {
         stopper = hardwareMap.get(Servo.class, "brake");
         colibriLeft = hardwareMap.get(Servo.class, "colibriLeft");
         colibriRight = hardwareMap.get(Servo.class, "colibriRight");
+        colibriRight.setDirection(Servo.Direction.REVERSE);
         stopper.setPosition(STOPPER_SHUT);
         colibriLeft.setPosition(COLIBRI_DOWN);
         colibriRight.setPosition(COLIBRI_DOWN);
@@ -144,8 +144,8 @@ public final class BiobuzzHardware {
 
     /** Where the turret points, in degrees left of the robot's front, from the two absolute encoders. */
     public static double turretDegrees(int[] pulses) {
-        double a = -0.01270 - (pulses[5] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
-        double b = 0.49707 - (pulses[4] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
+        double a = 0.47461 - (pulses[5] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
+        double b = 0.20996 - (pulses[4] - PULSE_MIN_US) / (double) (PULSE_MAX_US - PULSE_MIN_US + 1);
         a -= Math.floor(a);
         b -= Math.floor(b);
         double difference = b - a - Math.floor(b - a);

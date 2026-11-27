@@ -55,13 +55,13 @@ class BiobuzzTeamTablesSessionTest {
 
         for (int i = 0; i < BiobuzzTeamTables.DISTANCES_IN.length; i++) {
             double inches = BiobuzzTeamTables.DISTANCES_IN[i];
-            Pose pose = new Pose(red[0] + inches * INCH + 0.0814578, red[1], Math.PI);
+            Pose pose = new Pose(red[0] + inches * INCH + 0.0894588, red[1], Math.PI);
             Solution solution = BiobuzzTeamTables.PLAN.solve(pose, BiobuzzHive.Alliance.RED, BiobuzzHive.Tilt.AUDIENCE_UP, Double.NaN);
             assertTrue(solution.feasible, inches + " in");
             assertEquals(BiobuzzTeamTables.FLYWHEEL_TICKS[i], solution.flywheelTicksPerSecond, 1e-6, "speed at " + inches + " in");
             assertEquals((BiobuzzTeamTables.HOOD_COMMAND[i] + 1.0) / 2.0, solution.hoodPosition, 1e-9, "hood at " + inches + " in");
         }
-        Pose tooClose = new Pose(red[0] + 30 * INCH + 0.0814578, red[1], Math.PI);
+        Pose tooClose = new Pose(red[0] + 30 * INCH + 0.0894588, red[1], Math.PI);
         assertTrue(!BiobuzzTeamTables.PLAN.solve(tooClose, BiobuzzHive.Alliance.RED, BiobuzzHive.Tilt.AUDIENCE_UP, Double.NaN).feasible,
                 "the team's table starts at 36 in; its code would throw nearer than that");
     }

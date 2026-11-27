@@ -81,13 +81,13 @@ public final class BiobuzzPoseEstimator {
     }
 
     /** The calibrated Limelight mount, with the turret facing forward (robot frame, metres). */
-    public static final double CAMERA_X = (3.207 + 5.361) * 0.0254;
+    public static final double CAMERA_X = (3.522 + 5.434666889764) * 0.0254;
     public static final double CAMERA_Y = 0.0;
-    public static final double CAMERA_PITCH_RADIANS = Math.toRadians(45.0);
+    public static final double CAMERA_PITCH_RADIANS = Math.toRadians(41.0);
     /** The camera's calibrated height above the floor. */
-    public static final double CAMERA_HEIGHT_M = 16.785 * 0.0254;
+    public static final double CAMERA_HEIGHT_M = 16.96944346457 * 0.0254;
     /** The turret's axis; the camera turns about it with the turret. */
-    public static final double TURRET_AXIS_X = 3.207 * 0.0254;
+    public static final double TURRET_AXIS_X = 3.522 * 0.0254;
     public static final double TURRET_AXIS_Y = 0.0;
 
     /** The blend of a fix, as Hornet's {@code Camera} has it: tags nearer than this are "close". */

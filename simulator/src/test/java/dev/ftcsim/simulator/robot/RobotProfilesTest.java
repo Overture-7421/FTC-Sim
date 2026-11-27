@@ -72,24 +72,24 @@ class RobotProfilesTest {
         assertEquals("UP", biobuzz.hubLogo());
         assertEquals("FORWARD", biobuzz.hubUsb());
         CameraMount camera = biobuzz.camera();
-        assertEquals(0.2176272, camera.x(), 1e-12);
+        assertEquals((3.522 + 5.434666889764) * 0.0254, camera.x(), 1e-12);
         assertEquals(0.0, camera.y());
-        assertEquals(0.243939, camera.z(), 1e-12);
+        assertEquals(16.96944346457 * 0.0254 - 0.1824, camera.z(), 1e-12);
         assertEquals(0.0, camera.yawDegrees());
-        assertEquals(45.0, camera.pitchDegrees());
+        assertEquals(41.0, camera.pitchDegrees());
         assertEquals(0.0, camera.rollDegrees());
         assertEquals(
                 new TurretParts(
-                        new ServoMapping("turret", "axon-mini-plus", true),
+                        new ServoMapping("turret", "axon-mini-plus", false),
                         List.of(
-                                new TurretEncoder(5, "rev-tbe-v1", 5.5, -0.01270 * 360.0, true),
-                                new TurretEncoder(4, "rev-tbe-v1", 44.0 / 7.0, 0.49707 * 360.0, true)),
-                        3.207 * 0.0254, 0.0, true,
+                                new TurretEncoder(5, "rev-tbe-v1", 5.5, 0.47461 * 360.0, true),
+                                new TurretEncoder(4, "rev-tbe-v1", 44.0 / 7.0, 0.20996 * 360.0, true)),
+                        3.522 * 0.0254, 0.0, true,
                         List.of(
                                 new MechanismServo(ServoRole.HOOD, new ServoMapping("hood", "gobilda-2000-superspeed", false)),
                                 new MechanismServo(ServoRole.STOPPER, new ServoMapping("brake", "gobilda-2000-superspeed", false)),
-                                new MechanismServo(ServoRole.COLIBRI_LEFT, new ServoMapping("colibriLeft", "gobilda-2000-torque-5turn", false)),
-                                new MechanismServo(ServoRole.COLIBRI_RIGHT, new ServoMapping("colibriRight", "gobilda-2000-torque-5turn", false)))),
+                                new MechanismServo(ServoRole.COLIBRI_LEFT, new ServoMapping("colibriLeft", "gobilda-2000-torque", false)),
+                                new MechanismServo(ServoRole.COLIBRI_RIGHT, new ServoMapping("colibriRight", "gobilda-2000-torque", true)))),
                 biobuzz.turretParts());
         assertEquals(
                 List.of(

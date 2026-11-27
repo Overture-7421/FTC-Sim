@@ -52,8 +52,8 @@ public final class RobotProfiles {
     /**
      * BIOBUZZ's robot: SWYFT Spike drive motors at 12.7:1 on 112 mm wheels, Yellow Jackets 2.5:1 to the intake and the indexer and 43:30
      * to the flywheels, an Axon Mini+ turning the turret 2.75 turns to its one, two through-bore encoders on the turret, a Super
-     * Speed hood and stopper, and colibri arms on 5-turn Torque servos. The sensors sit where the first and fourth ball of the
-     * queue wait, on the left wall looking right.
+     * Speed hood and stopper, and colibri arms on 300-degree Torque servos (right mirrored). The sensors sit where the first and
+     * fourth ball of the queue wait, on the left wall looking right.
      */
     public static RobotMapping biobuzz() {
         return new RobotMapping(
@@ -70,16 +70,18 @@ public final class RobotProfiles {
                 11.3, 112, MotorCatalog.SWYFT_SPIKE, 2.75, "UP", "FORWARD",
                 RobotDesign.BIOBUZZ_CAMERA,
                 new TurretParts(
-                        new ServoMapping("turret", ServoCatalog.AXON_MINI_PLUS, true),
+                        new ServoMapping("turret", ServoCatalog.AXON_MINI_PLUS, false),
                         List.of(
-                                new TurretEncoder(5, ThroughBoreEncoder.V1, 5.5, -0.01270 * 360.0, true),
-                                new TurretEncoder(4, ThroughBoreEncoder.V1, 44.0 / 7.0, 0.49707 * 360.0, true)),
-                        3.207 * 0.0254, 0.0, true,
+                                new TurretEncoder(5, ThroughBoreEncoder.V1, 5.5, 0.47461 * 360.0, true),
+                                new TurretEncoder(4, ThroughBoreEncoder.V1, 44.0 / 7.0, 0.20996 * 360.0, true)),
+                        3.522 * 0.0254, 0.0, true,
                         List.of(
                                 mechanism(ServoRole.HOOD, "hood", ServoCatalog.GOBILDA_SUPER_SPEED),
                                 mechanism(ServoRole.STOPPER, "brake", ServoCatalog.GOBILDA_SUPER_SPEED),
-                                mechanism(ServoRole.COLIBRI_LEFT, "colibriLeft", ServoCatalog.GOBILDA_TORQUE_5_TURN),
-                                mechanism(ServoRole.COLIBRI_RIGHT, "colibriRight", ServoCatalog.GOBILDA_TORQUE_5_TURN))),
+                                mechanism(ServoRole.COLIBRI_LEFT, "colibriLeft", ServoCatalog.GOBILDA_TORQUE),
+                                new MechanismServo(
+                                        ServoRole.COLIBRI_RIGHT,
+                                        new ServoMapping("colibriRight", ServoCatalog.GOBILDA_TORQUE, true)))),
                 12.7,
                 List.of(
                         new ColorSensorMapping("upperSensor", 0.089, 0.065, 0.060, -90.0),
