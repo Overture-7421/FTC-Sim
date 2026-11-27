@@ -32,7 +32,7 @@ The simulator publishes the value of each joint as a body of the snapshot (`Robo
 | Flywheel and feed rollers | the first shooter motor | motor / 1.433 (43:30) |
 | Intake roller | the first intake motor | motor / 2.5 |
 | Indexer rollers and sprockets (one group per shaft) | the first conveyor motor | motor / 2.5 |
-| Colibri arms and printed plate | the left and right colibri servos | arm = servo angle / 1.333 (40:30), the CAD pose is 60 degrees above the simulated down position. A command of 0.4 lifts the plate about 90 degrees |
+| Colibri arms and printed plate | the left and right colibri servos | arm = `COLIBRI_REST_RADIANS` + servo angle / 1.333 (40:30), the CAD pose is 60 degrees above the simulated down position. Command 0.49 puts the plate down at 0 degrees (FLOWER height) and 0.05 stows it up at 99 degrees |
 | Stopper (the goBILDA floodgate switch) | the stopper servo | 1:1 |
 | Encoder gears (32T and 28T) | the turret's yaw | 5.5 and 44/7 turns per turret turn, against the turret |
 

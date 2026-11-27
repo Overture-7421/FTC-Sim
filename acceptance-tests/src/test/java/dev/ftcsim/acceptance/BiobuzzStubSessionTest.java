@@ -257,7 +257,7 @@ class BiobuzzStubSessionTest {
             session.runFor(SECOND);
             note(session, atRest, moved);
             assertEquals(300.0, joint(session, RobotJoint.STOPPER), 3.0, "X sends the Super Speed stopper to its calibrated open position, 1.0");
-            assertEquals(0.4 * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 90 degrees");
+            assertEquals((0.49 - 0.05) * 300.0 / (40.0 / 30.0), joint(session, RobotJoint.COLIBRI_LEFT), 3.0, "Y raises the arms, 99 degrees");
             assertEquals(joint(session, RobotJoint.COLIBRI_LEFT), joint(session, RobotJoint.COLIBRI_RIGHT), 1.0);
 
             session.setGamepad(1, pad(0f, 0f, true, false, false, false));

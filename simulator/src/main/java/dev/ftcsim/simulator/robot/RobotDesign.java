@@ -154,6 +154,13 @@ public final class RobotDesign {
     /** Servo turns to one turn of a colibri arm (the CAD's 40:30 gears). */
     public static final double COLIBRI_RATIO = 40.0 / 30.0;
 
+    /**
+     * The colibri arm's angle when its 300-degree servo is at 0 rad (position 1.0 on the mirrored left servo): calibrated
+     * so the team's open position (0.49) puts the arms down at 0 degrees (FLOWER height) and closed (0.05) stows them up
+     * at 99 degrees.
+     */
+    public static final double COLIBRI_REST_RADIANS = -Math.toRadians((1.0 - 0.49) * 300.0 / COLIBRI_RATIO);
+
     /** Servo turns to one turn of the hood (the team's table: 5.0694444, 365:72). */
     public static final double HOOD_RATIO = 365.0 / 72.0;
 
@@ -200,8 +207,8 @@ public final class RobotDesign {
             servos.add(switch (mechanism.role()) {
                 case HOOD -> new RobotSpec.ServoJoint(RobotJoint.HOOD, name, HOOD_RATIO, HOOD_REST_RADIANS, HOOD_RANGE_RADIANS);
                 case STOPPER -> new RobotSpec.ServoJoint(RobotJoint.STOPPER, name, STOPPER_RATIO, 0.0);
-                case COLIBRI_LEFT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_LEFT, name, COLIBRI_RATIO, 0.0);
-                case COLIBRI_RIGHT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_RIGHT, name, COLIBRI_RATIO, 0.0);
+                case COLIBRI_LEFT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_LEFT, name, COLIBRI_RATIO, COLIBRI_REST_RADIANS);
+                case COLIBRI_RIGHT -> new RobotSpec.ServoJoint(RobotJoint.COLIBRI_RIGHT, name, COLIBRI_RATIO, COLIBRI_REST_RADIANS);
             });
         }
         MotorMapping intake = firstMotor(mapping, Slot.INTAKE);

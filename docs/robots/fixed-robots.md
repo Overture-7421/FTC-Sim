@@ -71,7 +71,7 @@ From the team's calibrated robot code (`Overture/FRC-23619-2027`, commit `ba1a29
 | Intake (`intake`) and indexer (`indexer`) | goBILDA Yellow Jacket, 6000 rpm, both inverted in the code | 2.5:1 | `goBILDA-bare-6000`, ratio 2.5, mirrored |
 | Shooter (`shooterLeft`, `shooterRight`) | goBILDA Yellow Jacket, 6000 rpm | 43/30 = 1.4333 to the main roller | `goBILDA-bare-6000`, ratio 43/30; a ball leaves at 0.49 of the rim speed of a 3 in wheel (`BIOBUZZ_FLYWHEEL_RADIUS_M`), which is the motor's speed times 0.0381 m over the ratio |
 | Turret (`turret`) | Axon Mini servo | 2.75 servo to turret | `axon-mini-plus` (the Mini and Mini+ have the same speeds: 0.110 s per 60 degrees at 4.8 V, 0.090 s at 6 V); `turretRatio` 2.75 |
-| Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 300 degrees (`colibriRight` inverted in the code) | 40/30 servo to shaft | `gobilda-2000-torque` (`colibriRight` mirrored), `COLIBRI_RATIO` |
+| Colibri arms (`colibriLeft`, `colibriRight`) | goBILDA Torque servo, 300 degrees (`colibriRight` inverted in the code) | 40/30 servo to shaft | `gobilda-2000-torque` (`colibriLeft` mirrored), `COLIBRI_RATIO`, `COLIBRI_REST_RADIANS` (0.05 stowed up at 99 degrees, 0.49 down at 0 degrees) |
 | Hood (`hood`) | goBILDA Super Speed servo, 300 degrees | 365/72 = 5.0694 servo to hood | `gobilda-2000-superspeed`, `HOOD_RATIO` |
 | Stopper (`brake`) | goBILDA Super Speed servo, 300 degrees (the owner's word; the code only commands 0.5 shut and 1.0 open) | 1:1 | `gobilda-2000-superspeed`; it holds the balls at the foot of the column while shut (below) |
 | Turret encoders | REV Through Bore Encoders (V1 pulse, 1 to 1024) on the OctoQuad, both inverted | 5.5 (32T, channel 5), 44/7 = 6.2857 (28T, channel 4) turns per turret turn | `rev-tbe-v1`, mirrored, zero offsets 0.47461 turn (channel 5) and 0.20996 turn (channel 4) from the code's calibration |
@@ -122,7 +122,7 @@ BIOBUZZ's turret carries two V1 REV Through Bore Encoders, on OctoQuad ports 5 (
 
 ### Positional servos: the hood, the stopper and the colibri arms
 
-BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the hood and stopper are Super Speed (300 degrees) and the colibri arms are Torque servos (300 degrees, right mirrored). They take Control Hub servo ports after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (19.8 rad/s for the Super Speed, 4.4 for the Torque model), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
+BIOBUZZ has four more servos that go to a position (`servo.setPosition`): the hood and stopper are Super Speed (300 degrees) and the colibri arms are Torque servos (300 degrees, left mirrored so closed 0.05 stows up and open 0.49 lowers to the FLOWER). They take Control Hub servo ports after the turret servo's (hood 1, stopper 2, left colibri 3, right 4). `PositionServoPlant`: the SDK's 600 to 2400 microseconds are positions 0 to 1, the shaft travels 300 degrees (1800 for the 5-turn model) at the servo's top speed (19.8 rad/s for the Super Speed, 4.4 for the Torque model), holds when the hub stops pulsing, and a mirrored servo has its travel the other way round and starts at its far end.
 
 | Part | What it does in the simulation |
 |---|---|

@@ -52,8 +52,8 @@ public final class RobotProfiles {
     /**
      * BIOBUZZ's robot: SWYFT Spike drive motors at 12.7:1 on 112 mm wheels, Yellow Jackets 2.5:1 to the intake and the indexer and 43:30
      * to the flywheels, an Axon Mini+ turning the turret 2.75 turns to its one, two through-bore encoders on the turret, a Super
-     * Speed hood and stopper, and colibri arms on 300-degree Torque servos (right mirrored). The sensors sit where the first and
-     * fourth ball of the queue wait, on the left wall looking right.
+     * Speed hood and stopper, and colibri arms on 300-degree Torque servos (left mirrored so closed 0.05 stows up and open 0.49
+     * lowers to the FLOWER). The sensors sit where the first and fourth ball of the queue wait, on the left wall looking right.
      */
     public static RobotMapping biobuzz() {
         return new RobotMapping(
@@ -78,10 +78,10 @@ public final class RobotProfiles {
                         List.of(
                                 mechanism(ServoRole.HOOD, "hood", ServoCatalog.GOBILDA_SUPER_SPEED),
                                 mechanism(ServoRole.STOPPER, "brake", ServoCatalog.GOBILDA_SUPER_SPEED),
-                                mechanism(ServoRole.COLIBRI_LEFT, "colibriLeft", ServoCatalog.GOBILDA_TORQUE),
                                 new MechanismServo(
-                                        ServoRole.COLIBRI_RIGHT,
-                                        new ServoMapping("colibriRight", ServoCatalog.GOBILDA_TORQUE, true)))),
+                                        ServoRole.COLIBRI_LEFT,
+                                        new ServoMapping("colibriLeft", ServoCatalog.GOBILDA_TORQUE, true)),
+                                mechanism(ServoRole.COLIBRI_RIGHT, "colibriRight", ServoCatalog.GOBILDA_TORQUE))),
                 12.7,
                 List.of(
                         new ColorSensorMapping("upperSensor", 0.089, 0.065, 0.060, -90.0),

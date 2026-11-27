@@ -88,8 +88,8 @@ class RobotProfilesTest {
                         List.of(
                                 new MechanismServo(ServoRole.HOOD, new ServoMapping("hood", "gobilda-2000-superspeed", false)),
                                 new MechanismServo(ServoRole.STOPPER, new ServoMapping("brake", "gobilda-2000-superspeed", false)),
-                                new MechanismServo(ServoRole.COLIBRI_LEFT, new ServoMapping("colibriLeft", "gobilda-2000-torque", false)),
-                                new MechanismServo(ServoRole.COLIBRI_RIGHT, new ServoMapping("colibriRight", "gobilda-2000-torque", true)))),
+                                new MechanismServo(ServoRole.COLIBRI_LEFT, new ServoMapping("colibriLeft", "gobilda-2000-torque", true)),
+                                new MechanismServo(ServoRole.COLIBRI_RIGHT, new ServoMapping("colibriRight", "gobilda-2000-torque", false)))),
                 biobuzz.turretParts());
         assertEquals(
                 List.of(
