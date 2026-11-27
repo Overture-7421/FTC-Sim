@@ -42,12 +42,12 @@ public final class BiobuzzHardware {
     public static final double FEED_POWER = BiobuzzHoldShooter.FEED_POWER;
     /**
      * The team's calibrated stopper positions: 150 degrees shut and 300 open on a Super Speed servo, about 0.13 s of travel.
-     * The colibri arms' servos are 300 degree Torque servos: 0.4 is 120 degrees of servo, 90 of arm.
+     * The colibri arms' servos are 300 degree Torque servos: 0.49 is down at FLOWER height (0 degrees) and 0.05 stows them up (99 degrees).
      */
     public static final double STOPPER_SHUT = 0.5;
     public static final double STOPPER_OPEN = 1.0;
-    public static final double COLIBRI_DOWN = 0.0;
-    public static final double COLIBRI_UP = 0.4;
+    public static final double COLIBRI_DOWN = 0.49;
+    public static final double COLIBRI_UP = 0.05;
 
     public final DcMotor frontLeft;
     public final DcMotor backLeft;

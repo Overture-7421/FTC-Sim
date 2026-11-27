@@ -17,7 +17,7 @@ public final class BiobuzzFlowerAuto extends OpMode {
     private static final double FLOWER_X = 23.39 * INCH;
     private static final double FLOWER_Y = -69.52 * INCH;
     // Four degrees of linkage travel lifts the plate far enough to clear the FLOWER lip.
-    private static final double COLIBRI_NUDGE = 4.0 * (40.0 / 30.0) / 300.0;
+    private static final double COLIBRI_NUDGE = BiobuzzHardware.COLIBRI_DOWN - 4.0 * (40.0 / 30.0) / 300.0;
     private final ElapsedTime timer = new ElapsedTime();
     private BiobuzzHardware hw;
     private Stage stage;

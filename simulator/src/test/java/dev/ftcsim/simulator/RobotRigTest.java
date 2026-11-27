@@ -163,10 +163,10 @@ class RobotRigTest {
         int left = rig.wiring().servo("colibriLeft").port();
         int right = rig.wiring().servo("colibriRight").port();
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, left, 0x20, 0x4E);
-        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, left, 0x28, 0x05); // 1320 us (pos 0.4), 90 degrees at the linkage
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, left, 0xCA, 0x05); // 1482 us (pos 0.49, mirrored -> 0 degrees)
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, left, 1);
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_CONFIGURATION, right, 0x20, 0x4E);
-        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, right, 0x60, 0x09); // 2400 us (pos 1.0, mirrored -> 0 degrees)
+        send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_PULSE_WIDTH, right, 0xBE, 0x08); // 2238 us (pos 0.91 -> 90 degrees)
         send(rig, CONTROL_HUB, DekaCommand.SET_SERVO_ENABLE, right, 1);
         tickFor(rig, 1.5);
         for (RobotJoint joint : List.of(RobotJoint.COLIBRI_LEFT, RobotJoint.COLIBRI_RIGHT)) {
